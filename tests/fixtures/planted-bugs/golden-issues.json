@@ -1,0 +1,29 @@
+[
+  {
+    "id": "BUG-1",
+    "severity": "Critical",
+    "title": "TOCTOU race in consume()",
+    "description": "consume() releases and re-acquires the lock between checking token count and deducting tokens. Two threads can both see sufficient tokens and both succeed, overdrawing the bucket.",
+    "file": "src/token_bucket.py",
+    "line_range": "38-47",
+    "keywords": ["race", "TOCTOU", "lock", "atomic", "thread"]
+  },
+  {
+    "id": "BUG-2",
+    "severity": "Important",
+    "title": "time.time() instead of time.monotonic()",
+    "description": "Uses time.time() for elapsed calculation. If the system clock is adjusted (NTP sync, DST, manual change), refill calculation breaks — could grant too many or too few tokens.",
+    "file": "src/token_bucket.py",
+    "line_range": "22-28",
+    "keywords": ["time.time", "monotonic", "clock", "NTP", "system time"]
+  },
+  {
+    "id": "BUG-3",
+    "severity": "Minor",
+    "title": "No __repr__ for debugging",
+    "description": "TokenBucket has no __repr__ method. When debugging, print(bucket) shows unhelpful '<TokenBucket object at 0x...>' instead of current state.",
+    "file": "src/token_bucket.py",
+    "line_range": "8-15",
+    "keywords": ["repr", "__repr__", "debug", "string representation"]
+  }
+]

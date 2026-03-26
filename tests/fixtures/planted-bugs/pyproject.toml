@@ -1,0 +1,6 @@
+[project]
+name = "planted-bugs-fixture"
+version = "0.1.0"
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

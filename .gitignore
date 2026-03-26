@@ -1,0 +1,21 @@
+# Test artifacts
+tests/tmp/
+*.ndjson
+
+# Implementation files from test runs (not part of the skill)
+src/
+pyproject.toml
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Internal planning docs (not published)
+docs/
+
+# Claude Code local settings
+.claude/
+
+# OS
+.DS_Store

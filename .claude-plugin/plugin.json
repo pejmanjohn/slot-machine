@@ -1,0 +1,11 @@
+{
+  "name": "slot-machine",
+  "version": "0.1.0",
+  "description": "Best-of-N parallel implementation — run multiple agents on the same spec, review each, pick or synthesize the best",
+  "author": {
+    "name": "Pejman"
+  },
+  "license": "MIT",
+  "keywords": ["best-of-n", "parallel", "worktree", "code-quality", "multi-agent"],
+  "skills": ["./"]
+}

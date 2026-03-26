@@ -1,0 +1,15 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "slot-machine",
+  "description": "Best-of-N parallel implementation skill",
+  "owner": {
+    "name": "pejman",
+    "url": "https://github.com/pejman"
+  },
+  "plugins": [{
+    "name": "slot-machine",
+    "version": "0.1.0",
+    "source": "./",
+    "category": "productivity"
+  }]
+}

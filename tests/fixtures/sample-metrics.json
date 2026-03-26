@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "timestamp": "2026-03-26T10:30:00Z",
+  "feature": "token-bucket-rate-limiter",
+  "spec_source": "inline",
+  "config": {
+    "slots": 3,
+    "approach_hints": true,
+    "auto_synthesize": true,
+    "implementer_model": "sonnet",
+    "judge_model": "opus"
+  },
+  "results": {
+    "slots_succeeded": 3,
+    "slots_failed": 0,
+    "verdict": "SYNTHESIZE",
+    "confidence": "HIGH",
+    "winning_slot": null,
+    "base_slot": 3,
+    "donor_slots": [1, 2]
+  },
+  "reviewers": {
+    "slot_1": {
+      "spec_compliance": "PASS",
+      "critical_issues": 0,
+      "important_issues": 1,
+      "minor_issues": 2,
+      "verdict": "Yes",
+      "findings_total": 3,
+      "findings_acted_on": 2,
+      "findings_ignored": 1,
+      "false_positives": 0
+    },
+    "slot_2": {
+      "spec_compliance": "PASS",
+      "critical_issues": 0,
+      "important_issues": 2,
+      "minor_issues": 1,
+      "verdict": "Yes",
+      "findings_total": 3,
+      "findings_acted_on": 2,
+      "findings_ignored": 1,
+      "false_positives": 0
+    },
+    "slot_3": {
+      "spec_compliance": "PASS",
+      "critical_issues": 0,
+      "important_issues": 1,
+      "minor_issues": 0,
+      "verdict": "Yes",
+      "findings_total": 1,
+      "findings_acted_on": 1,
+      "findings_ignored": 0,
+      "false_positives": 0
+    },
+    "convergent_findings": [
+      {
+        "description": "consume(0) silently succeeds without validation",
+        "found_by": ["slot_1", "slot_3"],
+        "severity": "Important",
+        "confidence": "HIGH"
+      }
+    ],
+    "precision": 0.89,
+    "recall": 0.75,
+    "notes": "Recall measured against golden issues when available"
+  },
+  "agents": {
+    "total_dispatched": 11,
+    "implementers": 3,
+    "reviewers": 3,
+    "judge": 1,
+    "synthesizer": 1,
+    "retries": 3
+  },
+  "final_output": {
+    "test_count": 28,
+    "files_created": ["src/token_bucket.py", "tests/test_token_bucket.py"]
+  }
+}
