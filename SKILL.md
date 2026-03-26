@@ -99,9 +99,22 @@ Check for config in project's `CLAUDE.md`, `AGENTS.md`, or equivalent. User can 
 
 4. **Verify test baseline.** Run the project's test suite to confirm tests pass BEFORE any implementation. If tests fail now, they'll fail in every slot — stop and fix first.
 
-5. **Assign approach hints.** If `approach_hints` is enabled, randomly assign one hint per slot (without replacement). Each hint steers toward a different architecture — see the [Approach Hints](#approach-hints) section for the full list.
+5. **Detect project language.** Check file extensions in the project to select language-appropriate approach hints:
+   ```bash
+   LANG=$(find . -maxdepth 3 -type f \( -name '*.py' -o -name '*.ts' -o -name '*.js' -o -name '*.go' -o -name '*.rs' \) 2>/dev/null | head -20 | awk -F. '{print $NF}' | sort | uniq -c | sort -rn | head -1 | awk '{print $2}')
+   case "$LANG" in
+     py) HINT_LANG=python ;;
+     ts|js) HINT_LANG=typescript ;;
+     go) HINT_LANG=go ;;
+     rs) HINT_LANG=rust ;;
+     *) HINT_LANG=generic ;;
+   esac
+   ```
+   The hint language determines which variant of hints 3, 4, 6, and 7 to use. Hints 1, 2, 5, 8, 9, and 10 are language-neutral and stay the same regardless of detected language.
 
-6. **Report setup to user:**
+6. **Assign approach hints.** If `approach_hints` is enabled, randomly assign one hint per slot (without replacement). Each hint steers toward a different architecture — see the [Approach Hints](#approach-hints) section for the full list. Use the detected `HINT_LANG` to select the correct variant for hints 3, 4, 6, and 7.
+
+7. **Report setup to user:**
    ```
    🎰 Slot Machine: Pulling the lever with N slots
    Feature: {feature_name}
@@ -404,17 +417,61 @@ The goal is structural diversity — different designs, not different priorities
 
 1. "Use the simplest possible approach — single class, minimal API surface, fewest lines of code that fully satisfy the spec. When in doubt, do less."
 2. "Design for robustness — thorough input validation, defensive error handling, edge case coverage. Think about what happens with invalid inputs, concurrent access, and resource exhaustion."
-3. "Explore a functional or data-oriented approach — use dataclasses, named tuples, or plain functions instead of classes where possible. Prefer immutability and composition over inheritance."
-4. "Design around a fluent or context-manager API — make the interface Pythonic with `with` statements, chaining, or protocol support (`__enter__`, `__iter__`, etc). The API ergonomics matter as much as the internals."
-5. "Build for extensibility — use protocols/ABCs, dependency injection, or the strategy pattern. Make it easy to swap implementations or add new behavior without modifying existing code."
+3. *(language-aware — select the variant matching the detected project language)*
+4. *(language-aware — select the variant matching the detected project language)*
+5. "Build for extensibility — use protocols, interfaces, dependency injection, or the strategy pattern. Make it easy to swap implementations or add new behavior without modifying existing code."
 
 **Extended hints (for N > 5):**
 
-6. "Async-first design — use asyncio primitives (Event, Lock, Semaphore) as the core, with a sync wrapper for backwards compatibility."
-7. "Decorator pattern — expose the core functionality as a decorator or function wrapper so users can apply it with `@rate_limit` syntax."
+6. *(language-aware — select the variant matching the detected project language)*
+7. *(language-aware — select the variant matching the detected project language)*
 8. "Observable and debuggable — add structured logging, metrics hooks, and clear error messages. Optimize for production debugging, not just correctness."
 9. "Follow existing codebase patterns exactly — match the project's style, naming conventions, and architectural patterns precisely. Integrate, don't innovate."
 10. "Security-hardened — defense in depth, input sanitization, least privilege. Design as if the caller is untrusted."
+
+**Language-aware hint variants:**
+
+Select the variant matching the detected `HINT_LANG` from Phase 1, step 5.
+
+**Hint 3 — Data-oriented / functional approach:**
+
+| Language | Hint |
+|----------|------|
+| python | "Explore a functional or data-oriented approach — use dataclasses, named tuples, or plain functions instead of classes where possible. Prefer immutability and composition over inheritance." |
+| typescript | "Explore a functional or data-oriented approach — use plain objects with type guards, discriminated unions, or pure functions instead of classes where possible. Prefer immutability and composition over inheritance." |
+| go | "Explore a data-oriented approach — use plain structs with exported fields, table-driven logic, or standalone functions instead of method-heavy types. Prefer composition via embedding over interface hierarchies." |
+| rust | "Explore a data-oriented approach — use enums with variants, tuple structs, or free functions instead of trait-heavy designs. Prefer owned data and pattern matching over dynamic dispatch." |
+| generic | "Explore a functional or data-oriented approach — use simple data structures and pure functions instead of complex class hierarchies. Prefer immutability and composition over inheritance." |
+
+**Hint 4 — Ergonomic / idiomatic API:**
+
+| Language | Hint |
+|----------|------|
+| python | "Design around a fluent or context-manager API — make the interface Pythonic with `with` statements, chaining, or protocol support (`__enter__`, `__iter__`, etc). The API ergonomics matter as much as the internals." |
+| typescript | "Design around a fluent or builder API — make the interface ergonomic with method chaining, the `using` keyword for resource management, or `Symbol.iterator` for custom iteration. API ergonomics matter as much as internals." |
+| go | "Design around an idiomatic Go API — use functional options for configuration, `io.Reader`/`io.Writer` for streaming, and `context.Context` for cancellation. The API should feel natural to Go developers." |
+| rust | "Design around an ergonomic Rust API — use the builder pattern, `impl Into<T>` for flexible inputs, the `Iterator` trait for streaming, and `Drop` for resource cleanup. The API should feel natural to Rust developers." |
+| generic | "Design around a fluent or ergonomic API — make the interface pleasant to use with method chaining, resource management patterns, or iterator support. API ergonomics matter as much as internals." |
+
+**Hint 6 — Async / concurrency-first:**
+
+| Language | Hint |
+|----------|------|
+| python | "Async-first design — use asyncio primitives (Event, Lock, Semaphore) as the core, with a sync wrapper for backwards compatibility." |
+| typescript | "Async-first design — use Promises, async generators, and AbortController as the core primitives, with synchronous wrappers where needed." |
+| go | "Concurrency-first design — use goroutines, channels, and select as the core primitives. Design for concurrent access from the start." |
+| rust | "Async-first design — use tokio or async-std primitives (Mutex, Semaphore, channels) as the core, with a blocking wrapper for sync callers." |
+| generic | "Concurrency-first design — use the language's native async or threading primitives as the core. Design for concurrent access from the start." |
+
+**Hint 7 — Decorator / wrapper pattern:**
+
+| Language | Hint |
+|----------|------|
+| python | "Decorator pattern — expose the core functionality as a decorator or function wrapper so users can apply it with `@rate_limit` syntax." |
+| typescript | "Decorator or middleware pattern — expose the core functionality as a higher-order function, middleware, or TypeScript decorator so users can apply it declaratively." |
+| go | "Middleware pattern — expose the core functionality as a wrapper function or http.Handler middleware so users can compose it with existing handlers." |
+| rust | "Macro or newtype pattern — expose the core functionality as a procedural macro, derive macro, or newtype wrapper so users can apply it declaratively." |
+| generic | "Wrapper pattern — expose the core functionality as a decorator, middleware, or wrapper so users can apply it declaratively to existing code." |
 
 Each hint is a nudge, not a mandate. Every implementation must still fully satisfy the spec regardless of its hint.
 
