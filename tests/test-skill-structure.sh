@@ -30,10 +30,8 @@ echo ""
 echo "=== Skill Structure: All Skill Files Exist ==="
 SKILL_FILES=(
     SKILL.md
-    slot-implementer-prompt.md
-    slot-reviewer-prompt.md
-    slot-judge-prompt.md
-    slot-synthesizer-prompt.md
+    profiles/coding.md
+    profiles/writing.md
 )
 for file in "${SKILL_FILES[@]}"; do
     if [ -f "$SKILL_DIR/$file" ]; then
@@ -42,6 +40,27 @@ for file in "${SKILL_FILES[@]}"; do
         echo "  [FAIL] File '$file' missing"
         FAILED=$((FAILED + 1))
     fi
+done
+
+echo ""
+echo "=== Skill Structure: Profile Required Sections ==="
+for profile in "$SKILL_DIR"/profiles/*.md; do
+    PROFILE_NAME=$(basename "$profile")
+    PROFILE_CONTENT=$(cat "$profile")
+    for section in "Approach Hints" "Implementer Prompt" "Reviewer Prompt" "Judge Prompt" "Synthesizer Prompt"; do
+        assert_contains "$PROFILE_CONTENT" "## $section" \
+            "Profile '$PROFILE_NAME' has section '$section'" || FAILED=$((FAILED + 1))
+    done
+done
+
+echo ""
+echo "=== Skill Structure: Profile Frontmatter ==="
+for profile in "$SKILL_DIR"/profiles/*.md; do
+    PROFILE_NAME=$(basename "$profile")
+    PROFILE_CONTENT=$(cat "$profile")
+    assert_contains "$PROFILE_CONTENT" "name:" "Profile '$PROFILE_NAME' has name in frontmatter" || FAILED=$((FAILED + 1))
+    assert_contains "$PROFILE_CONTENT" "description:" "Profile '$PROFILE_NAME' has description in frontmatter" || FAILED=$((FAILED + 1))
+    assert_contains "$PROFILE_CONTENT" "isolation:" "Profile '$PROFILE_NAME' has isolation in frontmatter" || FAILED=$((FAILED + 1))
 done
 
 echo ""

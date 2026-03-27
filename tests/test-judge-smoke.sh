@@ -10,7 +10,7 @@
 #      - Slot 2: 2.70/5 — over-engineered, CRITICAL dual-lock race condition
 #   3. Create two temp worktree directories with minimal placeholder code
 #      (judge needs paths but primarily relies on scorecards for this test)
-#   4. Read slot-judge-prompt.md and fill in template variables:
+#   4. Read the Judge Prompt section from the active profile and fill in template variables:
 #      - {{SPEC}}            <- tiny-spec.md contents
 #      - {{ALL_SCORECARDS}}  <- sample-scorecards.md contents
 #      - {{WORKTREE_PATHS}}  <- paths to the two temp worktree dirs

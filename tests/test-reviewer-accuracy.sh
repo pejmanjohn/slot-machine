@@ -11,7 +11,7 @@
 #   1. Source test-helpers.sh for run_claude, assert_contains, etc.
 #   2. Point at the planted-bug implementation in tests/fixtures/planted-bugs/
 #   3. Read golden issues from tests/fixtures/planted-bugs/golden-issues.json
-#   4. Build the reviewer prompt by filling slot-reviewer-prompt.md template:
+#   4. Build the reviewer prompt by filling the Reviewer Prompt section from the active profile:
 #      - {{SPEC}}                = tiny-spec.md contents
 #      - {{IMPLEMENTER_REPORT}}  = fake DONE report
 #      - {{WORKTREE_PATH}}       = planted-bugs directory
@@ -44,7 +44,7 @@ source "$SCRIPT_DIR/test-helpers.sh"
 FIXTURE_DIR="$SCRIPT_DIR/fixtures/planted-bugs"
 GOLDEN_ISSUES="$FIXTURE_DIR/golden-issues.json"
 SPEC_FILE="$SCRIPT_DIR/fixtures/tiny-spec.md"
-REVIEWER_TEMPLATE="$SKILL_DIR/slot-reviewer-prompt.md"
+REVIEWER_TEMPLATE="$SKILL_DIR/profiles/coding.md"  # Reviewer prompt is in the profile
 
 echo "=== Reviewer Accuracy Test (Planted Bugs) ==="
 echo ""

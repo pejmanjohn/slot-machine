@@ -10,7 +10,7 @@
 #      - Include src/rate_limiter.py with a simple TokenBucket class
 #      - Include tests/test_rate_limiter.py with basic passing tests
 #   3. Build a fake implementer report claiming DONE status
-#   4. Read slot-reviewer-prompt.md and fill in template variables:
+#   4. Read the Reviewer Prompt section from the active profile and fill in template variables:
 #      - {{SPEC}}               <- tiny-spec.md contents
 #      - {{IMPLEMENTER_REPORT}} <- the fake implementer report
 #      - {{WORKTREE_PATH}}      <- path to the temp dir with code
