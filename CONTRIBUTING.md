@@ -15,7 +15,7 @@ All PRs must pass the contract validation suite:
 ./tests/run-tests.sh
 ```
 
-If your change touches prompt templates (`slot-*-prompt.md`) or SKILL.md workflow logic, also run:
+If your change touches profiles (`profiles/*.md`) or SKILL.md workflow logic, also run:
 
 ```bash
 ./tests/run-tests.sh --smoke
@@ -32,3 +32,11 @@ If your change touches prompt templates (`slot-*-prompt.md`) or SKILL.md workflo
 - Keep SKILL.md's frontmatter `description` focused on trigger conditions only
 - Every `{{VARIABLE}}` in a prompt template must appear in SKILL.md
 - Don't change status/verdict string values without updating all files that reference them
+
+## Creating Custom Profiles
+
+To create a custom profile, either:
+- Create a new `.md` file in `profiles/` following the structure of `coding.md` or `writing.md`
+- Create a profile that extends an existing one with `extends: coding` in the frontmatter
+
+Run `./tests/run-tests.sh` to validate your profile has all required sections and consistent contracts.

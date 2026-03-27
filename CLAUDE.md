@@ -3,15 +3,17 @@
 You are working on the slot-machine skill — a Claude Code skill for best-of-N parallel implementation.
 
 ## Structure
-- `SKILL.md` — Main orchestration logic (the skill itself)
-- `slot-*-prompt.md` — Prompt templates for each agent role
+- `SKILL.md` — Orchestration engine (shared across all task types)
+- `profiles/` — Task-specific profiles (prompts, hints, config)
+  - `coding.md` — Built-in: code implementation tasks
+  - `writing.md` — Built-in: writing/drafting tasks
 - `tests/` — Tiered test suite
 - `.claude-plugin/` — Plugin distribution metadata
 
 ## Key Rules
 - SKILL.md description must ONLY describe when to trigger, never the workflow
-- All {{VARIABLES}} in prompt templates must be documented in SKILL.md
-- Status/verdict values must match across all files (run tests/test-contracts.sh)
+- All {{VARIABLES}} in profile prompts must be from the universal variable set in SKILL.md
+- Status/verdict values must match across SKILL.md and all profiles
 - Run `./tests/run-tests.sh` before committing
 
 ## Testing
