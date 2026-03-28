@@ -154,6 +154,15 @@ Slots can be configured per-slot instead of using the same profile implementer f
   - `codex` → `(null, "codex")` — Codex with generic prompt
   - `/superpowers:tdd + codex` → `("/superpowers:tdd", "codex")` — Codex with skill
 
+### Skill Name Translation for External Harnesses
+
+Slot definitions use Claude Code's `/` prefix for skills. External harnesses use different syntax. When dispatching a skill to a non-Claude harness, translate the prefix:
+
+- **Codex:** `/superpowers:tdd` → `$superpowers:tdd` (replace `/` with `$`)
+- **Future harnesses:** follow their native skill invocation syntax
+
+The skill is invoked natively by the target harness — Codex loads its own copy of the skill, not a text summary. The user is responsible for ensuring the skill is installed on the target harness.
+
 ### Approach Hints and Skill Slots
 
 Approach hints only apply to `default` slots. Skill-based slots do NOT get approach hints — the skill IS the diversity mechanism. When mixing skill and default slots, assign hints only to the default slots.
@@ -372,9 +381,7 @@ Do NOT use the Agent tool. Dispatch via Bash:
 2. Run `codex exec` pointed at the worktree. Use the Bash tool with `timeout: 300000` (5 minutes) and `run_in_background: true`. The `--json` flag emits JSONL output — pipe it through the Python parser below to extract the agent's final report:
 
    ```bash
-   cd {worktree_path} && codex exec "Implement this specification. Write all files to the current directory.
-
-   {If skill specified: 'METHODOLOGY: Follow {skill_name} principles — e.g., for TDD: write failing tests first, create module stubs so tests fail at the assertion level (not import errors), then implement minimal code to pass, verify all tests pass.'}
+   cd {worktree_path} && codex exec "{If skill specified: '$codex_skill_name\n\n'}Implement this specification. Write all files to the current directory.
 
    Specification:
    {spec}
@@ -427,7 +434,7 @@ Do NOT use the Agent tool. Dispatch via Bash:
 | `default` | Agent tool (parallel Group 1) | Profile `1-implementer.md` + hint | Profile setting | Yes |
 | `/superpowers:tdd` | Agent tool (parallel Group 1) | "Invoke {skill} via Skill tool" + spec | worktree | No |
 | `codex` | `codex exec` CLI (parallel Group 2) | Generic "implement this" + spec | worktree (manual) | No |
-| `/superpowers:tdd + codex` | `codex exec` CLI (parallel Group 2) | Skill methodology + spec | worktree (manual) | No |
+| `/superpowers:tdd + codex` | `codex exec` CLI (parallel Group 2) | `$superpowers:tdd` + spec (native skill invocation) | worktree (manual) | No |
 
 ---
 
