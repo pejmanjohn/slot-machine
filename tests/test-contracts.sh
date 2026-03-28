@@ -155,7 +155,7 @@ done
 
 # Coding-specific: architectural keywords check
 CODING_HINTS=$(cat "$SKILL_DIR/profiles/coding/0-profile.md" 2>/dev/null || echo "")
-ARCH_MATCH_COUNT=$(echo "$CODING_HINTS" | grep -ioE 'dataclass|decorator|async|context.manager|protocol|ABCs?|inheritance|fluent|functional|data-oriented|immutab[a-z]*|composition|strategy.pattern|dependency.injection|named.tuple|with.statement|__enter__|__iter__|@rate_limit|asyncio|logging|metrics|observable' | tr '[:upper:]' '[:lower:]' | sort -u | wc -l | tr -d ' ')
+ARCH_MATCH_COUNT=$(echo "$CODING_HINTS" | grep -ioE 'dataclass|decorator|async|context.manager|protocol|ABCs?|inheritance|fluent|functional|data-oriented|immutab[a-z]*|composition|strategy.pattern|dependency.injection|named.tuple|with.statement|__enter__|__iter__|@rate_limit|asyncio|logging|metrics|observable|goroutine|channel|trait|enum|Promise|AbortController|middleware|builder|Iterator|Symbol|tokio|io\.Reader|io\.Writer|context\.Context|impl.Into|Drop|newtype|macro|type.guard|discriminated.union' | tr '[:upper:]' '[:lower:]' | sort -u | wc -l | tr -d ' ')
 
 if [ "$ARCH_MATCH_COUNT" -ge 4 ]; then
     echo "  [PASS] coding/0-profile.md hints contain $ARCH_MATCH_COUNT distinct architectural keywords (need >= 4)"
