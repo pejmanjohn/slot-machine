@@ -1,96 +1,119 @@
-# 🎰 Slot Machine
+# Slot Machine
 
-**An open-source agent skill for Claude Code, Codex, and Gemini CLI.**
+**An open-source agent skill for Claude Code.**
 
 AI agents are probabilistic. The same spec produces different code every time — different designs, different bugs, different quality. A single attempt is a coin flip. Slot Machine gives you N coins and keeps the best one — or combines the best parts of each.
 
 Run N independent implementations of the same feature in parallel. Each gets reviewed by an independent agent that hunts for real bugs. A meta-judge compares all of them and makes one of three calls: **pick** the clear winner, **synthesize** the best elements from multiple implementations into something better than any individual, or **reject all** if none meet the bar.
 
+## What You Can Do
+
+**Compete implementations against each other:**
+```
+/slot-machine — Implement the payment webhook handler from PLAN.md
+```
+
+**Pit different AI models against each other on the same spec:**
+```
+/slot-machine with /superpowers:tdd, /ce:work, and codex — Implement the TaskScheduler
+```
+
+**Use different methodologies per slot:**
+```
+/slot-machine with /superpowers:tdd and /ce:work — Build the rate limiter
+```
+
+**Draft prose with competing voices:**
+```
+/slot-machine with profile: writing — Write the launch announcement
+```
+
+**Set persistent defaults for your project:**
+```markdown
+## Slot Machine Settings
+slot-machine-slots:
+  - /superpowers:tdd
+  - /ce:work
+  - codex
+  - default
+```
+
 ## See It Work
 
 You give it a spec:
 
-> *Use slot-machine with 3 slots to implement the Task Queue API from the spec*
+> */slot-machine with 3 slots — Implement the TaskScheduler from the spec*
 
 The skill takes over:
 
 ```
-🎰 Slot Machine: Pulling the lever with 3 slots
-Feature: Task Queue API
-Baseline: 1 test passing
-Hints:
-  Slot 1 → Simplest possible approach
-  Slot 2 → Design for robustness
-  Slot 3 → Functional / data-oriented approach
+Slot Machine — coding profile
+
+Feature: TaskScheduler
+Slots: 3 | Simplest approach (claude-opus-4-6), Robustness (claude-opus-4-6), Functional (claude-opus-4-6)
 ```
 
-Three agents implement the full spec independently, each in an isolated worktree. Then independent reviewers inspect each one — not a rubber stamp, an adversarial review with evidence:
+Three agents implement the full spec independently, each in an isolated worktree with a different architectural direction. Then independent reviewers inspect each one — not a rubber stamp, an adversarial review with evidence:
 
 ```
 Slot 1 Review:
   Spec Compliance: PASS
-  Critical: src/api.py:47 — unhandled TypeError crash when priority
-           is non-integer. Flask returns 500 instead of 400.
-  Important: src/task_queue.py:38 — to_dict() called outside lock.
-             Another thread can see inconsistent state.
-  Verdict: Not a contender — critical API crash.
+  Critical: src/scheduler.ts:47 — unhandled TypeError when concurrency
+           is non-integer. Constructor accepts 1.5 silently.
+  Important: src/scheduler.ts:38 — drain() doesn't account for tasks
+             scheduled after drain is called.
+  Verdict: Not a contender — critical validation bug.
 
 Slot 2 Review:
   Spec Compliance: PASS
-  Important: tests/test_api.py:92 — flaky timing assertion, may
-             fail under CI load.
-  Minor: No __repr__ on TaskQueue for debugging.
-  Verdict: Yes — strongest validation, 45 tests.
+  Important: tests/scheduler.test.ts:92 — flaky timing assertion.
+  Minor: No error message in constructor throw.
+  Verdict: Yes — strongest validation, 17 tests.
 
 Slot 3 Review:
   Spec Compliance: PASS
-  Important: Sentinel object in worker lifecycle can mask shutdown errors.
-  Verdict: Yes with concerns — elegant API but sentinel bug.
+  Important: drain() uses snapshot semantics — may miss late-scheduled tasks.
+  Verdict: Yes with concerns — clean API but drain limitation.
 ```
 
-The opus-level judge compares all three, does targeted code inspection, and decides:
+The judge compares all three, does targeted code inspection, and decides:
 
 ```
-🎰 Slot Machine Complete
-Feature: Task Queue API
-Slots: 3 (3 succeeded, 0 failed)
-Verdict: PICK slot-2 (HIGH confidence)
-Tests: 45 passing
+---
 
-Why Slot 2 won:
-• Zero critical issues (Slot 1 had a crash)
-• Input validation at both layers (TaskQueue + Flask API)
-• Correct lock granularity (Slot 1 had a race condition)
-• 45 tests including concurrent access stress tests
+Verdict: PICK Slot 2 (Claude Code claude-opus-4-6) | Confidence: HIGH
+
+Zero critical issues, strongest test coverage (17 tests including concurrency
+stress tests), correct drain semantics. No synthesis needed — clear winner.
+
+---
 ```
 
-Three bugs caught that would have shipped with a single implementation. The winner has 2x the test coverage.
+Bugs caught that would have shipped with a single implementation. The winner has 3x the test coverage of either alternative.
 
 ### When the Judge Synthesizes
 
-Sometimes no single slot is the best at everything. In an earlier test run on a rate limiter spec, the judge saw complementary strengths across slots and called **SYNTHESIZE** instead of PICK:
+Sometimes no single slot is the best at everything. In a cross-model run, the judge saw complementary strengths and called **SYNTHESIZE**:
 
 ```
-🎰 Slot Machine Complete
-Feature: Token Bucket Rate Limiter
-Verdict: SYNTHESIZE (HIGH confidence)
+---
 
-Synthesis plan:
-  Base: Slot 3 (readability) — cleanest structure, spec-faithful consume()
-  + From Slot 1: refill_rate=0 support for fixed-capacity buckets
-  + From Slot 2: edge-case tests (tiny capacity, over-capacity, high-refill cap)
+Verdict: SYNTHESIZE | Confidence: HIGH
 
-Result: 74 lines, 28 tests — combines the best code from Slot 3
-        with the best tests from Slots 1 and 2
+Slot 3 has the cleanest code. Slot 1 has the best tests. Combining both
+produces something better than either.
+
+- Base: Slot 3 (Codex gpt-5.4) — cleanest implementation, proper drain pattern
+- + Slot 1 (Claude Code opus-4.6 w/ /ce:work) — 19-test suite: nested scheduling,
+  timing verification, counter tracking
+- Keep Slot 3: event-ordering drain test, error propagation test
+
+---
 ```
 
-The synthesizer agent works from the judge's plan: it starts with one slot as the base, ports specific elements from the donors, checks for coherence, and runs the full test suite. The result reads like one person wrote it, not like pieces were stitched together.
-
-This is one of the skill's strongest features — you don't have to choose between "clean code" and "thorough tests" when different slots excel at each.
+The synthesizer agent starts with one slot as the base, ports specific elements from the donors, checks for coherence, and runs the full test suite. The result reads like one person wrote it, not like pieces were stitched together.
 
 ## Without vs With Slot Machine
-
-We benchmarked on the same spec (multi-file Task Queue API), same model, same machine:
 
 | | Without Skill | With Slot Machine |
 |---|---|---|
@@ -106,25 +129,15 @@ We benchmarked on the same spec (multi-file Task Queue API), same model, same ma
 
 ## Install
 
-**Claude Code (plugin):**
+**Plugin:**
 ```
 /plugin marketplace add pejman/slot-machine
 /plugin install slot-machine@slot-machine
 ```
 
-**Claude Code (manual):**
+**Manual:**
 ```bash
 git clone https://github.com/pejman/slot-machine.git ~/.claude/skills/slot-machine
-```
-
-**Codex:**
-```bash
-git clone https://github.com/pejman/slot-machine.git ~/.codex/skills/slot-machine
-```
-
-**Gemini CLI:**
-```bash
-gemini extensions install https://github.com/pejman/slot-machine
 ```
 
 ## Usage
@@ -145,19 +158,25 @@ Spec: Write a changelog entry announcing the new task profiles feature
 
 The skill also triggers on natural language: "slot-machine this", "best-of-N", "pull the lever", or "parallel implementations."
 
-### Multi-Skill and Cross-Model Runs
+## Cross-Model Runs
 
-Compare different implementation approaches and AI systems on the same spec:
+Run the same spec on different AI systems and pick the best result:
 
 ```
-/slot-machine with /superpowers:tdd, /ce:work, and codex
+/slot-machine with /ce:work, /ce:work + codex, and codex
 
-Spec: Implement the payment webhook handler from PLAN.md
+Spec: Implement the TaskScheduler class from PLAN.md
 ```
 
-Three slots: Claude Code with TDD, Claude Code with CE patterns, and OpenAI Codex. Each implements independently, all reviewed by the same evaluation pipeline.
+Three slots: Claude Code with CE patterns, Codex with CE patterns, and bare Codex. Each implements independently, all reviewed by the same evaluation pipeline. The progress table shows which model ran each slot:
 
-Compose skills with harnesses using `+`:
+| Slot | Status | Model | Tests | Approach |
+|------|--------|-------|-------|----------|
+| 1 | `DONE` | `claude-opus-4-6` | 17 tests | /ce:work |
+| 2 | `DONE_WITH_CONCERNS` | `gpt-5.4` | 5 tests | /ce:work + codex |
+| 3 | `DONE_WITH_CONCERNS` | `gpt-5.4` | 5 tests | codex |
+
+**Skills** guide methodology (TDD, CE patterns). **Harnesses** choose the AI system (Claude, Codex). Compose them with `+`:
 
 ```
 /slot-machine with 4 slots:
@@ -166,6 +185,8 @@ Compose skills with harnesses using `+`:
   slot 3: /ce:work
   slot 4: codex
 ```
+
+Skills are invoked natively by each harness — Claude uses the Skill tool, Codex uses `$` prefix. Each loads the full skill document in its own way.
 
 Or set project defaults in `CLAUDE.md`:
 
@@ -178,11 +199,27 @@ slot-machine-slots:
   - default
 ```
 
+## Profiles: Coding and Writing
+
+Slot-machine auto-detects whether your spec is a coding task or a writing task and loads the right profile. Each profile has its own approach hints, reviewer criteria, and synthesis strategy.
+
+**Coding profile** (`isolation: worktree`):
+- Hints steer toward different architectures: simplicity, robustness, functional, idiomatic API, extensibility
+- Reviewer checks spec compliance, hunts bugs with file:line evidence, assesses test coverage
+- Pre-checks run your test suite before review
+- Each slot gets an isolated git worktree
+
+**Writing profile** (`isolation: file`):
+- Hints steer toward different voices: concise, narrative, technical, conversational, structured
+- Reviewer checks brief compliance, prose quality, audience fit, coherence
+- No git worktrees — each slot writes to a file
+- Synthesis merges the best phrasing and structure from multiple drafts
+
+Force a profile with `profile: writing` or `profile: coding`, or let auto-detection handle it.
+
 ## Works With Your Other Skills
 
 Each implementer subagent is a full Claude Code session with access to all your installed skills. If you use [superpowers](https://github.com/obra/superpowers), [gstack](https://github.com/garrytan/gstack), [compound-engineering](https://github.com/EveryInc/compound-engineering-plugin), or any other skills, the implementers can use them automatically.
-
-**Common combos:**
 
 | Your Skill | What Happens in Slot Machine |
 |-----------|------------------------------|
@@ -190,24 +227,6 @@ Each implementer subagent is a full Claude Code session with access to all your 
 | superpowers systematic-debugging | If an implementer gets stuck, it debugs methodically instead of guessing |
 | gstack /review | The judge can reference your project's review conventions |
 | compound-engineering workflows | Implementers follow your team's coding patterns |
-
-To make this explicit, mention it in your spec:
-
-```
-Use slot-machine with 3 slots. Each implementer should follow TDD.
-
-Spec: [your feature spec]
-```
-
-Or add it to your project's `CLAUDE.md`:
-
-```markdown
-## Slot Machine Settings
-When using slot-machine, implementers should:
-- Follow TDD (write failing test first)
-- Use our project's existing patterns in src/services/
-- Run `make lint` before committing
-```
 
 The orchestrator passes your `CLAUDE.md` conventions as project context to each implementer, so project-specific rules apply to every slot automatically.
 
@@ -234,19 +253,14 @@ The reviewer cites the exact file and line, explains the impact, and suggests a 
 
 ## How It Works
 
-1. **Setup** — Validate the spec, gather project context, verify tests pass
-2. **Implement** — N agents work in parallel, each in an isolated worktree with a different architectural hint:
-   - *"Simplest possible approach — single class, minimal API surface"*
-   - *"Design for robustness — input validation, error handling, edge cases"*
-   - *"Functional / data-oriented — dataclasses, composition over inheritance"*
-   - *"Context-manager API — Pythonic with `with` statements, protocols"*
-   - *"Build for extensibility — protocols/ABCs, dependency injection"*
+1. **Setup** — Validate the spec, gather project context, detect models and harnesses
+2. **Implement** — N agents work in parallel via Agent tool, each in an isolated worktree with a different approach. Codex slots run through a wrapper agent that dispatches `codex exec` and translates the output into the same report format.
 3. **Review** — Independent reviewers inspect each implementation: spec compliance (pass/fail), adversarial bug hunting (file:line evidence), test gap analysis
-4. **Judge** — An opus-level meta-judge compares all reviews, does targeted code inspection, and returns one of three verdicts:
-   - **PICK** — one slot is the clear winner → merge it
-   - **SYNTHESIZE** — multiple slots have complementary strengths → a synthesizer agent combines the best elements into one coherent implementation
-   - **NONE_ADEQUATE** — all slots have critical issues → report to user, don't ship broken code
-5. **Resolve** — Merge the winner (or synthesis), clean up worktrees, report the outcome
+4. **Judge** — A meta-judge compares all reviews, does targeted code inspection, and returns one of three verdicts:
+   - **PICK** — one slot is the clear winner, merge it
+   - **SYNTHESIZE** — multiple slots have complementary strengths, combine them
+   - **NONE_ADEQUATE** — all slots have critical issues, report to user
+5. **Resolve** — Merge the winner (or synthesis), clean up worktrees, report the outcome with full model attribution
 
 ## Configuration
 
@@ -255,10 +269,15 @@ The reviewer cites the exact file and line, explains the impact, and suggests a 
 | `slots` | 5 | Number of parallel attempts |
 | `approach_hints` | true | Different architectural direction per slot |
 | `auto_synthesize` | true | Allow combining best elements from multiple slots |
-| `implementer_model` | sonnet | Model for implementers and reviewers |
-| `judge_model` | opus | Model for judge and synthesizer |
+| `max_retries` | 1 | Re-run failed slots (0 = no retry) |
+| `cleanup` | true | Delete worktrees after completion |
+| `quiet` | false | Suppress progress tables (for autonomous loops) |
+| `implementer_model` | inherit | Model for implementers (inherits from session) |
+| `reviewer_model` | inherit | Model for reviewers (inherits from session) |
+| `judge_model` | inherit | Model for judge (inherits from session) |
+| `synthesizer_model` | inherit | Model for synthesizer (inherits from session) |
 
-Set in your project's `CLAUDE.md` or override inline: `"slot-machine this with 3 slots"`
+Set in your project's `CLAUDE.md` or override inline: `/slot-machine with 3 slots`
 
 ## When to Use
 
@@ -273,20 +292,9 @@ Set in your project's `CLAUDE.md` or override inline: `"slot-machine this with 3
 - You already know exactly how it should be built
 - Spec is too vague — brainstorm first, then slot-machine
 
-## Running Tests
-
-```bash
-./tests/run-tests.sh                  # Contract validation (instant)
-./tests/run-tests.sh --smoke          # + Phase-level tests (~10 min)
-./tests/run-tests.sh --integration    # + Full E2E (~20-30 min)
-./tests/run-tests.sh --all            # Everything
-```
-
-57 contract assertions verify format consistency across all agent prompts. E2E tests run the full pipeline headlessly via `claude -p` and verify the NDJSON transcript.
-
 ## Works in Autonomous Loops
 
-Slot-machine runs inside [Ralph](https://github.com/snarktank/ralph), [Trycycle](https://github.com/danshapiro/trycycle), and custom agent loops. No special setup — add config to your `CLAUDE.md` and the loop's AI instances pick it up automatically.
+Slot-machine runs inside [Ralph](https://github.com/snarktank/ralph) and custom agent loops. No special setup — add config to your `CLAUDE.md` and the loop's AI instances pick it up automatically.
 
 Slot-machine self-regulates: it evaluates each task and only engages when the task has meaningful design choices. Mechanical tasks (add a field, rename a function) get single-shot implementation. You can blanket-enable slot-machine and trust it to only spend compute when competition adds value.
 
@@ -306,6 +314,10 @@ Every run writes a machine-readable result to `.slot-machine/runs/latest/result.
   "verdict": "PICK",
   "winning_slot": 2,
   "confidence": "HIGH",
+  "slot_details": [
+    {"slot": 1, "harness": "Claude Code", "model": "claude-opus-4-6", "skill": "/ce:work"},
+    {"slot": 2, "harness": "Codex", "model": "gpt-5.4", "skill": null}
+  ],
   "files_changed": ["src/api.py", "tests/test_api.py"],
   "tests_passing": 45
 }
@@ -313,11 +325,71 @@ Every run writes a machine-readable result to `.slot-machine/runs/latest/result.
 
 Set `quiet: true` to suppress progress tables in unattended runs. The run directory (`.slot-machine/runs/`) keeps all artifacts (slot drafts, reviewer scorecards, judge verdict) for post-hoc inspection.
 
+## Custom Profiles
+
+Create your own profiles for domain-specific tasks. A profile is a folder with 5 files:
+
+```
+my-profile/
+  0-profile.md       # Config: name, isolation, pre-checks, approach hints
+  1-implementer.md   # Prompt for each implementation agent
+  2-reviewer.md      # Prompt for each review agent
+  3-judge.md         # Prompt for the meta-judge
+  4-synthesizer.md   # Prompt for the synthesizer
+```
+
+**Profile config (`0-profile.md`)** uses YAML frontmatter:
+
+```yaml
+---
+name: api-review
+description: For reviewing and reimplementing API endpoints with security focus.
+extends: coding
+isolation: worktree
+pre_checks: |
+  {test_command} 2>&1
+  npm audit 2>&1
+---
+
+## Approach Hints
+
+1. "Focus on input validation and authentication — treat every caller as untrusted."
+2. "Optimize for observability — structured logging, error codes, request tracing."
+3. "Design for backward compatibility — existing clients must not break."
+```
+
+**Inheritance:** Set `extends: coding` to inherit all prompts from the coding profile and override only what you change. Files present in your profile replace the base; missing files are inherited. One level of inheritance max.
+
+**Install locations:**
+- **Project-local:** `./profiles/my-profile/` (checked into your repo)
+- **Personal:** `~/.slot-machine/profiles/my-profile/` (available in all projects)
+
+Use it: `/slot-machine with profile: my-profile`
+
+Or set as project default in `CLAUDE.md`:
+
+```markdown
+slot-machine-profile: my-profile
+```
+
+All prompts receive [universal variables](SKILL.md#universal-variables) (`{{SPEC}}`, `{{PROJECT_CONTEXT}}`, `{{APPROACH_HINT}}`, etc.) — your prompts just need to reference them.
+
 ## This is NOT Standard Parallel Agents
 
 Every major tool splits different tasks across agents (frontend, backend, tests in parallel). That's task decomposition.
 
 Slot Machine gives the **same task** to N agents and compares their **full implementations**. The value isn't parallelism — it's competition, independent review, and structured judgment. Different problem, different solution.
+
+## Running Tests
+
+```bash
+./tests/run-tests.sh                  # Contract validation (instant)
+./tests/run-tests.sh --smoke          # + Phase-level tests (~10 min)
+./tests/run-tests.sh --integration    # + Full E2E (~20-30 min)
+./tests/run-tests.sh --all            # Everything
+```
+
+16 contracts with 100+ assertions verify format consistency across all agent prompts and orchestration documents.
 
 ## License
 
