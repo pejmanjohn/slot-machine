@@ -163,15 +163,21 @@ SKILL.md injects these variables into ALL profile prompts. If a variable isn't r
 
 5. **Assign approach hints.** If `approach_hints` is enabled, read hints from the active profile's `profile.md`. Randomly assign one hint per slot (without replacement). Each hint steers toward a different approach — the profile defines what diversity means for this task type.
 
-6. **Report setup to user:**
-   ```
-   🎰 Slot Machine: Pulling the lever with N slots
-   Profile: {profile_name}
+6. **Report setup to user** using this format (top-level markdown, not inside a code block):
+
+   **Slot Machine** — `{profile_name}` profile
+
    Feature: {feature_name}
-   Spec: {spec_source}
-   Baseline: {pre_check_summary or "no pre-checks configured"}
-   Hints: {list of hint assignments}
-   ```
+   Slots: `{N}` | Hints: {hint_1}, {hint_2}, ...
+
+   Formatting rules for ALL orchestrator output (apply throughout Phases 1-4):
+   - Tables MUST be top-level markdown — never indented or inside code blocks
+   - Status values in backticks: `DONE`, `PASS`, `FAIL`, `HIGH`, `MEDIUM`, `LOW`
+   - Profile name and key numbers in backticks
+   - Bold for phase labels and verdicts
+   - No italics anywhere — they de-emphasize in monospace terminals
+   - Blockquote (`>`) for the verdict section only
+   - H1 (`#`) for Final Output header only
 
 ### Phase 2: Parallel Implementation
 
@@ -218,15 +224,17 @@ Then dispatch implementers WITHOUT `isolation: "worktree"`, pointing each to its
 
 **Retry handling:** When retrying, dispatch a SINGLE Agent call (not parallel) with the same template but additional context addressing the block. Use a fresh subagent — don't try to continue the failed one.
 
-**Report progress:**
-```
-Implementation complete:
-  ✅ Slot 1: DONE (worktree: {path})
-  ✅ Slot 2: DONE_WITH_CONCERNS (worktree: {path})
-  ❌ Slot 3: FAILED after retry (reason)
-  ✅ Slot 4: DONE (worktree: {path})
-  ✅ Slot 5: DONE (worktree: {path})
-```
+**Report progress** using a top-level markdown table. For writing profiles, show word count. For coding profiles, show test count. Include a one-line summary of each slot's approach (from the hint influence):
+
+**Phase 2:** Implementation — `done`
+
+| Slot | Status | Words/Tests | Approach |
+|------|--------|-------------|----------|
+| 1 | `DONE` | ~330 | {hint_name} — {one-line summary of what this slot did differently} |
+| 2 | `DONE_WITH_CONCERNS` | ~327 | {hint_name} — {summary} |
+| 3 | `FAILED` | — | {hint_name} — {failure reason} |
+
+Do NOT show full implementer reports, self-review findings, or file lists. The table summarizes the essential information. Agent internals are pipeline noise.
 
 **Minimum viable:** At least 2 successful slots needed for meaningful comparison. If fewer than 2 succeed, report to user and recommend: re-run with different slot count, fix spec issues, or manual implementation.
 
@@ -269,7 +277,21 @@ The universal variables to fill in the reviewer prompt:
 
 The reviewer reads actual content in the worktree/output file — it does NOT have `isolation: "worktree"` (it inspects existing work, not its own workspace).
 
-After all reviewers return, collect all reviews.
+After all reviewers return, collect all reviews. **Report review results** using a top-level markdown table and standout bullets. Do NOT show full reviewer scorecards, evidence chains, or pass-by-pass analysis — those are pipeline internals the judge uses, not the user.
+
+**Phase 3:** Review — `done`
+
+| Slot | Compliance | Critical | Important | Minor | Verdict |
+|------|------------|----------|-----------|-------|---------|
+| 1 | `PASS` | 0 | 0 | 3 | **Contender** |
+| 2 | `PASS` | 0 | 1 | 2 | **Contender** |
+| 3 | `FAIL` | 1 | 0 | 1 | Eliminated |
+
+**Standout elements:**
+- Slot 1: {the reviewer's top strength for this slot — one line}
+- Slot 2: {the reviewer's top strength}
+
+Extract standout elements from each reviewer's "Strengths" section. Pick the single most notable strength per slot — the one the judge is most likely to care about.
 
 #### Step 2: Dispatch the judge
 
@@ -294,6 +316,23 @@ The judge returns one of three verdicts:
 - **PICK** — one slot is the clear winner
 - **SYNTHESIZE** — multiple slots have complementary strengths worth combining
 - **NONE_ADEQUATE** — all slots have critical issues
+
+**Report the verdict** using a blockquote. This is the most important output before the final result — make it visually distinct:
+
+**Phase 4:** Verdict
+
+> **SYNTHESIZE** — `HIGH` confidence
+>
+> **Base:** Slot 3 — strongest voice, best opener
+> **+ Slot 2:** problem sentence, lock-in footer
+> **+ Slot 1:** fzf detail, escape-hatch framing
+> **Cut:** "How it works" section — out of scope
+
+For PICK verdicts, the blockquote is simpler:
+
+> **PICK Slot 2** — `HIGH` confidence
+>
+> Zero critical issues, strongest test coverage (45 tests), correct lock granularity
 
 ### Phase 4: Resolution
 
@@ -398,15 +437,35 @@ If `cleanup` is false, report worktree/output locations so the user can inspect 
 
 #### Final Report
 
-```
-🎰 Slot Machine Complete
-Feature: {feature_name}
-Slots: N ({succeeded} succeeded, {failed} failed)
-Verdict: {PICK slot-N | SYNTHESIZE (base + donors) | NONE_ADEQUATE}
-Winner score: {score}/5
-Tests: {count} passing
-Wall clock: {duration}
-```
+The final report has three parts: the H1 header, the output content, and the footer line.
+
+**Part 1: H1 header** (use markdown `#` — this is the most visually distinct element):
+
+# Final Output
+
+**Part 2: Output content** — depends on profile isolation and output length:
+
+**For `file` isolation (writing):** Count lines in the final output file.
+- If ≤ 60 lines: show the full content inline after the header.
+- If > 60 lines: show the first ~20 lines, then: `Full output at \`{path}\``
+
+**For `worktree` isolation (coding):** Show a file change summary table:
+
+# Final Output — merged to `{branch}`
+
+| File | Lines | What |
+|------|-------|------|
+| src/task_queue.py | +142 | TaskQueue class with priority support |
+| tests/test_task_queue.py | +245 | 45 tests including concurrency |
+
+`3` files changed, `474` insertions
+`45` tests passing
+
+**Part 3: Footer** — a horizontal rule followed by a one-line summary:
+
+---
+
+**Complete** — `{word_count} words` | `{N} slots` | `{verdict}`
 
 #### Metrics (optional)
 
