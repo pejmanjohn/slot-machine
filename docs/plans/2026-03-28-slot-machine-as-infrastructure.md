@@ -98,9 +98,9 @@ The smallest useful expansion. Users specify which skill each slot uses:
 
 ```
 /slot-machine with 3 slots:
-  slot 1: use /superpowers:tdd
-  slot 2: use /ce:work
-  slot 3: default (profile hint)
+  slot 1: /superpowers:tdd
+  slot 2: /ce:work
+  slot 3: default
 ```
 
 Implementation:
@@ -118,10 +118,10 @@ The wow feature. Run Claude Code vs Codex on the same spec, review both, pick th
 
 ```
 /slot-machine with 4 slots:
-  slot 1: tdd                    ← Claude Code with TDD guidance
-  slot 2: tdd + codex            ← Codex with TDD guidance
-  slot 3: ce:work                ← Claude Code with CE patterns
-  slot 4: codex                  ← Codex with default approach
+  slot 1: /superpowers:tdd                ← Claude Code with TDD guidance
+  slot 2: /superpowers:tdd + codex        ← Codex with TDD guidance
+  slot 3: /ce:work                        ← Claude Code with CE patterns
+  slot 4: codex                           ← Codex with default approach
 ```
 
 **Key design decision: slot-machine dispatches to Codex natively — not through the `/codex` skill.**
@@ -133,7 +133,7 @@ The `/codex` skill (gstack) is designed for review/challenge/consult, not implem
 - **Harnesses** = which AI system (Claude Code, Codex, Gemini) — dispatch mechanism
 - **Default** = profile implementer prompt + approach hints
 
-Skills and harnesses compose: `tdd + codex` means "Codex implements using TDD methodology."
+Skills and harnesses compose: `/superpowers:tdd + codex` means "Codex implements using TDD methodology." The slash prefix on skills is natural — it's how users invoke them in Claude Code (with autocomplete). Harnesses don't have slashes — they're systems, not skills.
 
 **Codex dispatch mechanics:**
 
@@ -295,16 +295,16 @@ JSONL parsing pattern borrowed from gstack's codex skill: parse `item.completed`
 | Slot config | Orchestrator action | Dispatch mechanism | Isolation |
 |-------------|--------------------|--------------------|-----------|
 | `default` | Profile implementer prompt + approach hint | Agent tool | Profile's isolation setting |
-| `tdd` | TDD methodology guidance + spec | Agent tool | worktree |
-| `ce:work` | CE work patterns guidance + spec | Agent tool | worktree |
+| `/superpowers:tdd` | TDD methodology guidance + spec | Agent tool | worktree |
+| `/ce:work` | CE work patterns guidance + spec | Agent tool | worktree |
 | `codex` | Spec passed to codex exec CLI | `codex exec -s workspace-write --json` | worktree (slot-machine managed) |
-| `tdd + codex` | TDD guidance embedded in codex exec prompt | `codex exec -s workspace-write --json` | worktree (slot-machine managed) |
+| `/superpowers:tdd + codex` | TDD guidance embedded in codex exec prompt | `codex exec -s workspace-write --json` | worktree (slot-machine managed) |
 
 **Two categories, composable:**
-- **Skills** (tdd, ce:work, sdd) = methodology guidance. Injected into the prompt of whatever harness runs the slot.
-- **Harnesses** (codex, gemini, default=claude-code) = which AI system executes. Determines the dispatch mechanism.
+- **Skills** (`/superpowers:tdd`, `/ce:work`) = methodology guidance. Slash-prefixed, autocomplete-friendly. Injected into the prompt of whatever harness runs the slot.
+- **Harnesses** (`codex`, `gemini`) = which AI system executes. No slash prefix — these are systems, not skills. Determines the dispatch mechanism.
 
-A slot with no harness specified uses Claude Code (the Agent tool). A slot with no skill specified uses the profile's implementer prompt + approach hint. Both can be combined: `tdd + codex` = Codex implements using TDD methodology.
+A slot with no harness specified uses Claude Code (the Agent tool). A slot with no skill specified uses the profile's implementer prompt + approach hint. Both compose with `+`: `/superpowers:tdd + codex` = Codex implements using TDD methodology.
 
 **Key insight:** The profile's reviewer/judge/synthesizer prompts are always used regardless of how the slot was implemented. Only the implementation step is pluggable.
 
@@ -315,29 +315,29 @@ Three ways to configure slots, from casual to persistent:
 ### 1. Natural Language (primary — how most users interact)
 
 ```
-/slot-machine this with tdd, ce:work, and codex
+/slot-machine this with /superpowers:tdd, /ce:work, and codex
 
 Spec: Implement a rate limiter with sliding window support
 ```
 
-The orchestrator parses skill and harness names from the request. One slot per named item. If the user also specifies a slot count higher than the named items, remaining slots get default profile hints.
+The orchestrator parses skill and harness names from the request. Slash-prefixed names are skills, bare names are harnesses. One slot per named item. If the user also specifies a slot count higher than the named items, remaining slots get default profile hints.
 
 ```
-/slot-machine this with 5 slots — use tdd and codex, rest are default
+/slot-machine this with 5 slots — use /superpowers:tdd and codex, rest are default
 
 Spec: [the spec]
 ```
 
-Parsed as: Slot 1: tdd. Slot 2: codex. Slots 3-5: default profile hints.
+Parsed as: Slot 1: /superpowers:tdd. Slot 2: codex. Slots 3-5: default profile hints.
 
 ### 2. Explicit Per-Slot (power users who want precise control)
 
 ```
 /slot-machine with 4 slots:
-  slot 1: tdd
-  slot 2: ce:work
+  slot 1: /superpowers:tdd
+  slot 2: /ce:work
   slot 3: codex
-  slot 4: tdd + codex
+  slot 4: /superpowers:tdd + codex
 
 Spec: [the spec]
 ```
@@ -347,9 +347,9 @@ Spec: [the spec]
 ```markdown
 ## Slot Machine Settings
 slot-machine-slots:
-  - skill: tdd
-  - skill: ce:work
-  - harness: codex
+  - /superpowers:tdd
+  - /ce:work
+  - codex
   - default
 ```
 
@@ -371,7 +371,7 @@ When the user says "all my skills" or "all implementation skills" or uses `--dis
 |-----------|-----------------|
 | `/slot-machine this` | No — default profile + hints |
 | `/slot-machine this with 3 slots` | No — default hints |
-| `/slot-machine this with /superpowers:tdd and codex` | No — explicit list |
+| `/slot-machine this with /superpowers:tdd and codex` | No — explicit list, no discovery needed |
 | `/slot-machine this with all my skills` | **Yes** |
 | `/slot-machine this using all implementation skills` | **Yes** |
 | `/slot-machine --discover` | **Yes** |
@@ -381,22 +381,22 @@ Detection ONLY fires on explicit "all my/implementation skills" language or `--d
 ### First-Time Flow
 
 ```
-I scanned your installed skills and detected these implementation workflows:
+I scanned your installed skills and detected these slot-compatible workflows:
 
   1. /superpowers:tdd — test-first development
-  2. /superpowers:subagent-driven-development — multi-agent with review loops
-  3. /ce:work — pattern-matching execution
-  4. codex — OpenAI Codex (external, GPT model)
+  2. /ce:work — pattern-matching execution
+  3. codex — OpenAI Codex (external, GPT model)
 
-Use all 4 as slots? Or adjust?
+Use all 3 as slots? Or adjust?
 ```
+
+Discovery filters out poor slot candidates (multi-agent orchestrators like SDD). Users can still manually add them if they have a reason.
 
 User confirms or edits. Selection saved to `~/.slot-machine/config.md`:
 
 ```markdown
 ## Discovered Implementation Skills
 - /superpowers:tdd
-- /superpowers:subagent-driven-development
 - /ce:work
 - codex
 ```
@@ -568,7 +568,7 @@ The run directory (`.slot-machine/runs/`) keeps all artifacts
 
 1. **Ship the current branch** (Phase 1 complete — profiles, pipeline, run storage, output formatting, model inheritance)
 2. **Add JSON result artifact + quiet mode + README autonomous loop section** — small additions that enable loop integration without architectural changes
-3. **Design and implement Phase 2: skill-per-slot** — start with tdd and ce:work as the two slot-compatible skills
+3. **Design and implement Phase 2: skill-per-slot** — start with `/superpowers:tdd` and `/ce:work` as the two slot-compatible skills
 4. **Spike Phase 3: native Codex dispatch** — prove Claude Code → Codex in a worktree, review the output, end-to-end
 5. **Iterate on syntax** based on user testing of Phases 2-3
 6. **Generalize harness support** based on ecosystem evolution (Gemini CLI, AMP, etc.)
