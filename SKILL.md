@@ -66,6 +66,7 @@ Check for config in project's `CLAUDE.md`, `AGENTS.md`, or equivalent. User can 
 | `auto_synthesize` | true | Allow judge to combine elements from multiple slots |
 | `max_retries` | 1 | Re-run failed slots (0 = no retry) |
 | `cleanup` | true | Delete worktrees after completion |
+| `quiet` | false | Suppress progress tables — only show final verdict + output path. For autonomous loops. |
 | `implementer_model` | inherit | Model for implementer subagents (inherits from session if not set) |
 | `reviewer_model` | inherit | Model for reviewer subagents (inherits from session if not set) |
 | `judge_model` | inherit | Model for judge subagent (inherits from session if not set) |
@@ -465,11 +466,35 @@ The final report has three parts: the H1 header, the output content, and the foo
 `3` files changed, `474` insertions
 `45` tests passing
 
-**Part 3: Footer** — a horizontal rule followed by a one-line summary:
+**Part 3: Result artifact** — always write a machine-readable JSON file to the run directory:
+
+```bash
+cat > {RUN_DIR}/result.json << RESULT
+{
+  "verdict": "{PICK|SYNTHESIZE|NONE_ADEQUATE}",
+  "winning_slot": {N or null},
+  "confidence": "{HIGH|MEDIUM|LOW}",
+  "slots": {total},
+  "slots_succeeded": {succeeded},
+  "files_changed": [{list}],
+  "tests_passing": {count or null},
+  "run_dir": "{RUN_DIR}"
+}
+RESULT
+
+# Create latest symlink for easy script access
+ln -sfn "$(basename {RUN_DIR})" "$(dirname {RUN_DIR})/latest"
+```
+
+This is always written, every run. Humans ignore it. Autonomous loops and scripts parse it via `.slot-machine/runs/latest/result.json`.
+
+**Part 4: Footer** — a horizontal rule followed by a one-line summary:
 
 ---
 
 **Complete** — `{word_count} words` | `{N} slots` | `{verdict}`
+
+**Quiet mode:** If `quiet: true` is set, suppress all Phase 2-3 progress tables and standout elements. Only output the Phase 4 verdict blockquote, the Final Output section, and the footer. The run directory still has everything for post-hoc inspection.
 
 #### Metrics (optional)
 

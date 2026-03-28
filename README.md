@@ -250,6 +250,35 @@ Set in your project's `CLAUDE.md` or override inline: `"slot-machine this with 3
 
 57 contract assertions verify format consistency across all agent prompts. E2E tests run the full pipeline headlessly via `claude -p` and verify the NDJSON transcript.
 
+## Works in Autonomous Loops
+
+Slot-machine runs inside [Ralph](https://github.com/snarktank/ralph), [Trycycle](https://github.com/danshapiro/trycycle), and custom agent loops. No special setup — add config to your `CLAUDE.md` and the loop's AI instances pick it up automatically.
+
+Slot-machine self-regulates: it evaluates each task and only engages when the task has meaningful design choices. Mechanical tasks (add a field, rename a function) get single-shot implementation. You can blanket-enable slot-machine and trust it to only spend compute when competition adds value.
+
+**Setup (add to CLAUDE.md):**
+
+```markdown
+## Slot Machine Settings
+slot-machine-profile: coding
+slots: 3
+quiet: true
+```
+
+Every run writes a machine-readable result to `.slot-machine/runs/latest/result.json` that scripts can parse:
+
+```json
+{
+  "verdict": "PICK",
+  "winning_slot": 2,
+  "confidence": "HIGH",
+  "files_changed": ["src/api.py", "tests/test_api.py"],
+  "tests_passing": 45
+}
+```
+
+Set `quiet: true` to suppress progress tables in unattended runs. The run directory (`.slot-machine/runs/`) keeps all artifacts (slot drafts, reviewer scorecards, judge verdict) for post-hoc inspection.
+
 ## This is NOT Standard Parallel Agents
 
 Every major tool splits different tasks across agents (frontend, backend, tests in parallel). That's task decomposition.
