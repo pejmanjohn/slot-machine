@@ -404,14 +404,14 @@ The goal is structural diversity — different designs, not different priorities
 
 1. "Use the simplest possible approach — single class, minimal API surface, fewest lines of code that fully satisfy the spec. When in doubt, do less."
 2. "Design for robustness — thorough input validation, defensive error handling, edge case coverage. Think about what happens with invalid inputs, concurrent access, and resource exhaustion."
-3. "Explore a functional or data-oriented approach — use dataclasses, named tuples, or plain functions instead of classes where possible. Prefer immutability and composition over inheritance."
-4. "Design around a fluent or context-manager API — make the interface Pythonic with `with` statements, chaining, or protocol support (`__enter__`, `__iter__`, etc). The API ergonomics matter as much as the internals."
-5. "Build for extensibility — use protocols/ABCs, dependency injection, or the strategy pattern. Make it easy to swap implementations or add new behavior without modifying existing code."
+3. "Explore a functional or data-oriented approach — use the language's data structures (dataclasses in Python, plain objects/discriminated unions in TS, structs in Go, enums in Rust) instead of complex class hierarchies. Prefer immutability and composition over inheritance."
+4. "Design around an idiomatic API — context managers in Python, builder pattern in TS/Rust, functional options in Go. The API should feel natural to developers in the project's language."
+5. "Build for extensibility — use protocols, interfaces, dependency injection, or the strategy pattern. Make it easy to swap implementations or add new behavior without modifying existing code."
 
 **Extended hints (for N > 5):**
 
-6. "Async-first design — use asyncio primitives (Event, Lock, Semaphore) as the core, with a sync wrapper for backwards compatibility."
-7. "Decorator pattern — expose the core functionality as a decorator or function wrapper so users can apply it with `@rate_limit` syntax."
+6. "Async/concurrency-first — use asyncio in Python, Promises in TS, goroutines/channels in Go, tokio in Rust. Design for concurrent access from the start."
+7. "Decorator/wrapper pattern — Python decorators, TS/Go middleware, Rust macros or newtypes. Expose the core as something users apply declaratively."
 8. "Observable and debuggable — add structured logging, metrics hooks, and clear error messages. Optimize for production debugging, not just correctness."
 9. "Follow existing codebase patterns exactly — match the project's style, naming conventions, and architectural patterns precisely. Integrate, don't innovate."
 10. "Security-hardened — defense in depth, input sanitization, least privilege. Design as if the caller is untrusted."
