@@ -296,13 +296,7 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
 
 ### Phase 2: Parallel Implementation
 
-**Dispatch depends on the slot definition.** For each slot, determine the dispatch path:
-
-**Group 1 — Claude Code slots (Agent tool):** All slots where `harness` is `null` (default slots and skill-only slots). Dispatch all Group 1 slots in a SINGLE message using parallel Agent tool calls.
-
-**Group 2 — Codex slots (CLI):** All slots where `harness` is `codex`. Dispatch all Group 2 slots in parallel using background Bash commands (one per slot, using Bash tool with `run_in_background: true` and `timeout: 300000`).
-
-Both groups can run concurrently — dispatch Group 1 and Group 2 in the same message if possible, or Group 1 first then Group 2 immediately after. Collect all results after both groups complete.
+**Dispatch all N slots in a SINGLE message** using N parallel Agent tool calls — regardless of harness. Every slot dispatches via the Agent tool. For Codex slots, the subagent wraps `codex exec` internally and returns a standard implementer report. For mixed-harness runs, dispatch is transparent — all slots dispatch via Agent tool regardless of harness.
 
 ---
 
@@ -372,17 +366,26 @@ Use `isolation: "worktree"` on the Agent call. Do NOT include an approach hint �
 
 **Path C — Codex slots (harness = `codex`, with or without skill):**
 
-Do NOT use the Agent tool. Dispatch via Bash:
+Dispatch via Agent tool — same as Paths A and B. The subagent acts as a thin wrapper that runs `codex exec` and translates the output into a standard implementer report.
 
-1. Create a git worktree for this slot (same as Claude Code slots):
+Agent tool call:
+
+| Parameter | Value |
+|-----------|-------|
+| `description` | `"Slot {i}: Implement {feature_name} (via Codex)"` |
+| `isolation` | `"worktree"` if profile isolation is `worktree`; omit if `file` |
+| `model` | Omit (the subagent is a wrapper — the actual model is Codex's) |
+| `prompt` | See Codex wrapper prompt below |
+
+**Codex wrapper prompt:**
+
+```
+You are a wrapper agent that dispatches implementation to Codex CLI and reports back.
+
+1. Run `codex exec` in the current directory using the Bash tool. The `--json` flag emits JSONL output — pipe it through the Python parser to extract the final report:
+
    ```bash
-   git worktree add ".slot-machine/worktrees/slot-{i}" -b "slot-machine/{feature}/slot-{i}"
-   ```
-
-2. Run `codex exec` pointed at the worktree. Use the Bash tool with `timeout: 300000` (5 minutes) and `run_in_background: true`. The `--json` flag emits JSONL output — pipe it through the Python parser below to extract the agent's final report:
-
-   ```bash
-   cd {worktree_path} && codex exec "{If skill specified: '$codex_skill_name\n\n'}Implement this specification. Write all files to the current directory.
+   codex exec "{If skill specified: '$codex_skill_name\n\n'}Implement this specification. Write all files to the current directory.
    Do not ask questions or wait for confirmation — make your best judgment and proceed.
 
    Specification:
@@ -398,7 +401,7 @@ Do NOT use the Agent tool. Dispatch via Bash:
    - Any concerns or issues encountered" \
      -s workspace-write \
      -c 'model_reasoning_effort="high"' \
-     --json 2>{RUN_DIR}/slot-{i}-codex-stderr.txt | python3 -c "
+     --json 2>codex-stderr.txt | python3 -c "
    import sys, json
    for line in sys.stdin:
        line = line.strip()
@@ -414,29 +417,32 @@ Do NOT use the Agent tool. Dispatch via Bash:
                    cmd = item.get('command', '')
                    if cmd: print(f'[codex ran] {cmd}')
        except: pass
-   " > {RUN_DIR}/slot-{i}-report.txt
+   " > codex-report.txt
    ```
 
-3. After `codex exec` completes, commit the files it wrote to the worktree branch:
-   ```bash
-   cd {worktree_path} && git add -A && git commit -m "feat: {feature_name} — Codex slot {i}" 2>/dev/null || true
-   ```
-   This ensures the reviewer can inspect the worktree via git and the branch can be merged if this slot wins.
+2. After `codex exec` completes:
+   - If non-zero exit code, empty report, or timeout → report Status: BLOCKED with error details
+   - Otherwise → commit files: `git add -A && git commit -m "feat: {feature_name}"`
 
-4. Check for failures:
-   - non-zero exit code → mark FAILED, save stderr for debugging
-   - Empty report file (`{RUN_DIR}/slot-{i}-report.txt` is 0 bytes) → mark FAILED
-   - Timeout (Bash tool returns timeout) → mark FAILED
-   - On any failure, save whatever output exists to the run dir. The slot is marked FAILED but the run continues.
+3. Read `codex-report.txt` and translate to standard report format:
+
+   **Status:** DONE (or DONE_WITH_CONCERNS if Codex reported concerns, BLOCKED if codex failed)
+   **What I implemented:** [from Codex report]
+   **Files changed:** [list files in current directory]
+   **Test results:** [from Codex report]
+   **Concerns (if any):** [from Codex report]
+```
+
+Do NOT include an approach hint — for bare `codex` slots, the prompt has no skill prefix. For `skill + codex` slots, the `$codex_skill_name` prefix triggers native skill loading in Codex.
 
 ---
 
 | Slot definition | Dispatch | Prompt | Isolation | Hint? |
 |----------------|----------|--------|-----------|-------|
-| `default` | Agent tool (parallel Group 1) | Profile `1-implementer.md` + hint | Profile setting | Yes |
-| `/superpowers:tdd` | Agent tool (parallel Group 1) | "Invoke {skill} via Skill tool" + spec | worktree | No |
-| `codex` | `codex exec` CLI (parallel Group 2) | Generic "implement this" + spec | worktree (manual) | No |
-| `/superpowers:tdd + codex` | `codex exec` CLI (parallel Group 2) | `$superpowers:tdd` + spec (native skill invocation) | worktree (manual) | No |
+| `default` | Agent tool | Profile `1-implementer.md` + hint | Profile setting | Yes |
+| `/superpowers:tdd` | Agent tool | "Invoke {skill} via Skill tool" + spec | worktree | No |
+| `codex` | Agent tool (Codex wrapper) | Wrapper runs `codex exec` with spec | worktree | No |
+| `/superpowers:tdd + codex` | Agent tool (Codex wrapper) | Wrapper runs `codex exec` with `$superpowers:tdd` | worktree | No |
 
 ---
 
