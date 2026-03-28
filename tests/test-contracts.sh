@@ -111,31 +111,20 @@ for profile_dir in "$SKILL_DIR"/profiles/*/; do
 done
 
 echo ""
-echo "=== Contract 6: Model Values ==="
-# Extract model values referenced in SKILL.md configuration/model section
-# Valid values are: sonnet, opus, haiku
-# Check that model references in the configuration table and model selection section
-# only use these valid values
-VALID_MODELS="sonnet opus haiku"
-# Extract lines from SKILL.md that reference model settings (implementer_model, reviewer_model, etc.)
-MODEL_LINES=$(echo "$SKILL_CONTENT" | grep -E '(implementer_model|reviewer_model|judge_model|synthesizer_model|Default Model)' || true)
+echo "=== Contract 6: Model Configuration ==="
+# Model config must reference the 4 model settings and use "inherit" as default
+MODEL_LINES=$(echo "$SKILL_CONTENT" | grep -E '(implementer_model|reviewer_model|judge_model|synthesizer_model)' || true)
 
-# Check that no invalid model names appear in model config lines
-# Extract all quoted model names from model-related lines
-FOUND_MODELS=$(echo "$MODEL_LINES" | grep -oE '"[a-z]+"' | tr -d '"' | sort -u)
-if [ -z "$FOUND_MODELS" ]; then
-    echo "  [FAIL] No model values found in SKILL.md model config"
+if [ -z "$MODEL_LINES" ]; then
+    echo "  [FAIL] No model settings found in SKILL.md"
     FAILED=$((FAILED + 1))
 else
-    for found in $FOUND_MODELS; do
-        if ! echo "$VALID_MODELS" | grep -qw "$found"; then
-            echo "  [FAIL] Invalid model value '$found' in SKILL.md"
-            FAILED=$((FAILED + 1))
-        else
-            echo "  [PASS] Model value '$found' is valid"
-        fi
-    done
+    echo "  [PASS] Model settings referenced in SKILL.md"
 fi
+
+# Check that "inherit" appears as a model concept
+assert_contains "$SKILL_CONTENT" "inherit" \
+    "SKILL.md mentions model inheritance from session" || FAILED=$((FAILED + 1))
 
 echo ""
 echo "=== Contract 7: Approach Hints ==="

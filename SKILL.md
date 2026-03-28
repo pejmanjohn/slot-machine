@@ -66,10 +66,10 @@ Check for config in project's `CLAUDE.md`, `AGENTS.md`, or equivalent. User can 
 | `auto_synthesize` | true | Allow judge to combine elements from multiple slots |
 | `max_retries` | 1 | Re-run failed slots (0 = no retry) |
 | `cleanup` | true | Delete worktrees after completion |
-| `implementer_model` | sonnet | Model for implementer subagents |
-| `reviewer_model` | sonnet | Model for reviewer subagents |
-| `judge_model` | opus | Model for judge subagent |
-| `synthesizer_model` | opus | Model for synthesizer subagent |
+| `implementer_model` | inherit | Model for implementer subagents (inherits from session if not set) |
+| `reviewer_model` | inherit | Model for reviewer subagents (inherits from session if not set) |
+| `judge_model` | inherit | Model for judge subagent (inherits from session if not set) |
+| `synthesizer_model` | inherit | Model for synthesizer subagent (inherits from session if not set) |
 
 ## Profile Loading
 
@@ -193,7 +193,7 @@ For each slot i (1 to N), make an Agent tool call with:
 |-----------|-------|
 | `description` | `"Slot {i}: Implement {feature_name}"` |
 | `isolation` | `"worktree"` if profile isolation is `worktree`; omit if `file` |
-| `model` | configured `implementer_model` (default: `"sonnet"`) |
+| `model` | Omit unless user configured `implementer_model` — inherits from session by default |
 | `prompt` | Read `implementer.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
 
 The universal variables to fill in the implementer prompt:
@@ -265,7 +265,7 @@ For each successful slot i, make an Agent tool call with:
 | Parameter | Value |
 |-----------|-------|
 | `description` | `"Review Slot {i} implementation"` |
-| `model` | configured `reviewer_model` (default: `"sonnet"`) |
+| `model` | Omit unless user configured `reviewer_model` — inherits from session by default |
 | `prompt` | Read `reviewer.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
 
 The universal variables to fill in the reviewer prompt:
@@ -304,7 +304,7 @@ Make a SINGLE Agent tool call. **The judge MUST use the most capable model** —
 | Parameter | Value |
 |-----------|-------|
 | `description` | `"Judge Slot Machine results for {feature_name}"` |
-| `model` | **`"opus"`** (or configured `judge_model`) — do NOT omit this parameter |
+| `model` | Omit unless user configured `judge_model` — inherits from session by default. The judge benefits from the most capable model available. |
 | `prompt` | Read `judge.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
 
 The universal variables to fill in the judge prompt:
@@ -371,7 +371,7 @@ For PICK verdicts, the blockquote is simpler:
    |-----------|-------|
    | `description` | `"Synthesize best elements for {feature_name}"` |
    | `isolation` | `"worktree"` if profile isolation is `worktree`; omit if `file` |
-   | `model` | **`"opus"`** (or configured `synthesizer_model`) — do NOT omit this parameter |
+   | `model` | Omit unless user configured `synthesizer_model` — inherits from session by default |
    | `prompt` | Read `synthesizer.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
 
    The universal variables to fill in the synthesizer prompt:
@@ -390,7 +390,7 @@ For PICK verdicts, the blockquote is simpler:
    | Parameter | Value |
    |-----------|-------|
    | `description` | `"Review synthesis for {feature_name}"` |
-   | `model` | configured `reviewer_model` (default: `"sonnet"`) |
+   | `model` | Omit unless user configured `reviewer_model` — inherits from session by default |
    | `prompt` | Read `reviewer.md` from the active profile's folder and fill in `{{VARIABLES}}` using the synthesis worktree/output |
 
    The reviewer checks:
@@ -510,16 +510,16 @@ Implementer subagents report one of four statuses in their output:
 
 ## Model Selection
 
-Use the Agent tool's `model` parameter to assign appropriate model tiers:
+By default, all agents inherit the model from your current session. If you're running Opus, every slot gets Opus. If you're running Sonnet, every slot gets Sonnet. This means you always get the quality level you're paying for.
 
-| Role | Default Model | Configurable As | Rationale |
-|------|--------------|-----------------|-----------|
-| Implementer | `"sonnet"` | `implementer_model` | Mechanical implementation work — standard model is sufficient |
-| Reviewer | `"sonnet"` | `reviewer_model` | Structured evaluation against criteria — standard model handles this well |
-| Judge | `"opus"` | `judge_model` | Cross-implementation comparison requires best architectural judgment |
-| Synthesizer | `"opus"` | `synthesizer_model` | Combining code from multiple sources coherently needs strong reasoning |
+To override, set model configs in your project's `CLAUDE.md` or inline. Only pass the `model` parameter to the Agent tool when the user has explicitly configured an override — otherwise omit it so the session model is inherited.
 
-The user can override any of these in config or inline. For cost-sensitive runs, `"sonnet"` for all roles is viable. For maximum quality, `"opus"` everywhere.
+| Role | Default | Configurable As | When to override |
+|------|---------|-----------------|------------------|
+| Implementer | inherit | `implementer_model` | Downgrade to save cost on mechanical tasks |
+| Reviewer | inherit | `reviewer_model` | Downgrade to save cost on structured evaluation |
+| Judge | inherit | `judge_model` | Upgrade if running a cheaper session model |
+| Synthesizer | inherit | `synthesizer_model` | Upgrade if running a cheaper session model |
 
 ## Approach Hints
 
