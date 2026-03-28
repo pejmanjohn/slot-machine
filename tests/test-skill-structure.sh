@@ -46,7 +46,20 @@ echo ""
 echo "=== Skill Structure: Profile Required Sections ==="
 for profile in "$SKILL_DIR"/profiles/*.md; do
     PROFILE_NAME=$(basename "$profile")
-    PROFILE_CONTENT=$(cat "$profile")
+    # Resolve inheritance: if profile extends a base, merge base + child
+    EXTENDS=$(grep "^extends:" "$profile" | head -1 | awk '{print $2}')
+    if [ -n "$EXTENDS" ] && [ "$EXTENDS" != "null" ]; then
+        BASE_FILE="$SKILL_DIR/profiles/${EXTENDS}.md"
+        if [ -f "$BASE_FILE" ]; then
+            # Resolved content = base + child overlay (child sections override base)
+            PROFILE_CONTENT="$(cat "$BASE_FILE")
+$(cat "$profile")"
+        else
+            PROFILE_CONTENT=$(cat "$profile")
+        fi
+    else
+        PROFILE_CONTENT=$(cat "$profile")
+    fi
     for section in "Approach Hints" "Implementer Prompt" "Reviewer Prompt" "Judge Prompt" "Synthesizer Prompt"; do
         assert_contains "$PROFILE_CONTENT" "## $section" \
             "Profile '$PROFILE_NAME' has section '$section'" || FAILED=$((FAILED + 1))

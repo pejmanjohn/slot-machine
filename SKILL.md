@@ -340,7 +340,7 @@ The judge returns one of three verdicts:
    | `{{WORKTREE_PATHS}}` | All slot worktree/output paths the synthesizer needs to read from |
    | `{{BASE_SLOT_PATH}}` | The worktree/output path of the base slot specifically |
 
-3. Run full test suite to verify (for `worktree` isolation). For `file` isolation, the synthesizer writes a new combined output file.
+3. Run full test suite to verify (for `worktree` isolation). For `file` isolation, the synthesizer writes its output to `{SLOT_TEMP_DIR}/synthesis-output.md` (or appropriate extension). Tell the synthesizer this destination path in its prompt.
 
 4. **Post-synthesis review.** Dispatch ONE reviewer to check the synthesized result for integration issues:
 

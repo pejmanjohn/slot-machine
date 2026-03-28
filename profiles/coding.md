@@ -5,7 +5,7 @@ extends: null
 isolation: worktree
 pre_checks: |
   {test_command} 2>&1
-  git diff --name-only HEAD~1
+  git diff --name-only HEAD~1 2>/dev/null || true
   find . -name "*.py" -o -name "*.js" -o -name "*.ts" -o -name "*.rb" -o -name "*.go" -o -name "*.rs" | head -50 | xargs wc -l 2>/dev/null || true
 ---
 

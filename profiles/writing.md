@@ -146,6 +146,12 @@ These rules apply to EVERYTHING you write in this review:
 - **Never say "well-written" or "compelling" without explaining why.** Name the specific technique — is it concrete examples? A strong analogy? Logical progression? Contrast with the status quo?
 - **If you say something is missing, confirm it's actually missing** — read the full draft before claiming a topic isn't covered.
 
+## Reference Materials
+
+{{PROJECT_CONTEXT}}
+
+Use these to verify factual claims in the draft. If reference materials are provided, every factual assertion in the draft should be checkable against them.
+
 ## Draft Location
 
 The draft to review: `{{WORKTREE_PATH}}`
