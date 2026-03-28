@@ -123,13 +123,58 @@ SKILL.md injects these variables into ALL profile prompts. If a variable isn't r
 | `{{APPROACH_HINT_USED}}` | The approach hint given to the implementer (used in reviewer context) |
 | `{{TEST_COMMAND}}` | How to run the test suite (empty string if not applicable) |
 
+## Slot Definitions
+
+Slots can be configured per-slot instead of using the same profile implementer for all. Two axes compose with `+`:
+
+- **Skills** (`/superpowers:tdd`, `/ce:work`) — methodology guidance, slash-prefixed. Injected into the prompt of whatever harness runs the slot.
+- **Harnesses** (`codex`, `gemini`) — which AI system executes. No slash prefix. Determines the dispatch mechanism.
+
+### Slot Definition Sources (precedence)
+
+1. **Inline:** Parsed from the user's command. Slash-prefixed names are skills, bare names are harnesses. `+` composes them. `default` means profile implementer + approach hint.
+2. **CLAUDE.md config:** Read `slot-machine-slots` list if present:
+   ```markdown
+   slot-machine-slots:
+     - /superpowers:tdd
+     - /ce:work
+     - codex
+     - /superpowers:tdd + codex
+     - default
+   ```
+3. **Profile defaults:** If no slot definitions found, all slots use the profile's implementer prompt with randomly assigned approach hints. This is the Phase 1 behavior — unchanged.
+
+### Parsing Rules
+
+- If the user specifies slot definitions AND a slot count higher than the number of definitions, remaining slots get profile defaults with approach hints
+- If the user specifies only slot definitions (no count), the slot count equals the number of definitions
+- Each slot definition is a tuple: `(skill, harness)`:
+  - `default` → `(null, null)` — profile implementer + hint
+  - `/superpowers:tdd` → `("/superpowers:tdd", null)` — Claude Code with skill
+  - `codex` → `(null, "codex")` — Codex with generic prompt
+  - `/superpowers:tdd + codex` → `("/superpowers:tdd", "codex")` — Codex with skill
+
+### Approach Hints and Skill Slots
+
+Approach hints only apply to `default` slots. Skill-based slots do NOT get approach hints — the skill IS the diversity mechanism. When mixing skill and default slots, assign hints only to the default slots.
+
+### Poor Slot Candidate Warning
+
+If a parsed skill name matches a known multi-agent orchestrator (`/superpowers:subagent-driven-development`, `/superpowers:executing-plans`), warn the user: "⚠ {skill} is a multi-agent orchestrator — running it inside a slot creates nested pipelines (slower, redundant review). Consider using a single-session skill like /superpowers:tdd instead." Do not block — the user may have a reason.
+
 ## The Process
 
 ### Phase 1: Setup
 
 0. **Load profile.** Follow the [Profile Loading](#profile-loading) section to find the active profile folder and read `profile.md` from it for config. Report to user: "Using profile: {profile_name}"
 
-1. **Validate the spec.** The spec (plan, requirements doc, or inline description) must be concrete enough for independent attempts. If ambiguous — stop and ask for clarification before spending compute.
+1. **Parse slot definitions.** Check for slot definitions in precedence order: (1) inline in the user's command, (2) `slot-machine-slots` in CLAUDE.md, (3) fall back to profile defaults. Record the slot list — each slot is `(skill, harness)` or `default`. Check harness availability (see below).
+
+   **Check harness availability.** For each slot that specifies a harness:
+   - `codex`: Run `which codex` via Bash. If not found, warn: 'Codex CLI not found — slot {i} will fall back to Claude Code. Install: `npm install -g @openai/codex`'. Change the slot's harness to `null` (falls back to Claude Code with the same skill guidance if any).
+   - Future harnesses: same pattern — check binary, warn and fall back if missing.
+
+2. **Validate the spec.** The spec (plan, requirements doc, or inline description) must be concrete enough for independent attempts. If ambiguous — stop and ask for clarification before spending compute.
 
    Red flags that mean "not ready":
    - "Something like..." or "maybe we could..."
@@ -137,7 +182,7 @@ SKILL.md injects these variables into ALL profile prompts. If a variable isn't r
    - References to external context not provided
    - Contradictory requirements
 
-2. **Gather project context.** Collect what implementers need:
+3. **Gather project context.** Collect what implementers need:
    - README or architecture docs (if they exist)
    - Key file descriptions relevant to the task
    - Test patterns and how to run tests (if applicable)
@@ -146,7 +191,7 @@ SKILL.md injects these variables into ALL profile prompts. If a variable isn't r
 
    Keep context focused — don't dump everything. Implementers should get just enough to orient themselves.
 
-3. **Create run directory.** Create the run storage directory and add `.slot-machine/` to `.gitignore` if not already present:
+4. **Create run directory.** Create the run storage directory and add `.slot-machine/` to `.gitignore` if not already present:
    ```bash
    RUN_DIR=".slot-machine/runs/$(date +%Y-%m-%d)-{feature_slug}"
    mkdir -p "$RUN_DIR"
@@ -154,7 +199,7 @@ SKILL.md injects these variables into ALL profile prompts. If a variable isn't r
    ```
    All artifacts from this run will be saved to `{RUN_DIR}/`.
 
-4. **Prepare isolation.** Check the profile's `isolation` field:
+5. **Prepare isolation.** Check the profile's `isolation` field:
    - If `worktree`: The project MUST be a git repository with at least one commit before Phase 2 can create worktrees. If the directory is not a git repo or has no commits:
      ```bash
      git init && git add -A && git commit -m "initial commit"
@@ -162,17 +207,21 @@ SKILL.md injects these variables into ALL profile prompts. If a variable isn't r
      Without this, `isolation: "worktree"` on Agent calls will fail and agents will not get isolated workspaces.
    - If `file`: No git repo required. Each slot will write its output to `{RUN_DIR}/slot-{i}.md`.
 
-5. **Run pre-checks (if configured).** Read the active profile's `profile.md` frontmatter for the `pre_checks` field.
+6. **Run pre-checks (if configured).** Read the active profile's `profile.md` frontmatter for the `pre_checks` field.
    - If `null` → skip this step.
    - If set → run the pre-check commands, substituting `{test_command}` with the detected test command. These establish the baseline. If baseline checks fail, stop and fix first.
 
-6. **Assign approach hints.** If `approach_hints` is enabled, read hints from the active profile's `profile.md`. Randomly assign one hint per slot (without replacement). Each hint steers toward a different approach — the profile defines what diversity means for this task type.
+7. **Assign approach hints.** If `approach_hints` is enabled, read hints from the active profile's `profile.md`. Randomly assign one hint per slot (without replacement). Each hint steers toward a different approach — the profile defines what diversity means for this task type.
 
-7. **Report setup to user** using this format (top-level markdown, not inside a code block):
+8. **Report setup to user** using this format (top-level markdown, not inside a code block):
 
    **Slot Machine** — `{profile_name}` profile
 
    Feature: {feature_name}
+   Slots: `{N}` | /superpowers:tdd, /ce:work, codex, 2x default hints
+
+   When all slots use profile defaults (no slot definitions):
+
    Slots: `{N}` | Hints: {hint_1}, {hint_2}, ...
 
    Formatting rules for ALL orchestrator output (apply throughout Phases 1-4):
