@@ -12,7 +12,7 @@ SKILL_CONTENT=$(cat "$SKILL_DIR/SKILL.md")
 
 for profile_dir in "$SKILL_DIR"/profiles/*/; do
     PROFILE_NAME=$(basename "$profile_dir")
-    IMPL_CONTENT=$(cat "$profile_dir/implementer.md" 2>/dev/null || echo "")
+    IMPL_CONTENT=$(cat "$profile_dir/1-implementer.md" 2>/dev/null || echo "")
 
     for status in DONE DONE_WITH_CONCERNS BLOCKED NEEDS_CONTEXT; do
         assert_contains "$IMPL_CONTENT" "$status" \
@@ -29,7 +29,7 @@ echo ""
 echo "=== Contract 2: Reviewer Output -> Judge Input ==="
 for profile_dir in "$SKILL_DIR"/profiles/*/; do
     PROFILE_NAME=$(basename "$profile_dir")
-    REVIEWER_CONTENT=$(cat "$profile_dir/reviewer.md" 2>/dev/null || echo "")
+    REVIEWER_CONTENT=$(cat "$profile_dir/2-reviewer.md" 2>/dev/null || echo "")
 
     # Reviewer output sections the judge expects to parse
     for header in "Spec Compliance" "Issues" "Strengths" "Verdict"; do
@@ -58,7 +58,7 @@ echo ""
 echo "=== Contract 3: Judge Verdict -> SKILL.md Phase 4 ==="
 for profile_dir in "$SKILL_DIR"/profiles/*/; do
     PROFILE_NAME=$(basename "$profile_dir")
-    JUDGE_CONTENT=$(cat "$profile_dir/judge.md" 2>/dev/null || echo "")
+    JUDGE_CONTENT=$(cat "$profile_dir/3-judge.md" 2>/dev/null || echo "")
 
     for verdict in PICK SYNTHESIZE NONE_ADEQUATE; do
         assert_contains "$JUDGE_CONTENT" "$verdict" \
@@ -74,7 +74,7 @@ echo ""
 echo "=== Contract 4: Judge Synthesis Plan -> Synthesizer Input ==="
 for profile_dir in "$SKILL_DIR"/profiles/*/; do
     PROFILE_NAME=$(basename "$profile_dir")
-    JUDGE_CONTENT=$(cat "$profile_dir/judge.md" 2>/dev/null || echo "")
+    JUDGE_CONTENT=$(cat "$profile_dir/3-judge.md" 2>/dev/null || echo "")
 
     # Universal synthesis plan keywords present in all profiles
     for keyword in base Coherence; do
@@ -88,17 +88,17 @@ for profile_dir in "$SKILL_DIR"/profiles/*/; do
 done
 
 # Coding-specific: synthesis plan has Port/Source/Target terminology
-CODING_JUDGE_CONTENT=$(cat "$SKILL_DIR/profiles/coding/judge.md" 2>/dev/null || echo "")
+CODING_JUDGE_CONTENT=$(cat "$SKILL_DIR/profiles/coding/3-judge.md" 2>/dev/null || echo "")
 for keyword in Port Source Target; do
     assert_contains "$CODING_JUDGE_CONTENT" "$keyword" \
-        "Keyword '$keyword' in coding/judge.md judge synthesis plan" || FAILED=$((FAILED + 1))
+        "Keyword '$keyword' in coding/3-judge.md judge synthesis plan" || FAILED=$((FAILED + 1))
 done
 
 echo ""
 echo "=== Contract 5: Template Variables -> SKILL.md Documentation ==="
 for profile_dir in "$SKILL_DIR"/profiles/*/; do
     PROFILE_NAME=$(basename "$profile_dir")
-    for prompt_file in "$profile_dir"/implementer.md "$profile_dir"/reviewer.md "$profile_dir"/judge.md "$profile_dir"/synthesizer.md; do
+    for prompt_file in "$profile_dir"/1-implementer.md "$profile_dir"/2-reviewer.md "$profile_dir"/3-judge.md "$profile_dir"/4-synthesizer.md; do
         [ -f "$prompt_file" ] || continue
         PROMPT_NAME=$(basename "$prompt_file")
         TEMPLATE_CONTENT=$(cat "$prompt_file")
@@ -141,7 +141,7 @@ echo ""
 echo "=== Contract 7: Approach Hints ==="
 for profile_dir in "$SKILL_DIR"/profiles/*/; do
     PROFILE_NAME=$(basename "$profile_dir")
-    HINTS_CONTENT=$(cat "$profile_dir/profile.md" 2>/dev/null || echo "")
+    HINTS_CONTENT=$(cat "$profile_dir/0-profile.md" 2>/dev/null || echo "")
 
     # Test: at least 5 hints
     HINT_COUNT=$(echo "$HINTS_CONTENT" | grep -cE '^\s*[0-9]+\.' || echo "0")
@@ -154,13 +154,13 @@ for profile_dir in "$SKILL_DIR"/profiles/*/; do
 done
 
 # Coding-specific: architectural keywords check
-CODING_HINTS=$(cat "$SKILL_DIR/profiles/coding/profile.md" 2>/dev/null || echo "")
+CODING_HINTS=$(cat "$SKILL_DIR/profiles/coding/0-profile.md" 2>/dev/null || echo "")
 ARCH_MATCH_COUNT=$(echo "$CODING_HINTS" | grep -ioE 'dataclass|decorator|async|context.manager|protocol|ABCs?|inheritance|fluent|functional|data-oriented|immutab[a-z]*|composition|strategy.pattern|dependency.injection|named.tuple|with.statement|__enter__|__iter__|@rate_limit|asyncio|logging|metrics|observable' | tr '[:upper:]' '[:lower:]' | sort -u | wc -l | tr -d ' ')
 
 if [ "$ARCH_MATCH_COUNT" -ge 4 ]; then
-    echo "  [PASS] coding/profile.md hints contain $ARCH_MATCH_COUNT distinct architectural keywords (need >= 4)"
+    echo "  [PASS] coding/0-profile.md hints contain $ARCH_MATCH_COUNT distinct architectural keywords (need >= 4)"
 else
-    echo "  [FAIL] coding/profile.md hints contain only $ARCH_MATCH_COUNT distinct architectural keywords (need >= 4)"
+    echo "  [FAIL] coding/0-profile.md hints contain only $ARCH_MATCH_COUNT distinct architectural keywords (need >= 4)"
     FAILED=$((FAILED + 1))
 fi
 
@@ -183,9 +183,9 @@ echo ""
 echo "=== Contract 8: Profile Inheritance ==="
 for profile_dir in "$SKILL_DIR"/profiles/*/; do
     PROFILE_NAME=$(basename "$profile_dir")
-    PROFILE_FILE="$profile_dir/profile.md"
+    PROFILE_FILE="$profile_dir/0-profile.md"
     if [ ! -f "$PROFILE_FILE" ]; then
-        echo "  [SKIP] $PROFILE_NAME — profile.md not found"
+        echo "  [SKIP] $PROFILE_NAME — 0-profile.md not found"
         continue
     fi
     EXTENDS=$(grep "^extends:" "$PROFILE_FILE" | head -1 | awk '{print $2}')
@@ -198,7 +198,7 @@ for profile_dir in "$SKILL_DIR"/profiles/*/; do
             FAILED=$((FAILED + 1))
         fi
         # Check no multi-level inheritance
-        BASE_PROFILE_FILE="$BASE_DIR/profile.md"
+        BASE_PROFILE_FILE="$BASE_DIR/0-profile.md"
         if [ -f "$BASE_PROFILE_FILE" ]; then
             BASE_EXTENDS=$(grep "^extends:" "$BASE_PROFILE_FILE" | head -1 | awk '{print $2}')
             if [ -n "$BASE_EXTENDS" ] && [ "$BASE_EXTENDS" != "null" ]; then

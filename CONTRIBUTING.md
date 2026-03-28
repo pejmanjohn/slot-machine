@@ -36,7 +36,7 @@ If your change touches profiles (`profiles/*/`) or SKILL.md workflow logic, also
 ## Creating Custom Profiles
 
 To create a custom profile, either:
-- Create a new folder in `profiles/` (e.g., `profiles/my-profile/`) with `profile.md` + 4 prompt files (`implementer.md`, `reviewer.md`, `judge.md`, `synthesizer.md`). Use `profiles/coding/` or `profiles/writing/` as a template.
-- Create a profile that extends an existing one with `extends: coding` in the `profile.md` frontmatter. Only include files you want to override — missing files are inherited from the base.
+- Create a new folder in `profiles/` (e.g., `profiles/my-profile/`) with `0-profile.md` + 4 prompt files (`1-implementer.md`, `2-reviewer.md`, `3-judge.md`, `4-synthesizer.md`). Use `profiles/coding/` or `profiles/writing/` as a template.
+- Create a profile that extends an existing one with `extends: coding` in the `0-profile.md` frontmatter. Only include files you want to override — missing files are inherited from the base.
 
 Run `./tests/run-tests.sh` to validate your profile has all required files and consistent contracts.

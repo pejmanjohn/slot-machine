@@ -459,7 +459,7 @@ The user can override any of these in config or inline. For cost-sensitive runs,
 
 ## Approach Hints
 
-Approach hints are defined in the active profile's `profile.md`. See `profiles/coding/profile.md` for the coding defaults and `profiles/writing/profile.md` for writing defaults.
+Approach hints are defined in the active profile's `profile.md`. See `profiles/coding/0-profile.md` for the coding defaults and `profiles/writing/0-profile.md` for writing defaults.
 
 When `approach_hints` is enabled (default: true), each slot gets a different hint to encourage genuinely divergent attempts. Assign randomly without replacement. The profile defines what "diversity" means for its task type — architectural diversity for coding, voice/structure diversity for writing.
 

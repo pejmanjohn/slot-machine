@@ -30,8 +30,8 @@ echo ""
 echo "=== Skill Structure: All Skill Files Exist ==="
 SKILL_FILES=(
     SKILL.md
-    profiles/coding/profile.md
-    profiles/writing/profile.md
+    profiles/coding/0-profile.md
+    profiles/writing/0-profile.md
 )
 for file in "${SKILL_FILES[@]}"; do
     if [ -f "$SKILL_DIR/$file" ]; then
@@ -46,15 +46,15 @@ echo ""
 echo "=== Skill Structure: Profile Required Files ==="
 for profile_dir in "$SKILL_DIR"/profiles/*/; do
     PROFILE_NAME=$(basename "$profile_dir")
-    # Check profile.md exists
-    if [ -f "$profile_dir/profile.md" ]; then
-        echo "  [PASS] Profile '$PROFILE_NAME' has profile.md"
+    # Check 0-profile.md exists
+    if [ -f "$profile_dir/0-profile.md" ]; then
+        echo "  [PASS] Profile '$PROFILE_NAME' has 0-profile.md"
     else
-        echo "  [FAIL] Profile '$PROFILE_NAME' missing profile.md"
+        echo "  [FAIL] Profile '$PROFILE_NAME' missing 0-profile.md"
         FAILED=$((FAILED + 1))
     fi
     # Check all 4 prompt files exist
-    for prompt in implementer.md reviewer.md judge.md synthesizer.md; do
+    for prompt in 1-implementer.md 2-reviewer.md 3-judge.md 4-synthesizer.md; do
         if [ -f "$profile_dir/$prompt" ]; then
             echo "  [PASS] Profile '$PROFILE_NAME' has $prompt"
         else
@@ -68,8 +68,8 @@ echo ""
 echo "=== Skill Structure: Profile Frontmatter ==="
 for profile_dir in "$SKILL_DIR"/profiles/*/; do
     PROFILE_NAME=$(basename "$profile_dir")
-    if [ -f "$profile_dir/profile.md" ]; then
-        PROFILE_CONTENT=$(cat "$profile_dir/profile.md")
+    if [ -f "$profile_dir/0-profile.md" ]; then
+        PROFILE_CONTENT=$(cat "$profile_dir/0-profile.md")
         assert_contains "$PROFILE_CONTENT" "name:" "Profile '$PROFILE_NAME' has name in frontmatter" || FAILED=$((FAILED + 1))
         assert_contains "$PROFILE_CONTENT" "description:" "Profile '$PROFILE_NAME' has description in frontmatter" || FAILED=$((FAILED + 1))
         assert_contains "$PROFILE_CONTENT" "isolation:" "Profile '$PROFILE_NAME' has isolation in frontmatter" || FAILED=$((FAILED + 1))
