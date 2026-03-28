@@ -384,6 +384,26 @@ assert_contains "$SKILL_CONTENT" "horizontal.*rule\|---.*verdict\|bounded.*secti
     "SKILL.md uses horizontal rules for verdict section" || FAILED=$((FAILED + 1))
 
 echo ""
+echo "=== Contract 17: Streaming Review Pipeline ==="
+# Reviews should start as slots complete, not wait for all
+REVIEW_SECTION=$(echo "$SKILL_CONTENT" | sed -n '/Step 1: Dispatch reviewers/,/Step 2: Dispatch the judge/p')
+assert_contains "$SKILL_CONTENT" "as.*slot.*completes\|as.*each.*returns\|stream.*review\|review.*as.*finish\|overlap.*review.*implement" \
+    "SKILL.md describes starting reviews as slots complete" || FAILED=$((FAILED + 1))
+
+# Must NOT say "dispatch all reviewers in a SINGLE message" (old batch approach)
+BATCH_REVIEW=$(echo "$REVIEW_SECTION" | grep -c "Dispatch all reviewers in a SINGLE message" || true)
+if [ "$BATCH_REVIEW" -eq 0 ]; then
+    echo "  [PASS] Reviews are not batched into a single message"
+else
+    echo "  [FAIL] Still says dispatch all reviewers in a single message"
+    FAILED=$((FAILED + 1))
+fi
+
+# Judge should dispatch immediately after last review, no reporting gap
+assert_contains "$SKILL_CONTENT" "immediately.*judge\|judge.*without.*waiting\|dispatch.*judge.*as soon as\|review.*report.*after.*judge" \
+    "SKILL.md dispatches judge immediately after reviews complete" || FAILED=$((FAILED + 1))
+
+echo ""
 echo "=== Contract Tests Complete ==="
 echo "Failures: $FAILED"
 exit $FAILED
