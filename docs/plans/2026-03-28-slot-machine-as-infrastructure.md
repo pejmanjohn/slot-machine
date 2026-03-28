@@ -92,28 +92,83 @@ Implementation:
 
 This is context management, not new infrastructure.
 
-### Phase 3: Cross-Harness — Claude Code + Codex
+### Phase 3: Cross-Harness — Native Codex Dispatch
 
-The wow feature. Start with the most common case: a Claude Code user who also has Codex installed.
+The wow feature. Run Claude Code vs Codex on the same spec, review both, pick the winner.
 
 ```
 /slot-machine with 4 slots:
-  slot 1: claude-code + /superpowers:tdd
-  slot 2: claude-code + /ce:work
-  slot 3: codex
-  slot 4: codex + /superpowers:tdd
+  slot 1: tdd                    ← Claude Code with TDD guidance
+  slot 2: tdd + codex            ← Codex with TDD guidance
+  slot 3: ce:work                ← Claude Code with CE patterns
+  slot 4: codex                  ← Codex with default approach
 ```
 
-Implementation approach:
-- **Don't build custom adapters.** The ecosystem already has cross-agent dispatch (gstack's /codex skill, other emerging tools). Hook into what exists.
-- For Codex: use `codex exec` CLI (already available via gstack /codex skill). Pass the spec as a prompt, capture output files + report.
-- Output normalization: each harness adapter produces files in `{RUN_DIR}/slot-{i}/` + a text report. The reviewer reads files regardless of origin.
-- Review/judge stay in the orchestrator's harness (Claude Code) by default.
+**Key design decision: slot-machine dispatches to Codex natively — not through the `/codex` skill.**
 
-Key decisions:
-- Start Claude Code-first. Support Codex as the first cross-harness target.
-- Harness adapters are thin — they invoke a CLI command and normalize output. Not a framework.
-- If someone has already solved a cross-agent dispatch pattern (e.g., a skill that invokes Codex), we use theirs.
+The `/codex` skill (gstack) is designed for review/challenge/consult, not implementation. Delegating to it would confuse users ("is `/codex` creating a slot or running inside one?"). Instead, slot-machine handles Codex dispatch directly, the same way it handles Claude Code dispatch via the Agent tool.
+
+**User mental model (clean separation):**
+- **Skills** = methodology (TDD, CE patterns) — guidance injected into ANY harness
+- **Harnesses** = which AI system (Claude Code, Codex, Gemini) — dispatch mechanism
+- **Default** = profile implementer prompt + approach hints
+
+Skills and harnesses compose: `tdd + codex` means "Codex implements using TDD methodology."
+
+**Codex dispatch mechanics:**
+
+Codex CLI supports workspace-write mode: `codex exec -s workspace-write`. This means Codex can write files directly to a worktree — no output parsing needed.
+
+For each Codex slot, the orchestrator:
+1. Creates a git worktree (same as Claude Code slots)
+2. Runs `codex exec` pointed at that worktree:
+   ```bash
+   cd {worktree_path}
+   codex exec "Implement this spec. Write all files to the current directory.
+
+   {skill_guidance if specified}
+
+   Spec: {spec}
+
+   When done, report what you built, files changed, and any concerns." \
+     -s workspace-write \
+     -c 'model_reasoning_effort="high"' \
+     --json 2>/dev/null
+   ```
+3. Parses JSONL output for the implementer report (what was built, concerns)
+4. The worktree now contains Codex's implementation files
+5. Reviewer reads the worktree — identical to reviewing a Claude Code slot
+
+**JSONL parsing** (borrowed from gstack's codex skill pattern):
+```python
+# Parse codex JSONL events
+for line in sys.stdin:
+    obj = json.loads(line)
+    if obj['type'] == 'item.completed':
+        item = obj['item']
+        if item['type'] == 'agent_message':
+            # This is the implementer report
+            print(item['text'])
+        elif item['type'] == 'command_execution':
+            # Log what codex did
+            print(f"[codex ran] {item['command']}")
+```
+
+**Why native dispatch is better than using the `/codex` skill:**
+1. No conceptual confusion — "use codex" means one thing
+2. `workspace-write` mode lets Codex write files directly (gstack's codex uses read-only)
+3. Slot-machine controls the worktree lifecycle (create, dispatch, review, cleanup)
+4. Same pattern extends to Gemini CLI, AMP, or any future harness
+5. Skills (TDD, CE) compose with harnesses independently — `tdd + codex` just works
+
+**Same pattern for future harnesses:**
+
+| Harness | Dispatch command | Sandbox |
+|---------|-----------------|---------|
+| Claude Code | Agent tool with `isolation: "worktree"` | Worktree (built-in) |
+| Codex | `codex exec -s workspace-write --json` | Worktree (slot-machine manages) |
+| Gemini CLI | `gemini run --workspace {path}` (TBD) | Worktree (slot-machine manages) |
+| Custom | User-defined CLI command | User-defined |
 
 ### Phase 4: Any Harness, Any Direction
 
@@ -205,25 +260,33 @@ These are the skills that would be assigned to slots. Each produces files + a re
 
 **Integration notes:** CE work does its own codebase pattern research. In a slot-machine context, this is a feature — different slots might discover and follow different patterns. CE work also has optional reviewer agents (simplicity, security, performance) which add a second review layer on top of slot-machine's review.
 
-### Cross-Harness (Codex)
+### Cross-Harness (Codex) — Native Dispatch
 
-| Harness | Invocation | What it does | Isolation | Output |
-|---------|-----------|-------------|-----------|--------|
-| Codex | `codex exec "{spec}"` | GPT-based implementation in read-only sandbox | Codex sandbox | Code files (no commits) |
+| Harness | Dispatch | Sandbox mode | Isolation | Output |
+|---------|---------|-------------|-----------|--------|
+| Codex | `codex exec -s workspace-write --json` | workspace-write (can create/modify files) | Worktree (managed by slot-machine) | Files written directly to worktree + JSONL report |
 
-**Integration notes:** Codex runs in a read-only sandbox — it produces files but can't commit. The orchestrator needs to capture Codex's output and place it in the run directory. Codex doesn't produce a structured implementer report, so the orchestrator extracts what was built from the CLI output. Existing integration: gstack's `/codex` skill already handles `codex exec` invocation and output parsing.
+**Integration notes:** Slot-machine dispatches to Codex **natively** via `codex exec`, not through the gstack `/codex` skill. The `/codex` skill is designed for review/challenge/consult — not implementation. Native dispatch gives us `workspace-write` mode (Codex writes files directly to a worktree), JSONL output for implementer reports, and clean composition with skills (`tdd + codex`).
+
+JSONL parsing pattern borrowed from gstack's codex skill: parse `item.completed` events for agent messages and command executions.
 
 ### How Each Slot Type Maps to Orchestrator Behavior
 
-| Slot config | Orchestrator action | Prompt source | Isolation |
-|-------------|-------------------|---------------|-----------|
-| `default` | Read profile implementer prompt, add approach hint | Profile `1-implementer.md` | Profile's isolation setting |
-| `/superpowers:tdd` | Dispatch Agent with TDD skill instruction + spec | Skill guidance injected into context | worktree |
-| `/superpowers:sdd` | Dispatch Agent with SDD instruction + spec as plan | Skill guidance injected into context | worktree |
-| `/ce:work` | Dispatch Agent with CE work instruction + spec | Skill guidance injected into context | worktree |
-| `codex` | Run `codex exec` via Bash, capture output files | Spec passed as prompt to codex CLI | codex sandbox → files copied to RUN_DIR |
+| Slot config | Orchestrator action | Dispatch mechanism | Isolation |
+|-------------|--------------------|--------------------|-----------|
+| `default` | Profile implementer prompt + approach hint | Agent tool | Profile's isolation setting |
+| `tdd` | TDD methodology guidance + spec | Agent tool | worktree |
+| `ce:work` | CE work patterns guidance + spec | Agent tool | worktree |
+| `codex` | Spec passed to codex exec CLI | `codex exec -s workspace-write --json` | worktree (slot-machine managed) |
+| `tdd + codex` | TDD guidance embedded in codex exec prompt | `codex exec -s workspace-write --json` | worktree (slot-machine managed) |
 
-**Key insight:** For skill-based slots, the orchestrator doesn't read the profile's implementer prompt. Instead, it tells the subagent "use this skill to implement {spec}" and the skill's own prompting takes over. The profile's reviewer/judge/synthesizer prompts are still used — only the implementer is overridden.
+**Two categories, composable:**
+- **Skills** (tdd, ce:work, sdd) = methodology guidance. Injected into the prompt of whatever harness runs the slot.
+- **Harnesses** (codex, gemini, default=claude-code) = which AI system executes. Determines the dispatch mechanism.
+
+A slot with no harness specified uses Claude Code (the Agent tool). A slot with no skill specified uses the profile's implementer prompt + approach hint. Both can be combined: `tdd + codex` = Codex implements using TDD methodology.
+
+**Key insight:** The profile's reviewer/judge/synthesizer prompts are always used regardless of how the slot was implemented. Only the implementation step is pluggable.
 
 ## Invocation Syntax
 
