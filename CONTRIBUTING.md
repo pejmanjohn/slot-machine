@@ -40,3 +40,5 @@ To create a custom profile, either:
 - Create a profile that extends an existing one with `extends: coding` in the `0-profile.md` frontmatter. Only include files you want to override — missing files are inherited from the base.
 
 Run `./tests/run-tests.sh` to validate your profile has all required files and consistent contracts.
+
+For personal or community profiles that aren't part of this repo, place them in `~/.slot-machine/profiles/` instead. They'll be discovered automatically between project-local and built-in profiles.

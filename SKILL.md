@@ -80,8 +80,9 @@ Profiles define the task-specific content for a slot-machine run: approach hints
 1. **Explicit:** user says `--profile X` or `profile: X`
 2. **Project default:** `CLAUDE.md` sets `slot-machine-profile: X`
 3. **Local:** `./profiles/` folders in the project
-4. **Skill:** `profiles/` in the slot-machine skill directory (each profile is a folder)
-5. **Fallback:** `coding`
+4. **User:** `~/.slot-machine/profiles/` (community or personal profiles)
+5. **Skill:** `profiles/` in the slot-machine skill directory (the built-in profiles)
+6. **Fallback:** `coding`
 
 ### Profile Selection Logic
 
