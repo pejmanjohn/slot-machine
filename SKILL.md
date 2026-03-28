@@ -145,25 +145,29 @@ SKILL.md injects these variables into ALL profile prompts. If a variable isn't r
 
    Keep context focused — don't dump everything. Implementers should get just enough to orient themselves.
 
-3. **Prepare isolation.** Check the profile's `isolation` field:
+3. **Create run directory.** Create the run storage directory and add `.slot-machine/` to `.gitignore` if not already present:
+   ```bash
+   RUN_DIR=".slot-machine/runs/$(date +%Y-%m-%d)-{feature_slug}"
+   mkdir -p "$RUN_DIR"
+   grep -q '.slot-machine/' .gitignore 2>/dev/null || echo '.slot-machine/' >> .gitignore
+   ```
+   All artifacts from this run will be saved to `{RUN_DIR}/`.
+
+4. **Prepare isolation.** Check the profile's `isolation` field:
    - If `worktree`: The project MUST be a git repository with at least one commit before Phase 2 can create worktrees. If the directory is not a git repo or has no commits:
      ```bash
      git init && git add -A && git commit -m "initial commit"
      ```
      Without this, `isolation: "worktree"` on Agent calls will fail and agents will not get isolated workspaces.
-   - If `file`: Create a temp directory for slot outputs:
-     ```bash
-     SLOT_TEMP_DIR=$(mktemp -d)
-     ```
-     No git repo required. Each slot will write its output to `{SLOT_TEMP_DIR}/slot-{i}-output.md`.
+   - If `file`: No git repo required. Each slot will write its output to `{RUN_DIR}/slot-{i}.md`.
 
-4. **Run pre-checks (if configured).** Read the active profile's `profile.md` frontmatter for the `pre_checks` field.
+5. **Run pre-checks (if configured).** Read the active profile's `profile.md` frontmatter for the `pre_checks` field.
    - If `null` → skip this step.
    - If set → run the pre-check commands, substituting `{test_command}` with the detected test command. These establish the baseline. If baseline checks fail, stop and fix first.
 
-5. **Assign approach hints.** If `approach_hints` is enabled, read hints from the active profile's `profile.md`. Randomly assign one hint per slot (without replacement). Each hint steers toward a different approach — the profile defines what diversity means for this task type.
+6. **Assign approach hints.** If `approach_hints` is enabled, read hints from the active profile's `profile.md`. Randomly assign one hint per slot (without replacement). Each hint steers toward a different approach — the profile defines what diversity means for this task type.
 
-6. **Report setup to user** using this format (top-level markdown, not inside a code block):
+7. **Report setup to user** using this format (top-level markdown, not inside a code block):
 
    **Slot Machine** — `{profile_name}` profile
 
@@ -201,7 +205,7 @@ The universal variables to fill in the implementer prompt:
 | `{{PROJECT_CONTEXT}}` | README, architecture notes, CLAUDE.md conventions, reference materials gathered in Phase 1. Include any user-specified skill guidance. |
 | `{{TEST_COMMAND}}` | How to run the test suite (empty string if not applicable) |
 
-**For `file` isolation:** Each slot writes its output to `{SLOT_TEMP_DIR}/slot-{i}-output.md`. Include this path in the prompt so the implementer knows where to write. No worktrees, no git branches.
+**For `file` isolation:** Each slot writes its output to `{RUN_DIR}/slot-{i}.md`. Include this path in the prompt so the implementer knows where to write. No worktrees, no git branches.
 
 **For `worktree` isolation — worktree fallback:** If `isolation: "worktree"` fails (e.g., git repo not detected, permission issues), fall back to manual worktree creation:
 
@@ -211,7 +215,7 @@ for i in $(seq 1 $N); do
 done
 ```
 
-Then dispatch implementers WITHOUT `isolation: "worktree"`, pointing each to its worktree directory. Track worktree paths manually for cleanup in Phase 4.
+Then dispatch implementers WITHOUT `isolation: "worktree"`, pointing each to its worktree directory. Track worktree paths manually for cleanup in Phase 4. For `worktree` isolation, save each slot's diff to `{RUN_DIR}/slot-{i}.diff` before cleanup.
 
 **After all agents return**, process each result:
 
@@ -277,7 +281,7 @@ The universal variables to fill in the reviewer prompt:
 
 The reviewer reads actual content in the worktree/output file — it does NOT have `isolation: "worktree"` (it inspects existing work, not its own workspace).
 
-After all reviewers return, collect all reviews. **Report review results** using a top-level markdown table and standout bullets. Do NOT show full reviewer scorecards, evidence chains, or pass-by-pass analysis — those are pipeline internals the judge uses, not the user.
+After all reviewers return, collect all reviews. Save each reviewer's scorecard to `{RUN_DIR}/review-{i}.md`. **Report review results** using a top-level markdown table and standout bullets. Do NOT show full reviewer scorecards, evidence chains, or pass-by-pass analysis — those are pipeline internals the judge uses, not the user.
 
 **Phase 3:** Review — `done`
 
@@ -316,6 +320,8 @@ The judge returns one of three verdicts:
 - **PICK** — one slot is the clear winner
 - **SYNTHESIZE** — multiple slots have complementary strengths worth combining
 - **NONE_ADEQUATE** — all slots have critical issues
+
+Save the judge's full verdict and reasoning to `{RUN_DIR}/verdict.md`.
 
 **Report the verdict** using a blockquote. This is the most important output before the final result — make it visually distinct:
 
@@ -377,7 +383,7 @@ For PICK verdicts, the blockquote is simpler:
    | `{{WORKTREE_PATHS}}` | All slot worktree/output paths the synthesizer needs to read from |
    | `{{BASE_SLOT_PATH}}` | The worktree/output path of the base slot specifically |
 
-3. Run full test suite to verify (for `worktree` isolation). For `file` isolation, the synthesizer writes its output to `{SLOT_TEMP_DIR}/synthesis-output.md` (or appropriate extension). Tell the synthesizer this destination path in its prompt.
+3. Run full test suite to verify (for `worktree` isolation). For `file` isolation, the synthesizer writes its output to `{RUN_DIR}/output.md` (or appropriate extension). Tell the synthesizer this destination path in its prompt.
 
 4. **Post-synthesis review.** Dispatch ONE reviewer to check the synthesized result for integration issues:
 
@@ -427,11 +433,9 @@ git worktree remove {worktree_path} --force
 git branch -D {branch_name}
 ```
 
-**For `file` isolation:** remove the temp directory:
+Slot diffs are preserved in `{RUN_DIR}/`.
 
-```bash
-rm -rf {SLOT_TEMP_DIR}
-```
+**For `file` isolation:** Run artifacts are kept permanently — no cleanup needed. All slot outputs, reviews, and the verdict remain in `{RUN_DIR}/`.
 
 If `cleanup` is false, report worktree/output locations so the user can inspect them.
 
@@ -445,9 +449,9 @@ The final report has three parts: the H1 header, the output content, and the foo
 
 **Part 2: Output content** — depends on profile isolation and output length:
 
-**For `file` isolation (writing):** Count lines in the final output file.
+**For `file` isolation (writing):** Count lines in the final output file. The winner (or synthesis) is saved to `{RUN_DIR}/output.md`.
 - If ≤ 60 lines: show the full content inline after the header.
-- If > 60 lines: show the first ~20 lines, then: `Full output at \`{path}\``
+- If > 60 lines: show the first ~20 lines, then: `Full output at \`.slot-machine/runs/{date}-{feature}/output.md\``
 
 **For `worktree` isolation (coding):** Show a file change summary table:
 
