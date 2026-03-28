@@ -421,9 +421,14 @@ Cross-harness slots use different billing accounts. A run with 2 Claude Code slo
 
 ## Open Questions
 
-1. **Cross-harness timing** — Codex calls via CLI might take 2-5x longer than local Agent dispatch. Slots won't finish simultaneously. Should the orchestrator start reviewing completed slots while others are still running? Probably yes — dispatch reviewers as slots complete rather than waiting for all.
+1. **Cross-harness failure handling** — Skill-based and harness-based slots fail differently than hint-based slots. Hint slots return a standard implementer report (DONE/BLOCKED/NEEDS_CONTEXT). Skill slots might fail in skill-specific ways (TDD can't find a passing test after N attempts). Codex slots fail via CLI: timeout, non-zero exit, empty JSONL, partial output. The orchestrator needs per-dispatch-mechanism error handling:
+   - **Agent tool (skills):** If the subagent returns without a recognizable implementer report, mark FAILED with "no report produced."
+   - **codex exec:** Check exit code, handle timeout (5-minute default), detect empty/partial JSONL. On failure, save whatever output exists to the run dir for debugging.
+   - **All types:** A failed slot is not fatal. The run continues with remaining successful slots (minimum 2 needed for comparison).
 
-2. **Evaluation pipeline pluggability** — Custom profiles already allow custom reviewer/judge prompts. For full pluggability (different model for review, different harness for judge), the profile could specify `reviewer_harness: codex` or `judge_model: gpt-5`. Not for v1 but the profile structure supports it.
+2. **Cross-harness timing** — Codex calls via CLI might take 2-5x longer than local Agent dispatch. Slots won't finish simultaneously. Should the orchestrator start reviewing completed slots while others are still running? Probably yes — dispatch reviewers as slots complete rather than waiting for all.
+
+3. **Evaluation pipeline pluggability** — Custom profiles already allow custom reviewer/judge prompts. For full pluggability (different model for review, different harness for judge), the profile could specify `reviewer_harness: codex` or `judge_model: gpt-5`. Not for v1 but the profile structure supports it.
 
 ## Autonomous Loop Integration
 
