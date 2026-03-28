@@ -292,7 +292,7 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
    - Profile name and key numbers in backticks
    - Bold for phase labels and verdicts
    - No italics anywhere — they de-emphasize in monospace terminals
-   - Blockquote (`>`) for the verdict section only
+   - Verdict section bounded by horizontal rules (`---`) — no blockquotes (they render as dim italics in terminals)
    - H1 (`#`) for Final Output header only
 
 ### Phase 2: Parallel Implementation
@@ -554,22 +554,31 @@ The judge returns one of three verdicts:
 
 Save the judge's full verdict and reasoning to `{RUN_DIR}/verdict.md`.
 
-**Report the verdict** using a blockquote. This is the most important output before the final result — make it visually distinct:
+**Report the verdict** bounded by horizontal rules. This is the most important output — include a one-sentence why summary explaining the decision in plain language. Every slot reference must include full identity: `(Harness `Model` w/ skill)`.
 
 **Phase 4:** Verdict
 
-> **SYNTHESIZE** — `HIGH` confidence
->
-> **Base:** Slot 3 — strongest voice, best opener
-> **+ Slot 2:** problem sentence, lock-in footer
-> **+ Slot 1:** fzf detail, escape-hatch framing
-> **Cut:** "How it works" section — out of scope
+---
 
-For PICK verdicts, the blockquote is simpler:
+**Verdict: `SYNTHESIZE`** | Confidence: `HIGH`
 
-> **PICK Slot 2** — `HIGH` confidence
->
-> Zero critical issues, strongest test coverage (45 tests), correct lock granularity
+Slot 3 has the cleanest code. Slot 1 has the best tests. Combining both produces something better than either.
+
+- **Base:** Slot 3 (Codex `gpt-5.4`) — cleanest implementation, no NaN bug, proper drain waiter pattern
+- **+ Slot 1** (Claude Code `opus-4.6` w/ /ce:work) — 19-test suite: nested scheduling, timing verification, counter tracking
+- **Keep Slot 3:** event-ordering drain test, error propagation test
+
+---
+
+For PICK verdicts:
+
+---
+
+**Verdict: `PICK Slot 2`** (Claude Code `opus-4.6` w/ /ce:work) | Confidence: `HIGH`
+
+Zero critical issues, strongest test coverage (45 tests), correct lock granularity. No synthesis needed — clear winner.
+
+---
 
 ### Phase 4: Resolution
 
