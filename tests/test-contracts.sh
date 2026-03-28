@@ -258,6 +258,69 @@ else
 fi
 
 echo ""
+echo "=== Contract 11: Slot Definition Syntax ==="
+# SKILL.md must have a Slot Definitions section
+assert_contains "$SKILL_CONTENT" "## Slot Definitions" \
+    "SKILL.md has Slot Definitions section" || FAILED=$((FAILED + 1))
+
+# Must describe the + composition operator
+assert_contains "$SKILL_CONTENT" '+ codex' \
+    "SKILL.md describes skill + harness composition with codex" || FAILED=$((FAILED + 1))
+
+# Must describe CLAUDE.md config key
+assert_contains "$SKILL_CONTENT" "slot-machine-slots" \
+    "SKILL.md documents slot-machine-slots config key" || FAILED=$((FAILED + 1))
+
+# Must describe precedence
+assert_contains "$SKILL_CONTENT" "inline.*CLAUDE.md.*profile\|precedence" \
+    "SKILL.md documents slot definition precedence" || FAILED=$((FAILED + 1))
+
+# Must describe poor slot candidate warning
+assert_contains "$SKILL_CONTENT" "poor.*candidate\|multi-agent.*orchestrator\|warn.*block" \
+    "SKILL.md warns about poor slot candidates" || FAILED=$((FAILED + 1))
+
+# Skill-based slots must NOT get approach hints
+assert_contains "$SKILL_CONTENT" "skill.*no.*hint\|hint.*only.*default\|default.*slots.*hint" \
+    "SKILL.md clarifies hints only apply to default slots" || FAILED=$((FAILED + 1))
+
+echo ""
+echo "=== Contract 12: Codex Dispatch ==="
+# SKILL.md must describe native codex exec dispatch
+assert_contains "$SKILL_CONTENT" "codex exec" \
+    "SKILL.md describes codex exec dispatch" || FAILED=$((FAILED + 1))
+
+# Must specify workspace-write mode
+assert_contains "$SKILL_CONTENT" "workspace-write" \
+    "SKILL.md specifies workspace-write sandbox mode" || FAILED=$((FAILED + 1))
+
+# Must describe JSONL output parsing
+assert_contains "$SKILL_CONTENT" "JSONL\|jsonl" \
+    "SKILL.md describes JSONL output parsing" || FAILED=$((FAILED + 1))
+
+# Must describe Codex failure handling
+assert_contains "$SKILL_CONTENT" "non-zero exit\|timeout.*codex\|codex.*fail" \
+    "SKILL.md describes codex failure handling" || FAILED=$((FAILED + 1))
+
+# Must describe harness availability check with fallback
+assert_contains "$SKILL_CONTENT" "which codex\|codex.*not found\|fall.*back.*Claude" \
+    "SKILL.md describes codex availability check with fallback" || FAILED=$((FAILED + 1))
+
+# Must describe mixed-harness parallel dispatch
+assert_contains "$SKILL_CONTENT" "Claude Code slots.*parallel\|Codex slots.*background\|mixed.*harness\|dispatch.*group" \
+    "SKILL.md describes mixed-harness parallel dispatch strategy" || FAILED=$((FAILED + 1))
+
+echo ""
+echo "=== Contract 13: Skill Discovery ==="
+assert_contains "$SKILL_CONTENT" "Skill Discovery\|skill discovery" \
+    "SKILL.md has Skill Discovery section" || FAILED=$((FAILED + 1))
+
+assert_contains "$SKILL_CONTENT" "\-\-discover" \
+    "SKILL.md documents --discover flag" || FAILED=$((FAILED + 1))
+
+assert_contains "$SKILL_CONTENT" "all my skills\|all implementation skills" \
+    "SKILL.md documents natural language discovery triggers" || FAILED=$((FAILED + 1))
+
+echo ""
 echo "=== Contract Tests Complete ==="
 echo "Failures: $FAILED"
 exit $FAILED
