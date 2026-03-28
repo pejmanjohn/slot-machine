@@ -477,21 +477,15 @@ Do NOT show full implementer reports, self-review findings, or file lists. The t
 
 **The review/judgment pipeline is the skill's core value.** Baseline testing showed that Claude naturally does parallel dispatch and even synthesis — but it centralizes all evaluation in the orchestrator. This phase delegates evaluation to specialized agents for higher-quality, unbiased assessment.
 
-#### Step 0: Run pre-checks (before LLM reviewers)
+#### Streaming Review: Review as Slots Complete
 
-Run the pre-check commands defined in the active profile's `profile.md` frontmatter. If `pre_checks` is `null`, skip pre-checks entirely and pass an empty string for `{{PRE_CHECK_RESULTS}}`.
+**Do NOT wait for all implementations to finish before starting reviews.** As each slot completes, immediately run its pre-checks and dispatch its reviewer. This overlaps review work with implementation — a slot that finishes early gets reviewed while slower slots are still implementing.
 
-If `pre_checks` is set: for each successful slot, `cd` into the slot's worktree first, then run the commands (for `worktree` isolation). For `file` isolation, run against the slot's output file. Before running, substitute `{test_command}` with the test command detected during Phase 1. Every pre-check Bash command must start with `cd {worktree_path} &&` — do not assume the shell is already in the right directory.
+**For each slot, as it returns successfully:**
 
-Feed ALL pre-check results to the reviewer as `{{PRE_CHECK_RESULTS}}`. The more factual data the reviewer has, the less it has to discover — and the more it can focus on judgment calls that require reasoning.
+1. **Run pre-checks** for that slot. If `pre_checks` is `null`, skip and pass an empty string for `{{PRE_CHECK_RESULTS}}`. If set, `cd` into the slot's worktree first, then run the commands. Every pre-check Bash command must start with `cd {worktree_path} &&` — do not assume the shell is already in the right directory.
 
-Collect results as `{{PRE_CHECK_RESULTS}}` for each slot.
-
-#### Step 1: Dispatch reviewers for all successful slots
-
-**Dispatch all reviewers in a SINGLE message** — one parallel Agent tool call per successful slot.
-
-For each successful slot i, make an Agent tool call with:
+2. **Dispatch its reviewer immediately** — do not wait for other slots. Make an Agent tool call with:
 
 | Parameter | Value |
 |-----------|-------|
@@ -507,12 +501,16 @@ The universal variables to fill in the reviewer prompt:
 | `{{IMPLEMENTER_REPORT}}` | The implementer's status report (what they claim they built) |
 | `{{WORKTREE_PATH}}` | Path to this slot's worktree or output file (from Phase 2 results) |
 | `{{SLOT_NUMBER}}` | This slot's number |
-| `{{PRE_CHECK_RESULTS}}` | Pre-check output from Step 0 (empty string if pre_checks is null) |
+| `{{PRE_CHECK_RESULTS}}` | Pre-check output from the step above (empty string if pre_checks is null) |
 | `{{APPROACH_HINT_USED}}` | The approach hint that was given to this slot's implementer |
 
 The reviewer reads actual content in the worktree/output file — it does NOT have `isolation: "worktree"` (it inspects existing work, not its own workspace).
 
-After all reviewers return, collect all reviews. Save each reviewer's scorecard to `{RUN_DIR}/review-{i}.md`. **Report review results** using a top-level markdown table and standout bullets. Do NOT show full reviewer scorecards, evidence chains, or pass-by-pass analysis — those are pipeline internals the judge uses, not the user.
+**When multiple slots complete close together**, batch their reviewers into a single message for parallel dispatch — this is faster than dispatching one at a time. The key rule is: don't wait for stragglers. If 2 of 3 slots are done, dispatch their 2 reviewers now rather than waiting for the 3rd.
+
+**Collect reviews as they return.** Save each reviewer's scorecard to `{RUN_DIR}/review-{i}.md`.
+
+**Report review results** after all reviews are collected, using a top-level markdown table and standout bullets. Do NOT show full reviewer scorecards, evidence chains, or pass-by-pass analysis — those are pipeline internals the judge uses, not the user.
 
 **Phase 3:** Review — `done`
 
@@ -528,7 +526,9 @@ After all reviewers return, collect all reviews. Save each reviewer's scorecard 
 
 Extract standout elements from each reviewer's "Strengths" section. Pick the single most notable strength per slot — the one the judge is most likely to care about.
 
-#### Step 2: Dispatch the judge
+#### Dispatch the judge immediately
+
+As soon as all reviews are collected, dispatch the judge — do not pause for orchestrator reporting. The review report table above can be shown *after* the judge is already running, or combined with the verdict output. The goal is to eliminate idle time between the last review returning and the judge starting.
 
 Make a SINGLE Agent tool call. **The judge MUST use the most capable model** — this is where architectural judgment matters most:
 
