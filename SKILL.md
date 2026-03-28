@@ -374,7 +374,7 @@ Do NOT use the Agent tool. Dispatch via Bash:
    ```bash
    cd {worktree_path} && codex exec "Implement this specification. Write all files to the current directory.
 
-   {If skill specified: 'METHODOLOGY: Follow {skill_name} principles — e.g., for TDD: write failing tests first, verify they fail, then implement minimal code to pass, verify all tests pass.'}
+   {If skill specified: 'METHODOLOGY: Follow {skill_name} principles — e.g., for TDD: write failing tests first, create module stubs so tests fail at the assertion level (not import errors), then implement minimal code to pass, verify all tests pass.'}
 
    Specification:
    {spec}
@@ -408,8 +408,14 @@ Do NOT use the Agent tool. Dispatch via Bash:
    " > {RUN_DIR}/slot-{i}-report.txt
    ```
 
-3. After `codex exec` completes, check for failures:
-   - Non-zero exit code → mark FAILED, save stderr for debugging
+3. After `codex exec` completes, commit the files it wrote to the worktree branch:
+   ```bash
+   cd {worktree_path} && git add -A && git commit -m "feat: {feature_name} — Codex slot {i}" 2>/dev/null || true
+   ```
+   This ensures the reviewer can inspect the worktree via git and the branch can be merged if this slot wins.
+
+4. Check for failures:
+   - non-zero exit code → mark FAILED, save stderr for debugging
    - Empty report file (`{RUN_DIR}/slot-{i}-report.txt` is 0 bytes) → mark FAILED
    - Timeout (Bash tool returns timeout) → mark FAILED
    - On any failure, save whatever output exists to the run dir. The slot is marked FAILED but the run continues.
