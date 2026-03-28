@@ -162,6 +162,58 @@ Approach hints only apply to `default` slots. Skill-based slots do NOT get appro
 
 If a parsed skill name matches a known multi-agent orchestrator (`/superpowers:subagent-driven-development`, `/superpowers:executing-plans`), warn the user: "⚠ {skill} is a multi-agent orchestrator — running it inside a slot creates nested pipelines (slower, redundant review). Consider using a single-session skill like /superpowers:tdd instead." Do not block — the user may have a reason.
 
+## Skill Discovery
+
+When the user says "all my skills", "all implementation skills", or uses `--discover`, the orchestrator scans for available slot-compatible skills and proposes a slot configuration.
+
+### Trigger Rules (strict — never auto-fires)
+
+| User says | Discovery fires? |
+|-----------|-----------------|
+| `/slot-machine this` | No — default profile + hints |
+| `/slot-machine this with 3 slots` | No — default hints |
+| `/slot-machine this with /superpowers:tdd and codex` | No — explicit list |
+| `/slot-machine this with all my skills` | **Yes** |
+| `/slot-machine this using all implementation skills` | **Yes** |
+| `/slot-machine --discover` | **Yes** |
+
+Discovery ONLY fires on explicit "all my/implementation skills" language or `--discover`. Never as a suggestion. Never as a default.
+
+### Detection Heuristic
+
+1. Read skill descriptions from the system prompt
+2. Filter by signals:
+   - **Include:** "implement", "build", "execute plan", "write code", "development workflow"
+   - **Exclude:** "review", "deploy", "ship", "test-only", "audit", "monitor", "debug"
+3. Filter out known poor candidates: `/superpowers:subagent-driven-development`, `/superpowers:executing-plans`
+4. Check for external harnesses: run `which codex`, `which gemini` via Bash
+5. Propose the filtered list to the user
+
+### First-Time Flow
+
+```
+I scanned your installed skills and detected these slot-compatible workflows:
+
+  1. /superpowers:tdd — test-first development
+  2. /ce:work — pattern-matching execution
+  3. codex — OpenAI Codex (external harness)
+
+Use all 3 as slots? Or adjust?
+```
+
+User confirms or edits. Save selection to `~/.slot-machine/config.md`:
+
+```markdown
+## Discovered Implementation Skills
+- /superpowers:tdd
+- /ce:work
+- codex
+```
+
+### Subsequent Runs
+
+"All my skills" loads the saved list without re-scanning. User can re-trigger a fresh scan with `--discover`.
+
 ## The Process
 
 ### Phase 1: Setup
