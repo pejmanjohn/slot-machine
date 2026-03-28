@@ -235,7 +235,19 @@ If a parsed skill name matches a known multi-agent orchestrator (`/superpowers:s
 
 ### Phase 2: Parallel Implementation
 
-**Dispatch all N implementers in a SINGLE message** using N parallel Agent tool calls. This is critical — all calls must be in one message for true parallel execution.
+**Dispatch depends on the slot definition.** For each slot, determine the dispatch path:
+
+**Group 1 — Claude Code slots (Agent tool):** All slots where `harness` is `null` (default slots and skill-only slots). Dispatch all Group 1 slots in a SINGLE message using parallel Agent tool calls.
+
+**Group 2 — Codex slots (CLI):** All slots where `harness` is `codex`. Dispatch all Group 2 slots in parallel using background Bash commands (one per slot, using Bash tool with `run_in_background: true` and `timeout: 300000`).
+
+Both groups can run concurrently — dispatch Group 1 and Group 2 in the same message if possible, or Group 1 first then Group 2 immediately after. Collect all results after both groups complete.
+
+---
+
+**Path A — Default slots (no skill, no harness):**
+
+Unchanged from Phase 1. Read `1-implementer.md` from the active profile, fill universal `{{VARIABLES}}`, include the assigned approach hint. Dispatch via Agent tool with `isolation: "worktree"` (or omit if `file` profile).
 
 For each slot i (1 to N), make an Agent tool call with:
 
@@ -267,6 +279,100 @@ done
 
 Then dispatch implementers WITHOUT `isolation: "worktree"`, pointing each to its worktree directory. Track worktree paths manually for cleanup in Phase 4. For `worktree` isolation, save each slot's diff to `{RUN_DIR}/slot-{i}.diff` before cleanup.
 
+---
+
+**Path B — Skill-only slots (e.g., `/superpowers:tdd`, no harness):**
+
+Do NOT read the profile's `1-implementer.md`. Dispatch via Agent tool with this prompt:
+
+```
+You are implementing a feature in an isolated workspace.
+
+IMPORTANT: You MUST invoke the {skill_name} skill using the Skill tool before beginning implementation. Follow its workflow exactly.
+
+Specification:
+{spec}
+
+Project Context:
+{project_context}
+
+After implementation is complete, end with this report format:
+**Status:** [DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT]
+**What I implemented:** [bullet list]
+**Files changed:** [list]
+**Test results:** [if applicable]
+**Concerns (if any):** [issues]
+```
+
+Use `isolation: "worktree"` on the Agent call. Do NOT include an approach hint — the skill is the diversity mechanism.
+
+---
+
+**Path C — Codex slots (harness = `codex`, with or without skill):**
+
+Do NOT use the Agent tool. Dispatch via Bash:
+
+1. Create a git worktree for this slot (same as Claude Code slots):
+   ```bash
+   git worktree add "../slot-machine-{feature}-slot-{i}" -b "slot-machine/{feature}/slot-{i}"
+   ```
+
+2. Run `codex exec` pointed at the worktree. Use the Bash tool with `timeout: 300000` (5 minutes) and `run_in_background: true`. The `--json` flag emits JSONL output — pipe it through the Python parser below to extract the agent's final report:
+
+   ```bash
+   cd {worktree_path} && codex exec "Implement this specification. Write all files to the current directory.
+
+   {If skill specified: 'METHODOLOGY: Follow {skill_name} principles — e.g., for TDD: write failing tests first, verify they fail, then implement minimal code to pass, verify all tests pass.'}
+
+   Specification:
+   {spec}
+
+   Project context:
+   {project_context}
+
+   When done, provide a summary of:
+   - What you implemented (bullet list)
+   - Files created or modified
+   - Test results if you wrote tests
+   - Any concerns or issues encountered" \
+     -s workspace-write \
+     -c 'model_reasoning_effort="high"' \
+     --json 2>{RUN_DIR}/slot-{i}-codex-stderr.txt | python3 -c "
+   import sys, json
+   for line in sys.stdin:
+       line = line.strip()
+       if not line: continue
+       try:
+           obj = json.loads(line)
+           t = obj.get('type', '')
+           if t == 'item.completed' and 'item' in obj:
+               item = obj['item']
+               if item.get('type') == 'agent_message' and item.get('text'):
+                   print(item['text'])
+               elif item.get('type') == 'command_execution':
+                   cmd = item.get('command', '')
+                   if cmd: print(f'[codex ran] {cmd}')
+       except: pass
+   " > {RUN_DIR}/slot-{i}-report.txt
+   ```
+
+3. After `codex exec` completes, check for failures:
+   - Non-zero exit code → mark FAILED, save stderr for debugging
+   - Empty report file (`{RUN_DIR}/slot-{i}-report.txt` is 0 bytes) → mark FAILED
+   - Timeout (Bash tool returns timeout) → mark FAILED
+   - On any failure, save whatever output exists to the run dir. The slot is marked FAILED but the run continues.
+
+---
+
+| Slot definition | Dispatch | Prompt | Isolation | Hint? |
+|----------------|----------|--------|-----------|-------|
+| `default` | Agent tool (parallel Group 1) | Profile `1-implementer.md` + hint | Profile setting | Yes |
+| `/superpowers:tdd` | Agent tool (parallel Group 1) | "Invoke {skill} via Skill tool" + spec | worktree | No |
+| `codex` | `codex exec` CLI (parallel Group 2) | Generic "implement this" + spec | worktree (manual) | No |
+| `/superpowers:tdd + codex` | `codex exec` CLI (parallel Group 2) | Skill methodology + spec | worktree (manual) | No |
+
+---
+
 **After all agents return**, process each result:
 
 | Result | Action |
@@ -282,11 +388,12 @@ Then dispatch implementers WITHOUT `isolation: "worktree"`, pointing each to its
 
 **Phase 2:** Implementation — `done`
 
-| Slot | Status | Words/Tests | Approach |
-|------|--------|-------------|----------|
-| 1 | `DONE` | ~330 | {hint_name} — {one-line summary of what this slot did differently} |
-| 2 | `DONE_WITH_CONCERNS` | ~327 | {hint_name} — {summary} |
-| 3 | `FAILED` | — | {hint_name} — {failure reason} |
+| Slot | Via | Status | Words/Tests | Approach |
+|------|-----|--------|-------------|----------|
+| 1 | `Claude` | `DONE` | 13 tests | /superpowers:tdd |
+| 2 | `Codex` | `DONE` | 15 tests | /superpowers:tdd + codex |
+| 3 | `Claude` | `DONE` | 21 tests | /ce:work |
+| 4 | `Codex` | `DONE_WITH_CONCERNS` | 8 tests | codex |
 
 Do NOT show full implementer reports, self-review findings, or file lists. The table summarizes the essential information. Agent internals are pipeline noise.
 
