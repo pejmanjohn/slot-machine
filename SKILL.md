@@ -79,8 +79,8 @@ Profiles define the task-specific content for a slot-machine run: approach hints
 
 1. **Explicit:** user says `--profile X` or `profile: X`
 2. **Project default:** `CLAUDE.md` sets `slot-machine-profile: X`
-3. **Local:** `./profiles/` in the project
-4. **Skill:** `profiles/` in the slot-machine skill directory (the directory containing this SKILL.md file)
+3. **Local:** `./profiles/` folders in the project
+4. **Skill:** `profiles/` in the slot-machine skill directory (each profile is a folder)
 5. **Fallback:** `coding`
 
 ### Profile Selection Logic
@@ -94,14 +94,11 @@ Profiles define the task-specific content for a slot-machine run: approach hints
 ### Profile Inheritance Resolution
 
 - If profile has `extends: X`, read base profile X first
-- Overlay the extending profile's sections on top
-- Sections present in extending profile replace base entirely
+- Overlay the extending profile's files on top
+- Files present in extending profile's folder replace base files entirely
+- Missing files are inherited from the base folder
 - Frontmatter fields override individually
 - Max one level of inheritance
-
-### Section Extraction from Profiles
-
-Profiles contain known sections: `## Approach Hints`, `## Implementer Prompt`, `## Reviewer Prompt`, `## Judge Prompt`, `## Synthesizer Prompt`. Use these section names as boundaries when extracting content. Do NOT use generic `##` as a stop pattern — prompt sections contain their own `##` sub-headings internally.
 
 ### Universal Variables
 
@@ -128,7 +125,7 @@ SKILL.md injects these variables into ALL profile prompts. If a variable isn't r
 
 ### Phase 1: Setup
 
-0. **Load profile.** Follow the [Profile Loading](#profile-loading) section to find and resolve the active profile. Report to user: "Using profile: {profile_name}"
+0. **Load profile.** Follow the [Profile Loading](#profile-loading) section to find the active profile folder and read `profile.md` from it for config. Report to user: "Using profile: {profile_name}"
 
 1. **Validate the spec.** The spec (plan, requirements doc, or inline description) must be concrete enough for independent attempts. If ambiguous — stop and ask for clarification before spending compute.
 
@@ -159,11 +156,11 @@ SKILL.md injects these variables into ALL profile prompts. If a variable isn't r
      ```
      No git repo required. Each slot will write its output to `{SLOT_TEMP_DIR}/slot-{i}-output.md`.
 
-4. **Run pre-checks (if configured).** Read the profile's `pre_checks` frontmatter field.
+4. **Run pre-checks (if configured).** Read the active profile's `profile.md` frontmatter for the `pre_checks` field.
    - If `null` → skip this step.
    - If set → run the pre-check commands, substituting `{test_command}` with the detected test command. These establish the baseline. If baseline checks fail, stop and fix first.
 
-5. **Assign approach hints.** If `approach_hints` is enabled, read hints from the profile's `## Approach Hints` section. Randomly assign one hint per slot (without replacement). Each hint steers toward a different approach — the profile defines what diversity means for this task type.
+5. **Assign approach hints.** If `approach_hints` is enabled, read hints from the active profile's `profile.md`. Randomly assign one hint per slot (without replacement). Each hint steers toward a different approach — the profile defines what diversity means for this task type.
 
 6. **Report setup to user:**
    ```
@@ -186,7 +183,7 @@ For each slot i (1 to N), make an Agent tool call with:
 | `description` | `"Slot {i}: Implement {feature_name}"` |
 | `isolation` | `"worktree"` if profile isolation is `worktree`; omit if `file` |
 | `model` | configured `implementer_model` (default: `"sonnet"`) |
-| `prompt` | Read the `## Implementer Prompt` section from the active profile and fill in all universal `{{VARIABLES}}` |
+| `prompt` | Read `implementer.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
 
 The universal variables to fill in the implementer prompt:
 
@@ -238,7 +235,7 @@ Implementation complete:
 
 #### Step 0: Run pre-checks (before LLM reviewers)
 
-Run the pre-check commands defined in the active profile's `pre_checks` frontmatter field. If `null`, skip pre-checks entirely and pass an empty string for `{{PRE_CHECK_RESULTS}}`.
+Run the pre-check commands defined in the active profile's `profile.md` frontmatter. If `pre_checks` is `null`, skip pre-checks entirely and pass an empty string for `{{PRE_CHECK_RESULTS}}`.
 
 If `pre_checks` is set: for each successful slot, run the commands in the slot's worktree (for `worktree` isolation) or against the slot's output file (for `file` isolation). Before running, substitute `{test_command}` with the test command detected during Phase 1.
 
@@ -256,7 +253,7 @@ For each successful slot i, make an Agent tool call with:
 |-----------|-------|
 | `description` | `"Review Slot {i} implementation"` |
 | `model` | configured `reviewer_model` (default: `"sonnet"`) |
-| `prompt` | Read the `## Reviewer Prompt` section from the active profile and fill in all universal `{{VARIABLES}}` |
+| `prompt` | Read `reviewer.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
 
 The universal variables to fill in the reviewer prompt:
 
@@ -281,7 +278,7 @@ Make a SINGLE Agent tool call. **The judge MUST use the most capable model** —
 |-----------|-------|
 | `description` | `"Judge Slot Machine results for {feature_name}"` |
 | `model` | **`"opus"`** (or configured `judge_model`) — do NOT omit this parameter |
-| `prompt` | Read the `## Judge Prompt` section from the active profile and fill in all universal `{{VARIABLES}}` |
+| `prompt` | Read `judge.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
 
 The universal variables to fill in the judge prompt:
 
@@ -329,7 +326,7 @@ The judge returns one of three verdicts:
    | `description` | `"Synthesize best elements for {feature_name}"` |
    | `isolation` | `"worktree"` if profile isolation is `worktree`; omit if `file` |
    | `model` | **`"opus"`** (or configured `synthesizer_model`) — do NOT omit this parameter |
-   | `prompt` | Read the `## Synthesizer Prompt` section from the active profile and fill in all universal `{{VARIABLES}}` |
+   | `prompt` | Read `synthesizer.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
 
    The universal variables to fill in the synthesizer prompt:
 
@@ -348,7 +345,7 @@ The judge returns one of three verdicts:
    |-----------|-------|
    | `description` | `"Review synthesis for {feature_name}"` |
    | `model` | configured `reviewer_model` (default: `"sonnet"`) |
-   | `prompt` | Read the `## Reviewer Prompt` section from the active profile and fill in `{{VARIABLES}}` using the synthesis worktree/output |
+   | `prompt` | Read `reviewer.md` from the active profile's folder and fill in `{{VARIABLES}}` using the synthesis worktree/output |
 
    The reviewer checks:
    - Coherence: does it read like one person wrote it?
@@ -462,7 +459,7 @@ The user can override any of these in config or inline. For cost-sensitive runs,
 
 ## Approach Hints
 
-Approach hints are defined in the active profile's `## Approach Hints` section. See `profiles/coding.md` for the coding defaults and `profiles/writing.md` for writing defaults.
+Approach hints are defined in the active profile's `profile.md`. See `profiles/coding/profile.md` for the coding defaults and `profiles/writing/profile.md` for writing defaults.
 
 When `approach_hints` is enabled (default: true), each slot gets a different hint to encourage genuinely divergent attempts. Assign randomly without replacement. The profile defines what "diversity" means for its task type — architectural diversity for coding, voice/structure diversity for writing.
 
