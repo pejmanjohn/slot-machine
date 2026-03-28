@@ -102,6 +102,7 @@ We benchmarked on the same spec (multi-file Task Queue API), same model, same ma
 | **Synthesis** | N/A | Can combine best code from one slot with best tests from another |
 | **Confidence** | "Looks good to me" | HIGH — judge verified via targeted code inspection |
 | **Design alternatives** | 0 (never explored) | 2 rejected alternatives with documented reasons |
+| **Cross-model** | N/A | Claude vs Codex on same spec — different models find different bugs |
 
 ## Install
 
@@ -143,6 +144,39 @@ Spec: Write a changelog entry announcing the new task profiles feature
 ```
 
 The skill also triggers on natural language: "slot-machine this", "best-of-N", "pull the lever", or "parallel implementations."
+
+### Multi-Skill and Cross-Model Runs
+
+Compare different implementation approaches and AI systems on the same spec:
+
+```
+/slot-machine with /superpowers:tdd, /ce:work, and codex
+
+Spec: Implement the payment webhook handler from PLAN.md
+```
+
+Three slots: Claude Code with TDD, Claude Code with CE patterns, and OpenAI Codex. Each implements independently, all reviewed by the same evaluation pipeline.
+
+Compose skills with harnesses using `+`:
+
+```
+/slot-machine with 4 slots:
+  slot 1: /superpowers:tdd
+  slot 2: /superpowers:tdd + codex
+  slot 3: /ce:work
+  slot 4: codex
+```
+
+Or set project defaults in `CLAUDE.md`:
+
+```markdown
+## Slot Machine Settings
+slot-machine-slots:
+  - /superpowers:tdd
+  - /ce:work
+  - codex
+  - default
+```
 
 ## Works With Your Other Skills
 
