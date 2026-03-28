@@ -30,8 +30,8 @@ echo ""
 echo "=== Skill Structure: All Skill Files Exist ==="
 SKILL_FILES=(
     SKILL.md
-    profiles/coding.md
-    profiles/writing.md
+    profiles/coding/profile.md
+    profiles/writing/profile.md
 )
 for file in "${SKILL_FILES[@]}"; do
     if [ -f "$SKILL_DIR/$file" ]; then
@@ -43,37 +43,37 @@ for file in "${SKILL_FILES[@]}"; do
 done
 
 echo ""
-echo "=== Skill Structure: Profile Required Sections ==="
-for profile in "$SKILL_DIR"/profiles/*.md; do
-    PROFILE_NAME=$(basename "$profile")
-    # Resolve inheritance: if profile extends a base, merge base + child
-    EXTENDS=$(grep "^extends:" "$profile" | head -1 | awk '{print $2}')
-    if [ -n "$EXTENDS" ] && [ "$EXTENDS" != "null" ]; then
-        BASE_FILE="$SKILL_DIR/profiles/${EXTENDS}.md"
-        if [ -f "$BASE_FILE" ]; then
-            # Resolved content = base + child overlay (child sections override base)
-            PROFILE_CONTENT="$(cat "$BASE_FILE")
-$(cat "$profile")"
-        else
-            PROFILE_CONTENT=$(cat "$profile")
-        fi
+echo "=== Skill Structure: Profile Required Files ==="
+for profile_dir in "$SKILL_DIR"/profiles/*/; do
+    PROFILE_NAME=$(basename "$profile_dir")
+    # Check profile.md exists
+    if [ -f "$profile_dir/profile.md" ]; then
+        echo "  [PASS] Profile '$PROFILE_NAME' has profile.md"
     else
-        PROFILE_CONTENT=$(cat "$profile")
+        echo "  [FAIL] Profile '$PROFILE_NAME' missing profile.md"
+        FAILED=$((FAILED + 1))
     fi
-    for section in "Approach Hints" "Implementer Prompt" "Reviewer Prompt" "Judge Prompt" "Synthesizer Prompt"; do
-        assert_contains "$PROFILE_CONTENT" "## $section" \
-            "Profile '$PROFILE_NAME' has section '$section'" || FAILED=$((FAILED + 1))
+    # Check all 4 prompt files exist
+    for prompt in implementer.md reviewer.md judge.md synthesizer.md; do
+        if [ -f "$profile_dir/$prompt" ]; then
+            echo "  [PASS] Profile '$PROFILE_NAME' has $prompt"
+        else
+            echo "  [FAIL] Profile '$PROFILE_NAME' missing $prompt"
+            FAILED=$((FAILED + 1))
+        fi
     done
 done
 
 echo ""
 echo "=== Skill Structure: Profile Frontmatter ==="
-for profile in "$SKILL_DIR"/profiles/*.md; do
-    PROFILE_NAME=$(basename "$profile")
-    PROFILE_CONTENT=$(cat "$profile")
-    assert_contains "$PROFILE_CONTENT" "name:" "Profile '$PROFILE_NAME' has name in frontmatter" || FAILED=$((FAILED + 1))
-    assert_contains "$PROFILE_CONTENT" "description:" "Profile '$PROFILE_NAME' has description in frontmatter" || FAILED=$((FAILED + 1))
-    assert_contains "$PROFILE_CONTENT" "isolation:" "Profile '$PROFILE_NAME' has isolation in frontmatter" || FAILED=$((FAILED + 1))
+for profile_dir in "$SKILL_DIR"/profiles/*/; do
+    PROFILE_NAME=$(basename "$profile_dir")
+    if [ -f "$profile_dir/profile.md" ]; then
+        PROFILE_CONTENT=$(cat "$profile_dir/profile.md")
+        assert_contains "$PROFILE_CONTENT" "name:" "Profile '$PROFILE_NAME' has name in frontmatter" || FAILED=$((FAILED + 1))
+        assert_contains "$PROFILE_CONTENT" "description:" "Profile '$PROFILE_NAME' has description in frontmatter" || FAILED=$((FAILED + 1))
+        assert_contains "$PROFILE_CONTENT" "isolation:" "Profile '$PROFILE_NAME' has isolation in frontmatter" || FAILED=$((FAILED + 1))
+    fi
 done
 
 echo ""
