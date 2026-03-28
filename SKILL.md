@@ -231,9 +231,10 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
 
 1. **Parse slot definitions.** Check for slot definitions in precedence order: (1) inline in the user's command, (2) `slot-machine-slots` in CLAUDE.md, (3) fall back to profile defaults. Record the slot list — each slot is `(skill, harness)` or `default`. Check harness availability (see below).
 
-   **Check harness availability.** For each slot that specifies a harness:
-   - `codex`: Run `which codex` via Bash. If not found, warn: 'Codex CLI not found — slot {i} will fall back to Claude Code. Install: `npm install -g @openai/codex`'. Change the slot's harness to `null` (falls back to Claude Code with the same skill guidance if any).
-   - Future harnesses: same pattern — check binary, warn and fall back if missing.
+   **Check harness availability and detect model.** For each slot that specifies a harness:
+   - `codex`: Run `which codex` via Bash. If not found, warn: 'Codex CLI not found — slot {i} will fall back to Claude Code. Install: `npm install -g @openai/codex`'. Change the slot's harness to `null` (falls back to Claude Code with the same skill guidance if any). If found, read the Codex model version from `~/.codex/config.toml` (look for `model = "..."` line). Record this as the slot's model identifier (e.g., `gpt-5.4`).
+   - **Claude Code slots:** The model is the session model (e.g., `claude-opus-4-6`) or the configured `implementer_model` override.
+   - Future harnesses: same pattern — check binary, read model from config, warn and fall back if missing.
 
 2. **Validate the spec.** The spec (plan, requirements doc, or inline description) must be concrete enough for independent attempts. If ambiguous — stop and ask for clarification before spending compute.
 
@@ -279,7 +280,7 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
    **Slot Machine** — `{profile_name}` profile
 
    Feature: {feature_name}
-   Slots: `{N}` | /superpowers:tdd, /ce:work, codex, 2x default hints
+   Slots: `{N}` | /ce:work (`claude-opus-4-6`), /ce:work + codex (`gpt-5.4`), codex (`gpt-5.4`), 2x default hints (`claude-opus-4-6`)
 
    When all slots use profile defaults (no slot definitions):
 
@@ -461,12 +462,12 @@ Do NOT include an approach hint — for bare `codex` slots, the prompt has no sk
 
 **Phase 2:** Implementation — `done`
 
-| Slot | Via | Status | Words/Tests | Approach |
-|------|-----|--------|-------------|----------|
-| 1 | `Claude` | `DONE` | 13 tests | /superpowers:tdd |
-| 2 | `Codex` | `DONE` | 15 tests | /superpowers:tdd + codex |
-| 3 | `Claude` | `DONE` | 21 tests | /ce:work |
-| 4 | `Codex` | `DONE_WITH_CONCERNS` | 8 tests | codex |
+| Slot | Status | Model | Words/Tests | Approach |
+|------|--------|-------|-------------|----------|
+| 1 | `DONE` | `claude-opus-4-6` | 13 tests | /superpowers:tdd |
+| 2 | `DONE` | `gpt-5.4` | 15 tests | /superpowers:tdd + codex |
+| 3 | `DONE` | `claude-opus-4-6` | 21 tests | /ce:work |
+| 4 | `DONE_WITH_CONCERNS` | `gpt-5.4` | 8 tests | codex |
 
 Do NOT show full implementer reports, self-review findings, or file lists. The table summarizes the essential information. Agent internals are pipeline noise.
 
