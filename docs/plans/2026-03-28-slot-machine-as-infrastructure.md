@@ -361,72 +361,100 @@ The heuristic proposes — the user decides. The saved config is the source of t
 
 ## Autonomous Loop Integration
 
-Slot-machine should work inside autonomous agent loops — frameworks like Ralph (outer bash loop, one story per iteration) and Trycycle (inner multi-phase orchestration with subagent dispatch). In these scenarios, slot-machine runs fully unattended for hours.
+Slot-machine works inside autonomous agent loops like Ralph and Trycycle. We tested this: a headless Claude Code instance reads CLAUDE.md, sees the slot-machine instruction, and runs the pipeline without human intervention.
 
-### Two Integration Patterns
+**Key finding from testing:** Slot-machine is self-regulating. When given a mechanical task (fizzbuzz), it correctly decided the task didn't warrant competition and implemented it directly. In a Ralph loop with 20 stories, the agent decides which stories get slot-machine and which get single-shot. This is a feature, not a bug.
 
-**Pattern A: Slot-machine as a step in an outer loop (Ralph-style)**
+### What Already Works (no changes needed)
+
+- **CLAUDE.md config is read by headless instances.** Set profile, slots, and instructions once.
+- **Self-regulation.** The "When to Use" decision tree prevents wasting compute on mechanical tasks.
+- **Clean exit state.** Winner merged, worktrees cleaned, tests passing.
+- **No-stall on strong signals.** Profile auto-detection works without asking when coding signals are clear.
+- **Non-interactive invocation.** Works as subagent prompt or `claude -p` CLI.
+
+### What to Build (two things)
+
+**1. JSON result artifact — always written, every run.**
+
+```json
+{
+  "verdict": "PICK",
+  "winning_slot": 2,
+  "confidence": "HIGH",
+  "slots": 3,
+  "slots_succeeded": 3,
+  "files_changed": ["src/task_queue.py", "tests/test_task_queue.py"],
+  "tests_passing": 45,
+  "run_dir": ".slot-machine/runs/2026-03-28-task-queue/"
+}
+```
+
+Written to `.slot-machine/runs/{run}/result.json`. Plus a `latest` symlink: `.slot-machine/runs/latest → {current run}`.
+
+Always written — zero cost for humans (they ignore it), high value for loops that parse it. No config flag needed.
+
+**2. `quiet: true` config option.**
+
+Suppresses progress tables and intermediate phase reports. Final verdict + output path still printed. Set in CLAUDE.md for loop projects, never set for interactive use. Default: false (verbose).
+
+### What NOT to Build
+
+- **`autonomous: true` flag** — unnecessary. The agent already self-regulates and auto-detects for strong signals. CLAUDE.md instructions like "do not ask questions" handle the rest.
+- **Ralph-specific adapters** — Ralph doesn't need to know slot-machine exists. It just spawns Claude Code and checks the result.
+- **Special headless detection** — the pipeline works the same in both modes. Only output verbosity differs.
+
+### Loop Integration Setup
+
+**Ralph — add to CLAUDE.md:**
+
+```markdown
+## Slot Machine Settings
+slot-machine-profile: coding
+slots: 3
+quiet: true
+
+## Implementation Approach
+When implementing stories, use the slot-machine skill.
+Do not ask questions — make your best judgment and proceed.
+```
+
+That's the entire integration. No changes to Ralph.
+
+**Trycycle — subagent prompt:**
 
 ```
-Ralph's loop:
-  while stories_remain:
-    pick next story
-    → invoke slot-machine to implement it (replaces single AI instance)
-    run quality checks
-    if pass: mark done, commit
-    continue
+Implement this spec using slot-machine with 3 slots.
+Do not ask questions. Leave the workspace clean.
+Spec: {plan_content}
 ```
 
-Ralph doesn't care how the implementation happened. It spawns a fresh AI instance per story. Slot-machine replaces that single instance with N competing instances + review + judgment. Ralph's quality checks (typecheck, tests) validate the winner.
+Trycycle's orchestrator reads `.slot-machine/runs/latest/result.json` and passes the output to its review phase.
 
-**Pattern B: Slot-machine as a phase in an inner orchestrator (Trycycle-style)**
+**Custom bash loop:**
 
+```bash
+for story in $(jq -r '.stories[] | select(.passes == false) | .id' prd.json); do
+  SPEC=$(jq -r ".stories[] | select(.id == \"$story\") | .description" prd.json)
+  claude -p "Use slot-machine with 3 slots. Spec: $SPEC" \
+    --allowed-tools=all --permission-mode bypassPermissions
+  VERDICT=$(jq -r '.verdict' .slot-machine/runs/latest/result.json 2>/dev/null)
+  if [ "$VERDICT" != "NONE_ADEQUATE" ]; then
+    jq "(.stories[] | select(.id == \"$story\")).passes = true" prd.json > tmp.json
+    mv tmp.json prd.json
+  fi
+done
 ```
-Trycycle's phases:
-  plan → strengthen → test plan → BUILD → review → fix → finish
-                                    ↑
-                        slot-machine replaces this
-```
 
-Trycycle dispatches subagents per phase and collects structured output. Slot-machine could be the build phase — dispatch N implementations, review, pick winner. Trycycle's own review phase provides an independent second check.
+### README Section (to add)
 
-### Requirements for Loop Integration
+Add a section to README.md titled "## Works in Autonomous Loops" that covers:
 
-1. **Fully autonomous mode.** When invoked programmatically, slot-machine must run to completion without interactive prompts. No "which profile?" — auto-detect or use configured defaults. No "does this look right?" — just execute. Add an `autonomous: true` config or detect non-interactive context.
-
-2. **Clean exit state.** After the run, the workspace must be in a known state:
-   - Winning code merged to the working branch (or output file written)
-   - All tests passing
-   - No dangling worktrees
-   - No uncommitted changes
-   The outer loop picks up exactly where slot-machine left off.
-
-3. **Machine-readable output artifact.** In addition to human-readable tables, write a structured JSON file to the run directory:
-
-   ```json
-   {
-     "verdict": "PICK",
-     "winning_slot": 2,
-     "confidence": "HIGH",
-     "slots_succeeded": 3,
-     "slots_failed": 0,
-     "tests_passing": 45,
-     "files_changed": ["src/task_queue.py", "tests/test_task_queue.py"],
-     "output_path": ".slot-machine/runs/2026-03-28-task-queue/output.md",
-     "run_dir": ".slot-machine/runs/2026-03-28-task-queue/"
-   }
-   ```
-
-   Outer loops can read this JSON to decide what to do next. Ralph reads it to update `prd.json`. Trycycle reads it to feed into its review phase.
-
-4. **Non-interactive invocation.** Loops invoke slot-machine either as:
-   - A subagent prompt: `"Use slot-machine autonomously. Profile: coding. Slots: 3. Spec: {story}"`
-   - A CLI invocation: `claude -p "slot-machine this..." --allowed-tools=all`
-   - A skill reference within another skill's orchestration
-
-5. **Configurable verbosity.** In a 12-hour loop, no one watches the terminal. Add a `quiet` mode that suppresses progress tables and only outputs the final verdict + path to run artifacts. The run directory still has everything for post-hoc inspection.
-
-6. **Deterministic behavior.** When `autonomous: true`, never ask the user anything. If the spec is ambiguous, use best judgment and note concerns in the verdict. If auto-detection can't determine the profile, fall back to `coding`. The loop must not stall.
+- One paragraph explaining slot-machine works inside Ralph, Trycycle, and custom loops
+- The CLAUDE.md config block (profile, slots, quiet)
+- Note about self-regulation: "Slot-machine evaluates each task and only engages when the task has meaningful design choices. Mechanical tasks get single-shot implementation."
+- The JSON result artifact path for scripts that need to parse results
+- Link to Ralph and Trycycle repos as examples
 
 ### What This Means for SKILL.md
 
