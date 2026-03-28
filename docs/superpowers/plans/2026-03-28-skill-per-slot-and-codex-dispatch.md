@@ -525,6 +525,7 @@ Run slot-machine with explicit skill slots to verify skill guidance injection wo
 
 **Files:** None created — live execution test.
 **Time:** ~10-15 minutes for a 3-slot run with review and judgment.
+**How to run:** Interactively from the current session (the slot-machine repo). Create the test project in a temp dir but invoke slot-machine from this session — the skill is already loaded. This matches how 95% of users will invoke it. Headless (`claude -p`) invocation was already validated in the Ralph integration test.
 
 - [ ] **Step 1: Create a test project with a small spec**
 
@@ -606,6 +607,7 @@ Run slot-machine with a Codex slot alongside a Claude Code slot. This is the wow
 **Files:** None created — live execution test.
 **Requires:** Codex CLI installed (`which codex` succeeds).
 **Time:** ~10-15 minutes. Codex slots may take longer than Claude Code slots.
+**How to run:** Interactively from the current session. Create test project in temp dir, invoke slot-machine from this session.
 
 - [ ] **Step 1: Verify Codex is available**
 
@@ -690,52 +692,34 @@ git add -A && git commit -m "fix: address issues from cross-harness live test"
 
 ---
 
-### Task 9: End-to-end live test — Codex fallback when not installed
+### Task 9: Verify Codex fallback path
 
-Verify graceful degradation when a user requests Codex but it's not available.
+Verify the fallback logic is correctly documented in SKILL.md. A live fallback test requires a machine without Codex — we don't simulate this by moving binaries.
 
-**Files:** None — behavioral verification.
+**Files:** None — verification only.
 
-- [ ] **Step 1: Simulate missing Codex**
+- [ ] **Step 1: Verify SKILL.md describes the fallback**
 
-Temporarily rename the codex binary (or test on a machine without it):
-
-```bash
-CODEX_PATH=$(which codex 2>/dev/null)
-if [ -n "$CODEX_PATH" ]; then
-    sudo mv "$CODEX_PATH" "${CODEX_PATH}.bak"
-    echo "Codex temporarily hidden"
-fi
-```
-
-(Or skip this task if you can't modify the binary path — document the expected behavior instead.)
-
-- [ ] **Step 2: Run slot-machine requesting Codex**
-
-```
-/slot-machine with 2 slots:
-  slot 1: /superpowers:tdd
-  slot 2: codex
-
-Spec: [any small spec]
-```
-
-- [ ] **Step 3: Verify graceful fallback**
-
-Check that:
-- The orchestrator warned: "Codex CLI not found — slot 2 will fall back to Claude Code"
-- Slot 2 ran via Claude Code (Agent tool) instead of codex exec
-- The skill guidance (if any) was preserved in the fallback
-- The run completed successfully with 2 Claude Code slots
-
-- [ ] **Step 4: Restore Codex**
+Contract 12 already validates that SKILL.md contains "codex not found" / "fall back Claude" text. Verify it passes:
 
 ```bash
-if [ -n "$CODEX_PATH" ]; then
-    sudo mv "${CODEX_PATH}.bak" "$CODEX_PATH"
-    echo "Codex restored"
-fi
+./tests/run-tests.sh 2>&1 | grep "codex availability check with fallback"
 ```
+
+Expected: PASS.
+
+- [ ] **Step 2: Read the fallback text in SKILL.md and verify it's complete**
+
+Check that the fallback description covers:
+- Detection: `which codex` returns empty
+- Warning message includes the slot number and install instructions
+- Harness is changed to `null` (falls back to Claude Code)
+- Skill guidance is preserved if the slot had a skill (`/superpowers:tdd + codex` → falls back to `/superpowers:tdd` on Claude Code)
+- The run continues — fallback is not an error
+
+- [ ] **Step 3: Note for future testing**
+
+A live fallback test can be run on a machine without Codex installed, or in CI where Codex is not present. Document this as a future CI test candidate.
 
 ---
 
@@ -744,6 +728,7 @@ fi
 Verify that `slot-machine-slots` in CLAUDE.md works without inline slot definitions.
 
 **Files:** None — behavioral verification.
+**How to run:** Interactively from the current session. The test project's CLAUDE.md has the slot config — the orchestrator reads it when loading project context.
 
 - [ ] **Step 1: Create a test project with slot config in CLAUDE.md**
 
@@ -797,6 +782,7 @@ Verify that `/superpowers:tdd + codex` actually causes Codex to follow TDD metho
 
 **Files:** None — behavioral verification.
 **Requires:** Codex CLI installed.
+**How to run:** Interactively from the current session.
 
 - [ ] **Step 1: Run slot-machine with composed slot**
 
