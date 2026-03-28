@@ -10,301 +10,464 @@
 
 **Design doc:** `docs/plans/2026-03-28-slot-machine-as-infrastructure.md`
 
----
+**Key design decisions (resolved during planning):**
 
-### Task 1: Add slot definition parsing to SKILL.md Phase 1
-
-Add the ability for the orchestrator to parse slot definitions from the user's invocation or CLAUDE.md config. This is the foundation — later tasks build on the parsed slot list.
-
-**Files:**
-- Modify: `SKILL.md` (Phase 1 Setup section)
-
-- [ ] **Step 1: Add "Slot Definitions" section after Profile Loading in SKILL.md**
-
-After the `## Profile Loading` section and before `## The Process`, add a new section `## Slot Definitions` that explains:
-
-1. Three input sources (precedence: inline > CLAUDE.md > profile defaults):
-
-   **Inline:** Parse skill/harness names from the user's command. Slash-prefixed names (`/superpowers:tdd`, `/ce:work`) are skills. Bare names (`codex`) are harnesses. The `+` operator composes them (`/superpowers:tdd + codex`). The word `default` means use the profile's implementer prompt + approach hint.
-
-   **CLAUDE.md config:** Read `slot-machine-slots` list if present:
-   ```markdown
-   slot-machine-slots:
-     - /superpowers:tdd
-     - /ce:work
-     - codex
-     - default
-   ```
-
-   **Profile defaults:** If no slot definitions found, use the current behavior — all slots get the profile's implementer prompt with randomly assigned approach hints.
-
-2. Slot definition parsing rules:
-   - If the user specifies slot definitions AND a slot count higher than the definitions, remaining slots get profile defaults with approach hints
-   - If the user specifies only slot definitions (no count), the slot count equals the number of definitions
-   - Each slot definition produces a tuple: `(skill: string | null, harness: string | null)`
-   - `default` → `(null, null)` — use profile implementer + hint
-   - `/superpowers:tdd` → `(skill="/superpowers:tdd", harness=null)` — Claude Code with skill guidance
-   - `codex` → `(skill=null, harness="codex")` — Codex with profile implementer
-   - `/superpowers:tdd + codex` → `(skill="/superpowers:tdd", harness="codex")` — Codex with skill guidance
-
-3. Poor slot candidate warning: If a parsed skill name matches a known multi-agent orchestrator (`/superpowers:subagent-driven-development`, `/superpowers:executing-plans`), warn the user but don't block.
-
-- [ ] **Step 2: Update Phase 1 Step 0 to parse slot definitions**
-
-In the Phase 1 Setup, after loading the profile, add a step to parse slot definitions:
-
-"**Parse slot definitions.** Check for slot definitions in this order: (1) inline in the user's command, (2) `slot-machine-slots` in CLAUDE.md, (3) fall back to profile defaults. Record the slot list — each slot is `(skill, harness)` or `default`."
-
-- [ ] **Step 3: Update Phase 1 setup report to show slot definitions**
-
-Change the setup report template from:
-
-```
-Slots: `{N}` | Hints: {hint_1}, {hint_2}, ...
-```
-
-To:
-
-```
-Slots: `{N}` | {slot_summary}
-```
-
-Where `{slot_summary}` is:
-- If all defaults: `Hints: {hint_1}, {hint_2}, ...` (current behavior)
-- If mixed: `Slots: /superpowers:tdd, /ce:work, codex, 2x default hints`
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add SKILL.md
-git commit -m "feat: add slot definition parsing to Phase 1 — skill/harness/default per slot"
-```
+- **Skill-based slots do NOT get approach hints.** The skill IS the diversity mechanism. Only `default` slots get hints.
+- **Bare `codex` slots (no skill) get a generic implementation prompt** — not the profile's implementer prompt (which is Claude-Code-specific in tone). The prompt includes the spec + project context + a "implement this and report what you built" instruction.
+- **Mixed-harness parallel dispatch:** Claude Code slots dispatch in parallel via Agent tool (one message). Codex slots dispatch in parallel via background Bash commands. Both groups can run concurrently. Collect all results after both groups complete.
+- **Skill-based slots must explicitly invoke the skill**, not just "follow the methodology." The prompt tells the subagent to use the Skill tool.
 
 ---
 
-### Task 2: Update Phase 2 dispatch for skill-based slots
+### Task 1: Write tests for slot definitions and harness dispatch (TDD RED)
 
-Make the implementer dispatch conditional — skill-based slots get skill guidance injected instead of the profile's implementer prompt.
-
-**Files:**
-- Modify: `SKILL.md` (Phase 2 section)
-
-- [ ] **Step 1: Add skill dispatch path to Phase 2**
-
-In the Phase 2 dispatch section, before the current Agent tool call table, add conditional logic:
-
-"For each slot, check its definition:
-
-**If `default` (no skill, no harness):** Use the current dispatch — read `1-implementer.md` from the active profile, fill variables, include approach hint. This is unchanged from Phase 1 behavior.
-
-**If skill-based (e.g., `/superpowers:tdd`, no harness):** Do NOT read the profile's `1-implementer.md`. Instead, dispatch the Agent with a prompt that says:
-
-```
-You are implementing a feature. Use the {skill_name} methodology.
-
-Spec: {{SPEC}}
-
-Project Context: {{PROJECT_CONTEXT}}
-
-Implement this spec following {skill_name}. When done, report:
-- Status: DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT
-- What you implemented
-- Files changed
-- Test results (if applicable)
-- Any concerns
-```
-
-The skill name tells the subagent which installed skill to follow. The subagent has access to all skills in its session — it loads the skill and follows its methodology."
-
-- [ ] **Step 2: Add harness dispatch path (Codex) to Phase 2**
-
-Add the Codex dispatch path:
-
-"**If harness-based (`codex`, with or without skill):** Do NOT use the Agent tool. Instead, dispatch via the Codex CLI:
-
-1. Create a git worktree for this slot (same as Claude Code slots)
-2. Run `codex exec` pointed at the worktree:
-
-```bash
-cd {worktree_path}
-codex exec "Implement this spec. Write all files to the current directory.
-
-{skill_guidance if skill is specified — e.g., 'Follow TDD: write failing tests first, then implement.'}
-
-Spec: {spec}
-
-Project context: {project_context}
-
-When done, summarize what you built, files changed, and any concerns." \
-  -s workspace-write \
-  -c 'model_reasoning_effort="high"' \
-  --json 2>{RUN_DIR}/slot-{i}-codex-stderr.txt
-```
-
-3. Parse the JSONL output to extract the implementer report. Use this Python parser:
-
-```python
-import sys, json
-for line in sys.stdin:
-    line = line.strip()
-    if not line:
-        continue
-    try:
-        obj = json.loads(line)
-        t = obj.get('type', '')
-        if t == 'item.completed' and 'item' in obj:
-            item = obj['item']
-            if item.get('type') == 'agent_message' and item.get('text'):
-                print(item['text'])
-            elif item.get('type') == 'command_execution' and item.get('command'):
-                print(f'[codex ran] {item[\"command\"]}')
-    except:
-        pass
-```
-
-4. Save the parsed report to `{RUN_DIR}/slot-{i}-report.txt`
-5. The worktree now contains Codex's implementation files
-6. Check for Codex failures:
-   - Non-zero exit code → mark FAILED, save stderr to run dir
-   - Empty output → mark FAILED
-   - Timeout (5 minutes default) → mark FAILED
-   - On failure, save whatever output exists for debugging
-
-**If harness + skill (`/superpowers:tdd + codex`):** Same as harness dispatch, but include the skill guidance in the Codex prompt. The skill guidance line tells Codex what methodology to follow."
-
-- [ ] **Step 3: Update the dispatch table**
-
-Replace the current single-row Agent tool call table with a conditional summary:
-
-| Slot type | Dispatch | Prompt source | Isolation |
-|-----------|----------|---------------|-----------|
-| `default` | Agent tool | Profile `1-implementer.md` + approach hint | Profile setting |
-| Skill only (`/superpowers:tdd`) | Agent tool | Skill guidance + spec (no profile implementer) | worktree |
-| Harness only (`codex`) | `codex exec` CLI | Spec + profile context (no profile implementer) | worktree (slot-machine managed) |
-| Skill + harness (`/superpowers:tdd + codex`) | `codex exec` CLI | Skill guidance + spec | worktree (slot-machine managed) |
-
-- [ ] **Step 4: Update the progress report table**
-
-Add a "Via" column to the Phase 2 progress table to show which harness ran each slot:
-
-| Slot | Via | Status | Words/Tests | Approach |
-|------|-----|--------|-------------|----------|
-| 1 | Claude | `DONE` | 13 tests | /superpowers:tdd |
-| 2 | Codex | `DONE` | 15 tests | /superpowers:tdd + codex |
-| 3 | Claude | `DONE` | 21 tests | /ce:work |
-| 4 | Codex | `DONE_WITH_CONCERNS` | 8 tests | codex (default) |
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add SKILL.md
-git commit -m "feat: skill and harness dispatch in Phase 2 — skill guidance, native codex exec"
-```
-
----
-
-### Task 3: Update tests for slot definitions and harness dispatch
-
-Add contract tests that validate the new SKILL.md content.
+Write the contract tests first. They describe the desired SKILL.md content and should FAIL against the current SKILL.md.
 
 **Files:**
 - Modify: `tests/test-contracts.sh`
 
 - [ ] **Step 1: Add Contract 11 — Slot Definition Syntax**
 
-```bash
-echo "=== Contract 11: Slot Definition Syntax ==="
-# SKILL.md must describe slot definitions
-assert_contains "$SKILL_CONTENT" "Slot Definitions\|slot definition\|slot-machine-slots" \
-    "SKILL.md documents slot definition parsing" || FAILED=$((FAILED + 1))
+Add before the "Contract Tests Complete" line:
 
-# Must describe the three slot types
-for slot_type in "default" "skill" "harness"; do
-    assert_contains "$SKILL_CONTENT" "$slot_type" \
-        "SKILL.md describes '$slot_type' slot type" || FAILED=$((FAILED + 1))
-done
+```bash
+echo ""
+echo "=== Contract 11: Slot Definition Syntax ==="
+# SKILL.md must have a Slot Definitions section
+assert_contains "$SKILL_CONTENT" "## Slot Definitions" \
+    "SKILL.md has Slot Definitions section" || FAILED=$((FAILED + 1))
 
 # Must describe the + composition operator
-assert_contains "$SKILL_CONTENT" '+ codex\|+ gemini\|compose\|composition' \
-    "SKILL.md describes skill + harness composition" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" '+ codex' \
+    "SKILL.md describes skill + harness composition with codex" || FAILED=$((FAILED + 1))
 
-# Must describe CLAUDE.md config
+# Must describe CLAUDE.md config key
 assert_contains "$SKILL_CONTENT" "slot-machine-slots" \
     "SKILL.md documents slot-machine-slots config key" || FAILED=$((FAILED + 1))
+
+# Must describe precedence
+assert_contains "$SKILL_CONTENT" "inline.*CLAUDE.md.*profile\|precedence" \
+    "SKILL.md documents slot definition precedence" || FAILED=$((FAILED + 1))
+
+# Must describe poor slot candidate warning
+assert_contains "$SKILL_CONTENT" "poor.*candidate\|multi-agent.*orchestrator\|warn.*block" \
+    "SKILL.md warns about poor slot candidates" || FAILED=$((FAILED + 1))
+
+# Skill-based slots must NOT get approach hints
+assert_contains "$SKILL_CONTENT" "skill.*no.*hint\|hint.*only.*default\|default.*slots.*hint" \
+    "SKILL.md clarifies hints only apply to default slots" || FAILED=$((FAILED + 1))
 ```
 
 - [ ] **Step 2: Add Contract 12 — Codex Dispatch**
 
 ```bash
+echo ""
 echo "=== Contract 12: Codex Dispatch ==="
-# SKILL.md must describe native codex dispatch
+# SKILL.md must describe native codex exec dispatch
 assert_contains "$SKILL_CONTENT" "codex exec" \
     "SKILL.md describes codex exec dispatch" || FAILED=$((FAILED + 1))
 
+# Must specify workspace-write mode
 assert_contains "$SKILL_CONTENT" "workspace-write" \
     "SKILL.md specifies workspace-write sandbox mode" || FAILED=$((FAILED + 1))
 
-assert_contains "$SKILL_CONTENT" "JSONL\|jsonl\|json.*parse\|parse.*json" \
+# Must describe JSONL output parsing
+assert_contains "$SKILL_CONTENT" "JSONL\|jsonl" \
     "SKILL.md describes JSONL output parsing" || FAILED=$((FAILED + 1))
 
-# Codex failure handling must be documented
-assert_contains "$SKILL_CONTENT" "timeout\|non-zero exit\|empty output" \
+# Must describe Codex failure handling
+assert_contains "$SKILL_CONTENT" "non-zero exit\|timeout.*codex\|codex.*fail" \
     "SKILL.md describes codex failure handling" || FAILED=$((FAILED + 1))
+
+# Must describe harness availability check with fallback
+assert_contains "$SKILL_CONTENT" "which codex\|codex.*not found\|fall.*back.*Claude" \
+    "SKILL.md describes codex availability check with fallback" || FAILED=$((FAILED + 1))
+
+# Must describe mixed-harness parallel dispatch
+assert_contains "$SKILL_CONTENT" "Claude Code slots.*parallel\|Codex slots.*background\|mixed.*harness\|dispatch.*group" \
+    "SKILL.md describes mixed-harness parallel dispatch strategy" || FAILED=$((FAILED + 1))
 ```
 
-- [ ] **Step 3: Run tests to verify they fail (RED)**
+- [ ] **Step 3: Add Contract 13 — Skill Discovery**
+
+```bash
+echo ""
+echo "=== Contract 13: Skill Discovery ==="
+assert_contains "$SKILL_CONTENT" "Skill Discovery\|skill discovery" \
+    "SKILL.md has Skill Discovery section" || FAILED=$((FAILED + 1))
+
+assert_contains "$SKILL_CONTENT" "\-\-discover" \
+    "SKILL.md documents --discover flag" || FAILED=$((FAILED + 1))
+
+assert_contains "$SKILL_CONTENT" "all my skills\|all implementation skills" \
+    "SKILL.md documents natural language discovery triggers" || FAILED=$((FAILED + 1))
+```
+
+- [ ] **Step 4: Run tests — verify RED**
 
 ```bash
 ./tests/run-tests.sh
 ```
 
-Expected: Contracts 1-10 pass, Contracts 11-12 fail (SKILL.md doesn't have the new content yet — but actually it does from Tasks 1-2 if those ran first. If running TDD with tests first, these will be RED until Tasks 1-2 are implemented.)
+Expected: Contracts 1-10 pass, Contracts 11-13 fail. Count the failures.
 
-Note: If following the plan sequentially (Tasks 1-2 first), run tests after Task 2 to verify GREEN instead.
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add tests/test-contracts.sh
-git commit -m "test: add contracts for slot definitions and codex dispatch"
+git commit -m "test: add contracts for slot definitions, codex dispatch, and skill discovery (RED)"
 ```
 
 ---
 
-### Task 4: Add Codex availability check to Phase 1
+### Task 2: Add slot definition parsing to SKILL.md Phase 1
 
-Before dispatching to Codex, verify the CLI is installed. Fail gracefully if not.
+Add the ability for the orchestrator to parse slot definitions from the user's invocation or CLAUDE.md config.
 
 **Files:**
-- Modify: `SKILL.md` (Phase 1 section)
+- Modify: `SKILL.md`
 
-- [ ] **Step 1: Add harness availability check to Phase 1**
+- [ ] **Step 1: Add "Slot Definitions" section after Profile Loading**
 
-In Phase 1 Setup, after parsing slot definitions, add:
+After the `## Profile Loading` section and before `## The Process`, add:
+
+```markdown
+## Slot Definitions
+
+Slots can be configured per-slot instead of using the same profile implementer for all. Two axes compose with `+`:
+
+- **Skills** (`/superpowers:tdd`, `/ce:work`) — methodology guidance, slash-prefixed. Injected into the prompt of whatever harness runs the slot.
+- **Harnesses** (`codex`, `gemini`) — which AI system executes. No slash prefix. Determines the dispatch mechanism.
+
+### Slot Definition Sources (precedence)
+
+1. **Inline:** Parsed from the user's command. Slash-prefixed names are skills, bare names are harnesses. `+` composes them. `default` means profile implementer + approach hint.
+2. **CLAUDE.md config:** Read `slot-machine-slots` list if present:
+   ```markdown
+   slot-machine-slots:
+     - /superpowers:tdd
+     - /ce:work
+     - codex
+     - /superpowers:tdd + codex
+     - default
+   ```
+3. **Profile defaults:** If no slot definitions found, all slots use the profile's implementer prompt with randomly assigned approach hints. This is the Phase 1 behavior — unchanged.
+
+### Parsing Rules
+
+- If the user specifies slot definitions AND a slot count higher than the number of definitions, remaining slots get profile defaults with approach hints
+- If the user specifies only slot definitions (no count), the slot count equals the number of definitions
+- Each slot definition is a tuple: `(skill, harness)`:
+  - `default` → `(null, null)` — profile implementer + hint
+  - `/superpowers:tdd` → `("/superpowers:tdd", null)` — Claude Code with skill
+  - `codex` → `(null, "codex")` — Codex with generic prompt
+  - `/superpowers:tdd + codex` → `("/superpowers:tdd", "codex")` — Codex with skill
+
+### Approach Hints and Skill Slots
+
+Approach hints only apply to `default` slots. Skill-based slots do NOT get approach hints — the skill IS the diversity mechanism. When mixing skill and default slots, assign hints only to the default slots.
+
+### Poor Slot Candidate Warning
+
+If a parsed skill name matches a known multi-agent orchestrator (`/superpowers:subagent-driven-development`, `/superpowers:executing-plans`), warn the user: "⚠ {skill} is a multi-agent orchestrator — running it inside a slot creates nested pipelines (slower, redundant review). Consider using a single-session skill like /superpowers:tdd instead." Do not block — the user may have a reason.
+```
+
+- [ ] **Step 2: Update Phase 1 to parse slot definitions**
+
+In Phase 1 Setup, after step 0 (Load profile), add a new step:
+
+"**1. Parse slot definitions.** Check for slot definitions in precedence order: (1) inline in the user's command, (2) `slot-machine-slots` in CLAUDE.md, (3) fall back to profile defaults. Record the slot list — each slot is `(skill, harness)` or `default`. Check harness availability (see below)."
+
+Renumber subsequent steps (current 1 becomes 2, etc.).
+
+- [ ] **Step 3: Add harness availability check**
+
+Add to the same new step:
 
 "**Check harness availability.** For each slot that specifies a harness:
-- `codex`: Run `which codex`. If not found, warn: 'Codex CLI not found — slot {i} will fall back to Claude Code. Install: `npm install -g @openai/codex`'. Change the slot's harness to `null` (falls back to Claude Code with the same skill guidance if any).
+- `codex`: Run `which codex` via Bash. If not found, warn: 'Codex CLI not found — slot {i} will fall back to Claude Code. Install: `npm install -g @openai/codex`'. Change the slot's harness to `null` (falls back to Claude Code with the same skill guidance if any).
 - Future harnesses: same pattern — check binary, warn and fall back if missing."
 
-- [ ] **Step 2: Commit**
+- [ ] **Step 4: Update setup report**
+
+Change the setup report template. When slots have definitions:
+
+```
+Slots: `{N}` | /superpowers:tdd, /ce:work, codex, 2x default hints
+```
+
+When all defaults (current behavior):
+
+```
+Slots: `{N}` | Hints: {hint_1}, {hint_2}, ...
+```
+
+- [ ] **Step 5: Run tests — check Contract 11 progress**
+
+```bash
+./tests/run-tests.sh 2>&1 | grep "Contract 11"
+```
+
+Some Contract 11 assertions should now pass.
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git add SKILL.md
-git commit -m "feat: harness availability check in Phase 1 — graceful fallback if codex missing"
+git commit -m "feat: add slot definition parsing — skills, harnesses, composition, discovery"
 ```
 
 ---
 
-### Task 5: Update README for new capabilities
+### Task 3: Update Phase 2 dispatch for skill and harness slots
 
-Document the new slot definition syntax and cross-harness features in the README.
+Make the implementer dispatch conditional — skill-based slots get explicit skill invocation, harness-based slots use `codex exec`.
+
+**Files:**
+- Modify: `SKILL.md` (Phase 2 section)
+
+- [ ] **Step 1: Add conditional dispatch logic to Phase 2**
+
+Replace the current single dispatch path with conditional logic. Before the Agent tool call table, add:
+
+"**Dispatch depends on the slot definition.** For each slot, determine the dispatch path:
+
+**Group 1 — Claude Code slots (Agent tool):** All slots where `harness` is `null` (default slots and skill-only slots). Dispatch all Group 1 slots in a SINGLE message using parallel Agent tool calls.
+
+**Group 2 — Codex slots (CLI):** All slots where `harness` is `codex`. Dispatch all Group 2 slots in parallel using background Bash commands (one per slot, using Bash tool with `run_in_background: true` and `timeout: 300000`).
+
+Both groups can run concurrently — dispatch Group 1 and Group 2 in the same message if possible, or Group 1 first then Group 2 immediately after. Collect all results after both groups complete."
+
+- [ ] **Step 2: Add the three dispatch paths**
+
+After the grouping logic, add the three paths:
+
+"**Path A — Default slots (no skill, no harness):**
+
+Unchanged from Phase 1. Read `1-implementer.md` from the active profile, fill universal `{{VARIABLES}}`, include the assigned approach hint. Dispatch via Agent tool with `isolation: "worktree"` (or omit if `file` profile).
+
+**Path B — Skill-only slots (e.g., `/superpowers:tdd`, no harness):**
+
+Do NOT read the profile's `1-implementer.md`. Dispatch via Agent tool with this prompt:
+
+```
+You are implementing a feature in an isolated workspace.
+
+IMPORTANT: You MUST invoke the {skill_name} skill using the Skill tool before beginning implementation. Follow its workflow exactly.
+
+Specification:
+{spec}
+
+Project Context:
+{project_context}
+
+After implementation is complete, end with this report format:
+**Status:** [DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT]
+**What I implemented:** [bullet list]
+**Files changed:** [list]
+**Test results:** [if applicable]
+**Concerns (if any):** [issues]
+```
+
+Use `isolation: "worktree"` on the Agent call. Do NOT include an approach hint — the skill is the diversity mechanism.
+
+**Path C — Codex slots (harness = `codex`, with or without skill):**
+
+Do NOT use the Agent tool. Dispatch via Bash:
+
+1. Create a git worktree for this slot (same as Claude Code slots):
+   ```bash
+   git worktree add "../slot-machine-{feature}-slot-{i}" -b "slot-machine/{feature}/slot-{i}"
+   ```
+
+2. Run `codex exec` pointed at the worktree. Use the Bash tool with `timeout: 300000` (5 minutes) and `run_in_background: true`:
+
+   ```bash
+   cd {worktree_path} && codex exec "Implement this specification. Write all files to the current directory.
+
+   {If skill specified: 'METHODOLOGY: Follow {skill_name} principles — e.g., for TDD: write failing tests first, verify they fail, then implement minimal code to pass, verify all tests pass.'}
+
+   Specification:
+   {spec}
+
+   Project context:
+   {project_context}
+
+   When done, provide a summary of:
+   - What you implemented (bullet list)
+   - Files created or modified
+   - Test results if you wrote tests
+   - Any concerns or issues encountered" \
+     -s workspace-write \
+     -c 'model_reasoning_effort="high"' \
+     --json 2>{RUN_DIR}/slot-{i}-codex-stderr.txt | python3 -c "
+   import sys, json
+   for line in sys.stdin:
+       line = line.strip()
+       if not line: continue
+       try:
+           obj = json.loads(line)
+           t = obj.get('type', '')
+           if t == 'item.completed' and 'item' in obj:
+               item = obj['item']
+               if item.get('type') == 'agent_message' and item.get('text'):
+                   print(item['text'])
+               elif item.get('type') == 'command_execution':
+                   cmd = item.get('command', '')
+                   if cmd: print(f'[codex ran] {cmd}')
+       except: pass
+   " > {RUN_DIR}/slot-{i}-report.txt
+   ```
+
+3. After `codex exec` completes, check for failures:
+   - Non-zero exit code → mark FAILED, save stderr for debugging
+   - Empty report file (`{RUN_DIR}/slot-{i}-report.txt` is 0 bytes) → mark FAILED
+   - Timeout (Bash tool returns timeout) → mark FAILED
+   - On any failure, save whatever output exists to the run dir. The slot is marked FAILED but the run continues."
+
+- [ ] **Step 3: Update the dispatch summary table**
+
+Replace the current single-row Agent tool call table:
+
+| Slot definition | Dispatch | Prompt | Isolation | Hint? |
+|----------------|----------|--------|-----------|-------|
+| `default` | Agent tool (parallel Group 1) | Profile `1-implementer.md` + hint | Profile setting | Yes |
+| `/superpowers:tdd` | Agent tool (parallel Group 1) | "Invoke {skill} via Skill tool" + spec | worktree | No |
+| `codex` | `codex exec` CLI (parallel Group 2) | Generic "implement this" + spec | worktree (manual) | No |
+| `/superpowers:tdd + codex` | `codex exec` CLI (parallel Group 2) | Skill methodology + spec | worktree (manual) | No |
+
+- [ ] **Step 4: Update the progress report table**
+
+Add a "Via" column:
+
+| Slot | Via | Status | Words/Tests | Approach |
+|------|-----|--------|-------------|----------|
+| 1 | `Claude` | `DONE` | 13 tests | /superpowers:tdd |
+| 2 | `Codex` | `DONE` | 15 tests | /superpowers:tdd + codex |
+| 3 | `Claude` | `DONE` | 21 tests | /ce:work |
+| 4 | `Codex` | `DONE_WITH_CONCERNS` | 8 tests | codex |
+
+- [ ] **Step 5: Run tests — check Contracts 11-12**
+
+```bash
+./tests/run-tests.sh 2>&1 | grep -E "Contract (11|12)"
+```
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add SKILL.md
+git commit -m "feat: conditional dispatch in Phase 2 — skill invocation, native codex exec, parallel groups"
+```
+
+---
+
+### Task 4: Add Skill Discovery to SKILL.md
+
+Implement the `--discover` / "all my skills" detection and first-time proposal flow.
+
+**Files:**
+- Modify: `SKILL.md`
+
+- [ ] **Step 1: Add Skill Discovery section**
+
+After the Slot Definitions section, add `## Skill Discovery`:
+
+```markdown
+## Skill Discovery
+
+When the user says "all my skills", "all implementation skills", or uses `--discover`, the orchestrator scans for available slot-compatible skills and proposes a slot configuration.
+
+### Trigger Rules (strict — never auto-fires)
+
+| User says | Discovery fires? |
+|-----------|-----------------|
+| `/slot-machine this` | No — default profile + hints |
+| `/slot-machine this with 3 slots` | No — default hints |
+| `/slot-machine this with /superpowers:tdd and codex` | No — explicit list |
+| `/slot-machine this with all my skills` | **Yes** |
+| `/slot-machine this using all implementation skills` | **Yes** |
+| `/slot-machine --discover` | **Yes** |
+
+Discovery ONLY fires on explicit "all my/implementation skills" language or `--discover`. Never as a suggestion. Never as a default.
+
+### Detection Heuristic
+
+1. Read skill descriptions from the system prompt
+2. Filter by signals:
+   - **Include:** "implement", "build", "execute plan", "write code", "development workflow"
+   - **Exclude:** "review", "deploy", "ship", "test-only", "audit", "monitor", "debug"
+3. Filter out known poor candidates: `/superpowers:subagent-driven-development`, `/superpowers:executing-plans`
+4. Check for external harnesses: run `which codex`, `which gemini` via Bash
+5. Propose the filtered list to the user
+
+### First-Time Flow
+
+```
+I scanned your installed skills and detected these slot-compatible workflows:
+
+  1. /superpowers:tdd — test-first development
+  2. /ce:work — pattern-matching execution
+  3. codex — OpenAI Codex (external harness)
+
+Use all 3 as slots? Or adjust?
+```
+
+User confirms or edits. Save selection to `~/.slot-machine/config.md`:
+
+```markdown
+## Discovered Implementation Skills
+- /superpowers:tdd
+- /ce:work
+- codex
+```
+
+### Subsequent Runs
+
+"All my skills" loads the saved list without re-scanning. User can re-trigger a fresh scan with `--discover`.
+```
+
+- [ ] **Step 2: Run tests — verify Contract 13 passes**
+
+```bash
+./tests/run-tests.sh 2>&1 | grep "Contract 13"
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add SKILL.md
+git commit -m "feat: skill discovery — detect installed implementation skills on demand"
+```
+
+---
+
+### Task 5: Run all tests — verify GREEN
+
+All contracts should now pass.
+
+**Files:** None — verification only.
+
+- [ ] **Step 1: Run full test suite**
+
+```bash
+./tests/run-tests.sh
+```
+
+Expected: ALL contracts (1-13) pass, 0 failures.
+
+- [ ] **Step 2: If any failures, fix and re-run**
+
+Iterate until all green. Commit fixes individually.
+
+---
+
+### Task 6: Update README for new capabilities
 
 **Files:**
 - Modify: `README.md`
 
-- [ ] **Step 1: Update the Usage section**
-
-After the existing usage examples, add a subsection showing skill and harness slots:
+- [ ] **Step 1: Add "Multi-Skill and Cross-Model Runs" subsection after Usage**
 
 ```markdown
 ### Multi-Skill and Cross-Model Runs
@@ -341,9 +504,7 @@ slot-machine-slots:
 \```
 ```
 
-- [ ] **Step 2: Add a "Cross-Model" row to the Without vs With table**
-
-Add to the comparison table:
+- [ ] **Step 2: Add "Cross-model" row to the Without vs With table**
 
 ```
 | **Cross-model** | N/A | Claude vs Codex on same spec — different models find different bugs |
@@ -358,47 +519,93 @@ git commit -m "docs: add multi-skill and cross-model usage to README"
 
 ---
 
-### Task 6: End-to-end live test — skill-per-slot
+### Task 7: End-to-end live test — skill-per-slot (Claude Code only)
 
-Run slot-machine with explicit skill slots to verify skill guidance injection works.
+Run slot-machine with explicit skill slots to verify skill guidance injection works. This test uses only Claude Code slots — no Codex.
 
 **Files:** None created — live execution test.
+**Time:** ~10-15 minutes for a 3-slot run with review and judgment.
 
-- [ ] **Step 1: Run slot-machine with 2 skill slots + 1 default**
+- [ ] **Step 1: Create a test project with a small spec**
 
-Use the tiny-spec fixture (token bucket rate limiter) with:
+```bash
+TEST_DIR=$(mktemp -d)
+cd "$TEST_DIR"
+git init && mkdir -p src tests
+echo '# Test Project' > README.md
+git add -A && git commit -m "initial"
+echo "Test dir: $TEST_DIR"
+```
+
+- [ ] **Step 2: Run slot-machine with 3 skill/default slots**
+
+From the test directory, invoke slot-machine:
+
 ```
 /slot-machine with 3 slots:
   slot 1: /superpowers:tdd
   slot 2: /ce:work
   slot 3: default
+
+Spec: Implement a function called `is_palindrome(s)` in src/palindrome.py
+that checks if a string is a palindrome (case-insensitive, ignoring spaces
+and punctuation). Include tests in tests/test_palindrome.py using pytest.
 ```
 
-- [ ] **Step 2: Verify Phase 1 — slot definitions parsed**
+- [ ] **Step 3: Verify Phase 1 — slot definitions parsed correctly**
 
-Check the setup report:
-- Does it show slot definitions (not just hints)?
-- Does it list `/superpowers:tdd`, `/ce:work`, and `default`?
+Check the setup report output:
+- Does it show `/superpowers:tdd`, `/ce:work`, and `default`?
+- Does it show a hint only for the default slot (slot 3)?
+- Does it NOT show hints for slots 1 and 2?
 
-- [ ] **Step 3: Verify Phase 2 — skill-based slots used different approaches**
+- [ ] **Step 4: Verify Phase 2 — each slot used different approaches**
 
-Check that:
-- Slot 1 (TDD) wrote tests before implementation
-- Slot 2 (CE work) did pattern research
-- Slot 3 (default) used a profile approach hint
-- Progress table shows the "Via" column
+Check the progress table:
+- Does slot 1 (TDD) show `Via: Claude`?
+- Does slot 2 (CE work) show `Via: Claude`?
+- Does slot 3 (default) show `Via: Claude` with a hint name?
+- Did slot 1 actually write tests first (check the implementer report or slot diff)?
+- Did slot 2 do pattern research (check the implementer report)?
+- Did slot 3 follow the profile's implementer prompt?
 
-- [ ] **Step 4: Verify Phase 3-4 — review and judgment worked normally**
+- [ ] **Step 5: Verify Phase 3-4 — evaluation pipeline unchanged**
 
-The evaluation pipeline should work identically regardless of how each slot was implemented. Verify reviewers produced structured scorecards, judge made a verdict, and the pipeline completed.
+- Did reviewers produce structured scorecards for all 3 slots?
+- Did the judge compare all 3 and make a verdict?
+- If SYNTHESIZE: did the synthesizer execute the plan?
+- Did the run produce `result.json` in the run dir?
+
+- [ ] **Step 6: Verify run artifacts**
+
+```bash
+ls -la .slot-machine/runs/latest/
+cat .slot-machine/runs/latest/result.json
+```
+
+Expected: `slot-{1,2,3}` artifacts, `review-{1,2,3}.md`, `verdict.md`, `output.md` (or output files), `result.json`.
+
+- [ ] **Step 7: Clean up test directory**
+
+```bash
+rm -rf "$TEST_DIR"
+```
+
+- [ ] **Step 8: Commit any fixes found**
+
+```bash
+git add -A && git commit -m "fix: address issues from skill-per-slot live test"
+```
 
 ---
 
-### Task 7: End-to-end live test — Codex dispatch
+### Task 8: End-to-end live test — Codex dispatch (cross-harness)
 
-Run slot-machine with a Codex slot to verify native dispatch works.
+Run slot-machine with a Codex slot alongside a Claude Code slot. This is the wow feature test.
 
-**Files:** None created — live execution test. **Requires:** Codex CLI installed (`codex` binary available).
+**Files:** None created — live execution test.
+**Requires:** Codex CLI installed (`which codex` succeeds).
+**Time:** ~10-15 minutes. Codex slots may take longer than Claude Code slots.
 
 - [ ] **Step 1: Verify Codex is available**
 
@@ -406,79 +613,224 @@ Run slot-machine with a Codex slot to verify native dispatch works.
 which codex && codex --version
 ```
 
-If not available, skip this test.
+If not available, document why and skip to Task 9.
 
-- [ ] **Step 2: Run slot-machine with 1 Claude + 1 Codex slot**
+- [ ] **Step 2: Create a test project**
+
+```bash
+TEST_DIR=$(mktemp -d)
+cd "$TEST_DIR"
+git init && mkdir -p src tests
+echo '# Test Project' > README.md
+git add -A && git commit -m "initial"
+```
+
+- [ ] **Step 3: Run slot-machine with 1 Claude + 1 Codex slot**
 
 ```
 /slot-machine with 2 slots:
   slot 1: /superpowers:tdd
   slot 2: codex
 
-Spec: [paste tiny-spec.md content]
+Spec: Implement a function called `fizzbuzz(n)` in src/fizzbuzz.py that
+returns "Fizz" for multiples of 3, "Buzz" for multiples of 5, "FizzBuzz"
+for multiples of both, and the number as a string otherwise. Include tests
+in tests/test_fizzbuzz.py using pytest.
 ```
 
-- [ ] **Step 3: Verify Codex slot executed via CLI**
+- [ ] **Step 4: Verify Phase 2 dispatch was mixed-harness**
 
 Check that:
-- The orchestrator ran `codex exec` (not the Agent tool) for Slot 2
-- Codex wrote files to the worktree
-- The JSONL output was parsed into an implementer report
-- The progress table shows `Via: Codex` for Slot 2
+- Slot 1 was dispatched via Agent tool (Claude Code)
+- Slot 2 was dispatched via `codex exec` CLI (check for Bash tool calls with `codex exec`)
+- Both slots produced implementation files in their worktrees
+- The progress table shows `Via: Claude` for slot 1 and `Via: Codex` for slot 2
 
-- [ ] **Step 4: Verify the reviewer compared both slots**
+- [ ] **Step 5: Verify Codex output was normalized**
 
-The reviewer should review both the Claude Code output (Slot 1) and the Codex output (Slot 2) using the same reviewer prompt and evaluation criteria. The judge should compare them and make a verdict.
+Check that:
+- The Codex slot produced files in its worktree (not just text output)
+- An implementer report was extracted from the JSONL output
+- The report is saved to `{RUN_DIR}/slot-2-report.txt`
+- Codex stderr is saved to `{RUN_DIR}/slot-2-codex-stderr.txt`
 
-- [ ] **Step 5: Verify cross-harness cost reporting**
+- [ ] **Step 6: Verify the reviewer compared both fairly**
 
-The final report should note which harnesses were used:
+- Did the reviewer review slot 1 (Claude) and slot 2 (Codex) using the same reviewer prompt?
+- Are both scorecards in the same format?
+- Did the reviewer cite file:line evidence from both worktrees?
+
+- [ ] **Step 7: Verify the judge compared cross-harness outputs**
+
+- Did the judge receive both scorecards?
+- Did the judge make a verdict (PICK or SYNTHESIZE)?
+- Does the verdict reference specific strengths/weaknesses from each harness?
+
+- [ ] **Step 8: Verify result.json includes harness info**
+
+```bash
+cat .slot-machine/runs/latest/result.json
+```
+
+Check that the result includes which harness ran each slot.
+
+- [ ] **Step 9: Verify final report shows harness breakdown**
+
+The final report footer should indicate:
 ```
 Harnesses: Claude Code (1 slot), Codex (1 slot)
 ```
 
-- [ ] **Step 6: Commit any fixes found during testing**
+- [ ] **Step 10: Clean up and commit**
 
 ```bash
-git add -A
-git commit -m "fix: address issues found during live skill/codex testing"
+rm -rf "$TEST_DIR"
+git add -A && git commit -m "fix: address issues from cross-harness live test"
 ```
 
 ---
 
-### Task 8: Add skill discovery
+### Task 9: End-to-end live test — Codex fallback when not installed
 
-Implement the `--discover` / "all my skills" detection and first-time proposal flow.
+Verify graceful degradation when a user requests Codex but it's not available.
 
-**Files:**
-- Modify: `SKILL.md` (add Skill Discovery section)
+**Files:** None — behavioral verification.
 
-- [ ] **Step 1: Add Skill Discovery section to SKILL.md**
+- [ ] **Step 1: Simulate missing Codex**
 
-After the Slot Definitions section, add `## Skill Discovery` with:
-
-1. **Trigger rules** — only fires on "all my skills", "all implementation skills", or `--discover`. Never as a default, never as a suggestion.
-
-2. **Detection heuristic** — read skill descriptions from the system prompt. Include signals: "implement", "build", "execute plan", "write code". Exclude signals: "review", "deploy", "ship", "audit". Check for external harnesses: `which codex`, `which gemini`. Filter out known poor candidates (SDD, executing-plans).
-
-3. **First-time flow** — propose the detected list, user confirms or edits. Save to `~/.slot-machine/config.md`.
-
-4. **Subsequent runs** — load saved list. Re-scan with `--discover`.
-
-- [ ] **Step 2: Commit**
+Temporarily rename the codex binary (or test on a machine without it):
 
 ```bash
-git add SKILL.md
-git commit -m "feat: skill discovery — detect installed implementation skills on demand"
+CODEX_PATH=$(which codex 2>/dev/null)
+if [ -n "$CODEX_PATH" ]; then
+    sudo mv "$CODEX_PATH" "${CODEX_PATH}.bak"
+    echo "Codex temporarily hidden"
+fi
+```
+
+(Or skip this task if you can't modify the binary path — document the expected behavior instead.)
+
+- [ ] **Step 2: Run slot-machine requesting Codex**
+
+```
+/slot-machine with 2 slots:
+  slot 1: /superpowers:tdd
+  slot 2: codex
+
+Spec: [any small spec]
+```
+
+- [ ] **Step 3: Verify graceful fallback**
+
+Check that:
+- The orchestrator warned: "Codex CLI not found — slot 2 will fall back to Claude Code"
+- Slot 2 ran via Claude Code (Agent tool) instead of codex exec
+- The skill guidance (if any) was preserved in the fallback
+- The run completed successfully with 2 Claude Code slots
+
+- [ ] **Step 4: Restore Codex**
+
+```bash
+if [ -n "$CODEX_PATH" ]; then
+    sudo mv "${CODEX_PATH}.bak" "$CODEX_PATH"
+    echo "Codex restored"
+fi
 ```
 
 ---
 
-### Task 9: Final verification
+### Task 10: End-to-end live test — CLAUDE.md config-driven slots
 
-Run all tests, verify no stale references, confirm structure is complete.
+Verify that `slot-machine-slots` in CLAUDE.md works without inline slot definitions.
 
-**Files:** None — read-only verification.
+**Files:** None — behavioral verification.
+
+- [ ] **Step 1: Create a test project with slot config in CLAUDE.md**
+
+```bash
+TEST_DIR=$(mktemp -d)
+cd "$TEST_DIR"
+git init && mkdir -p src tests
+
+cat > CLAUDE.md << 'EOF'
+# Test Project
+
+## Slot Machine Settings
+slot-machine-profile: coding
+slot-machine-slots:
+  - /superpowers:tdd
+  - default
+EOF
+
+git add -A && git commit -m "initial"
+```
+
+- [ ] **Step 2: Run slot-machine WITHOUT inline slot definitions**
+
+```
+/slot-machine this
+
+Spec: Implement a function called `factorial(n)` in src/math_utils.py
+that returns n! for non-negative integers. Raise ValueError for negative input.
+Include tests in tests/test_math_utils.py using pytest.
+```
+
+- [ ] **Step 3: Verify CLAUDE.md config was loaded**
+
+Check that:
+- The setup report shows 2 slots: `/superpowers:tdd` and `default`
+- Slot 1 used TDD (invoked the skill)
+- Slot 2 used the profile's implementer prompt with an approach hint
+- The user was NOT asked to specify slots — config was auto-loaded
+
+- [ ] **Step 4: Clean up**
+
+```bash
+rm -rf "$TEST_DIR"
+```
+
+---
+
+### Task 11: End-to-end live test — skill + harness composition
+
+Verify that `/superpowers:tdd + codex` actually causes Codex to follow TDD methodology.
+
+**Files:** None — behavioral verification.
+**Requires:** Codex CLI installed.
+
+- [ ] **Step 1: Run slot-machine with composed slot**
+
+```
+/slot-machine with 2 slots:
+  slot 1: /superpowers:tdd
+  slot 2: /superpowers:tdd + codex
+
+Spec: Implement a `Stack` class in src/stack.py with push, pop, peek,
+and is_empty methods. Pop and peek on empty stack should raise IndexError.
+Include tests in tests/test_stack.py using pytest.
+```
+
+- [ ] **Step 2: Verify both slots followed TDD**
+
+Check that:
+- Slot 1 (Claude + TDD): invoked the TDD skill, wrote tests first
+- Slot 2 (Codex + TDD): the codex exec prompt included TDD methodology guidance, and Codex's output shows test-first behavior (tests written before or alongside implementation)
+
+- [ ] **Step 3: Verify the judge compared across harnesses**
+
+- Did the judge see different implementations from different models?
+- Were both valid implementations of the Stack spec?
+- Did the verdict reflect genuine differences (not just "both are the same")?
+
+- [ ] **Step 4: Compare the two implementations qualitatively**
+
+Read both slot outputs from the run dir. Are they genuinely different? Different variable names, different error handling approaches, different test strategies? This is the value proposition of cross-harness — different models produce genuinely different code.
+
+---
+
+### Task 12: Final verification
+
+**Files:** None — read-only checks.
 
 - [ ] **Step 1: Run full test suite**
 
@@ -486,20 +838,18 @@ Run all tests, verify no stale references, confirm structure is complete.
 ./tests/run-tests.sh
 ```
 
-Expected: all contracts pass (including new Contracts 11-12).
+Expected: all contracts (1-13) pass.
 
 - [ ] **Step 2: Verify no stale references**
 
 ```bash
-grep -rn "slot-implementer-prompt\|slot-reviewer-prompt\|SLOT_TEMP_DIR\|mktemp" SKILL.md
+grep -rn "SLOT_TEMP_DIR\|mktemp" SKILL.md && echo "STALE FOUND" || echo "Clean"
 ```
-
-Expected: no matches.
 
 - [ ] **Step 3: Verify SKILL.md covers all slot types**
 
 ```bash
-for term in "default" "skill" "harness" "codex exec" "workspace-write" "slot-machine-slots" "Skill Discovery"; do
+for term in "## Slot Definitions" "slot-machine-slots" "codex exec" "workspace-write" "## Skill Discovery" "which codex" "+ codex" "Group 1" "Group 2"; do
     grep -q "$term" SKILL.md && echo "PASS: $term" || echo "FAIL: $term"
 done
 ```
@@ -510,4 +860,10 @@ done
 for term in "Multi-Skill" "Cross-Model" "codex" "/superpowers:tdd" "slot-machine-slots"; do
     grep -q "$term" README.md && echo "PASS: $term" || echo "FAIL: $term"
 done
+```
+
+- [ ] **Step 5: Run git log to verify commit history is clean**
+
+```bash
+git log --oneline | head -15
 ```
