@@ -129,16 +129,20 @@ gemini extensions install https://github.com/pejman/slot-machine
 ## Usage
 
 ```
-Slot-machine this feature: [paste your spec or reference your plan file]
+/slot-machine
+
+Spec: Implement the payment webhook handler from PLAN.md
 ```
 
-Or be explicit:
+Or inline with options:
 
 ```
-Use slot-machine with 5 slots to implement the payment webhook handler from PLAN.md
+/slot-machine with 3 slots, profile: writing
+
+Spec: Write a changelog entry announcing the new task profiles feature
 ```
 
-The skill triggers on "slot-machine", "best-of-N", "pull the lever", or "parallel implementations."
+The skill also triggers on natural language: "slot-machine this", "best-of-N", "pull the lever", or "parallel implementations."
 
 ## Works With Your Other Skills
 
