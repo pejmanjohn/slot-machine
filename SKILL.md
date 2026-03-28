@@ -297,7 +297,9 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
 
 ### Phase 2: Parallel Implementation
 
-**Dispatch all N slots in a SINGLE message** using N parallel Agent tool calls — regardless of harness. Every slot dispatches via the Agent tool. For Codex slots, the subagent wraps `codex exec` internally and returns a standard implementer report. For mixed-harness runs, dispatch is transparent — all slots dispatch via Agent tool regardless of harness.
+**Dispatch all N slots using background Agent calls** (`run_in_background: true`) so the orchestrator can react as each slot finishes. This enables streaming reviews — the first completed slot gets its pre-check and reviewer while slower slots are still implementing.
+
+Dispatch is uniform: all slots dispatch via the Agent tool regardless of harness. For Codex slots, the subagent wraps `codex exec` internally and returns a standard implementer report. For mixed-harness runs, dispatch is transparent.
 
 ---
 
@@ -447,12 +449,12 @@ Do NOT include an approach hint — for bare `codex` slots, the prompt has no sk
 
 ---
 
-**After all agents return**, process each result:
+**As each background slot completes**, process its result immediately:
 
 | Result | Action |
 |--------|--------|
-| Agent succeeded, implementer status DONE | Record worktree path + branch (worktree isolation) or output file path (file isolation). Save implementer report. |
-| Agent succeeded, status DONE_WITH_CONCERNS | Record path. Save report including concerns. |
+| Agent succeeded, implementer status DONE | Record worktree path + branch. Save implementer report. Run pre-checks and dispatch reviewer (see Phase 3 streaming). |
+| Agent succeeded, status DONE_WITH_CONCERNS | Record path. Save report including concerns. Run pre-checks and dispatch reviewer. |
 | Agent succeeded, status BLOCKED or NEEDS_CONTEXT | If `max_retries` > 0: re-dispatch with additional context. Else: mark FAILED. |
 | Agent errored/crashed | If `max_retries` > 0: re-dispatch fresh. Else: mark FAILED. |
 

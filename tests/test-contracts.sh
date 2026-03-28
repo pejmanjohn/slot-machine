@@ -403,6 +403,10 @@ fi
 assert_contains "$SKILL_CONTENT" "immediately.*judge\|judge.*without.*waiting\|dispatch.*judge.*as soon as\|review.*report.*after.*judge" \
     "SKILL.md dispatches judge immediately after reviews complete" || FAILED=$((FAILED + 1))
 
+# Implementers must use background dispatch so orchestrator can react as each finishes
+assert_contains "$SKILL_CONTENT" "run_in_background.*implement\|background.*implement\|background.*slot" \
+    "SKILL.md uses background dispatch for implementers" || FAILED=$((FAILED + 1))
+
 echo ""
 echo "=== Contract Tests Complete ==="
 echo "Failures: $FAILED"
