@@ -46,19 +46,39 @@ A slot can be any of:
 
 All slot types produce the same thing: implementation artifacts + a self-report. The evaluation pipeline doesn't care how it was made.
 
-## What's Pluggable (Eventually Everything)
+## What's Pluggable
 
-| Component | Default | Override via |
-|-----------|---------|-------------|
-| **Implementation** | Profile implementer prompt + hint | Skill, harness, or command per slot |
-| **Review** | Profile reviewer prompt | Custom reviewer in profile, or different model/agent |
-| **Judgment** | Profile judge prompt | Custom judge in profile, or different model/agent |
-| **Synthesis** | Profile synthesizer prompt | Custom synthesizer in profile |
-| **Model (per step)** | Inherit from session | Per-slot or per-role config |
-| **Isolation** | Profile setting (worktree/file) | Per-slot override |
-| **Pre-checks** | Profile setting | Per-slot override |
+| Component | Default | Pluggable now (Phase 1) | Pluggable later |
+|-----------|---------|------------------------|-----------------|
+| **Implementation** | Profile implementer prompt + hint | No — profile only | Phase 2: skill per slot. Phase 3: harness per slot. |
+| **Review** | Profile reviewer prompt | Custom profile only | Phase 4+: different model/harness for review |
+| **Judgment** | Profile judge prompt | Custom profile only | Phase 4+: different model/harness for judgment |
+| **Synthesis** | Profile synthesizer prompt | Custom profile only | Phase 4+: different model/harness for synthesis |
+| **Model (per step)** | Inherit from session | Per-role config in CLAUDE.md | Per-slot model override |
+| **Isolation** | Profile setting (worktree/file) | Profile only | Per-slot override |
 
-Advanced users configure via profiles. Slot machine is pure infrastructure — profiles are the opinion layer.
+Advanced users configure via profiles today. Skill-per-slot and cross-harness expand what's pluggable in Phases 2-3. The evaluation pipeline (review/judge/synthesis) becomes fully pluggable in Phase 4+.
+
+## Slot-Compatible Skills
+
+Not every implementation skill works well as a slot candidate. Slots run independently and produce a single implementation. Skills that are themselves multi-agent orchestrators create awkward nesting.
+
+**Good slot candidates (single-session, produce one implementation):**
+
+| Skill | Why it works |
+|-------|-------------|
+| `/superpowers:tdd` | Single-session methodology. Produces code + tests in one pass. |
+| `/ce:work` | Single-session execution. Does its own pattern research (a feature — different slots find different patterns). |
+| `codex` | Single invocation via CLI. Produces files directly. |
+
+**Poor slot candidates (multi-agent orchestrators — nesting issues):**
+
+| Skill | Why it's awkward |
+|-------|-----------------|
+| `/superpowers:subagent-driven-development` | Dispatches its own subagents with its own review loops. Running SDD inside a slot = a full pipeline nested inside a pipeline. Redundant review, 10x longer per slot. |
+| `/superpowers:executing-plans` | Designed for multi-task plans with checkpoints. A slot is one task, not a plan. |
+
+The orchestrator should warn if a user assigns a poor-candidate skill to a slot, but not block it — the user might have a reason.
 
 ## Phased Rollout
 
@@ -290,67 +310,50 @@ A slot with no harness specified uses Claude Code (the Agent tool). A slot with 
 
 ## Invocation Syntax
 
-### Natural Language (the common case)
+Three ways to configure slots, from casual to persistent:
 
-Users describe what they want conversationally. The orchestrator parses intent:
+### 1. Natural Language (primary — how most users interact)
 
 ```
-/slot-machine this with /superpowers:tdd, /ce:work, and codex
+/slot-machine this with tdd, ce:work, and codex
 
 Spec: Implement a rate limiter with sliding window support
 ```
 
-Parsed as: 3 slots, one per named skill/harness. No default hint slots.
+The orchestrator parses skill and harness names from the request. One slot per named item. If the user also specifies a slot count higher than the named items, remaining slots get default profile hints.
 
 ```
-/slot-machine this with 5 slots — use /superpowers:tdd and codex,
-rest are default
+/slot-machine this with 5 slots — use tdd and codex, rest are default
 
 Spec: [the spec]
 ```
 
-Parsed as: 5 slots. Slot 1: superpowers:tdd. Slot 2: codex. Slots 3-5: default profile hints.
+Parsed as: Slot 1: tdd. Slot 2: codex. Slots 3-5: default profile hints.
 
-```
-/slot-machine this using all my implementation skills
-
-Spec: [the spec]
-```
-
-Parsed as: auto-detect installed implementation skills, one slot per skill. The orchestrator checks what's available (superpowers, CE, codex CLI) and creates one slot for each.
-
-### Explicit Per-Slot (power users)
+### 2. Explicit Per-Slot (power users who want precise control)
 
 ```
 /slot-machine with 4 slots:
-  slot 1: /superpowers:tdd
-  slot 2: /ce:work
+  slot 1: tdd
+  slot 2: ce:work
   slot 3: codex
-  slot 4: default
+  slot 4: tdd + codex
 
 Spec: [the spec]
 ```
 
-### Config-Based (project defaults in CLAUDE.md)
+### 3. Project Config (CLAUDE.md — set once, use every time)
 
 ```markdown
 ## Slot Machine Settings
 slot-machine-slots:
-  - skill: /superpowers:tdd
-  - skill: /ce:work
+  - skill: tdd
+  - skill: ce:work
   - harness: codex
   - default
 ```
 
-Then the user just says `/slot-machine this` and the config is loaded.
-
-### Shorthand Flags
-
-```
-/slot-machine --skills tdd,ce:work --harness codex
-
-Spec: [the spec]
-```
+Then `/slot-machine this` loads the config automatically.
 
 ### Precedence
 
@@ -412,15 +415,15 @@ The orchestrator reads skill descriptions from the system prompt and filters by 
 
 The heuristic proposes — the user decides. The saved config is the source of truth, not the heuristic.
 
+## Cost Implications for Cross-Harness
+
+Cross-harness slots use different billing accounts. A run with 2 Claude Code slots + 2 Codex slots means charges on both Anthropic and OpenAI. The orchestrator should report which harnesses were used in the final summary so the user understands where costs landed. No blocking or warning needed — just transparency.
+
 ## Open Questions
 
-1. **Skills that do their own review (SDD)** — SDD has built-in spec compliance and code quality review loops. When running SDD inside a slot, slot-machine also runs its own independent review. This is intentional (two independent review perspectives are better than one), but it means SDD slots take longer and do redundant work. Should we offer a "skip slot-machine review for skill-based slots" option? Probably not in v1 — the independent review is the whole point.
+1. **Cross-harness timing** — Codex calls via CLI might take 2-5x longer than local Agent dispatch. Slots won't finish simultaneously. Should the orchestrator start reviewing completed slots while others are still running? Probably yes — dispatch reviewers as slots complete rather than waiting for all.
 
-2. **Codex sandbox vs slot-machine worktrees** — Codex runs read-only. It can produce files but can't run tests. The orchestrator needs to take Codex's output, place it in a worktree or run dir, and run tests itself before the reviewer sees it. This is doable but adds a step.
-
-3. **Cross-harness timing** — Codex calls via CLI might take 2-5x longer than local Agent dispatch. Slots won't finish simultaneously. Should the orchestrator start reviewing completed slots while others are still running? Probably yes — dispatch reviewers as slots complete rather than waiting for all.
-
-4. **Evaluation pipeline pluggability** — Custom profiles already allow custom reviewer/judge prompts. For full pluggability (different model for review, different harness for judge), the profile could specify `reviewer_harness: codex` or `judge_model: gpt-5`. Not for v1 but the profile structure supports it.
+2. **Evaluation pipeline pluggability** — Custom profiles already allow custom reviewer/judge prompts. For full pluggability (different model for review, different harness for judge), the profile could specify `reviewer_harness: codex` or `judge_model: gpt-5`. Not for v1 but the profile structure supports it.
 
 ## Autonomous Loop Integration
 
@@ -463,9 +466,9 @@ Suppresses progress tables and intermediate phase reports. Final verdict + outpu
 
 ### What NOT to Build
 
-- **`autonomous: true` flag** — unnecessary. The agent already self-regulates and auto-detects for strong signals. CLAUDE.md instructions like "do not ask questions" handle the rest.
+- **`autonomous: true` flag** — unnecessary. The agent already self-regulates and auto-detects for strong signals. CLAUDE.md instructions like "do not ask questions" handle the rest. No special mode needed.
 - **Ralph-specific adapters** — Ralph doesn't need to know slot-machine exists. It just spawns Claude Code and checks the result.
-- **Special headless detection** — the pipeline works the same in both modes. Only output verbosity differs.
+- **Special headless detection** — the pipeline works the same in both modes. Only output verbosity differs (`quiet: true`).
 
 ### Loop Integration Setup
 
@@ -509,74 +512,63 @@ for story in $(jq -r '.stories[] | select(.passes == false) | .id' prd.json); do
 done
 ```
 
-### README Section (to add)
-
-Add a section to README.md titled "## Works in Autonomous Loops" that covers:
-
-- One paragraph explaining slot-machine works inside Ralph, Trycycle, and custom loops
-- The CLAUDE.md config block (profile, slots, quiet)
-- Note about self-regulation: "Slot-machine evaluates each task and only engages when the task has meaningful design choices. Mechanical tasks get single-shot implementation."
-- The JSON result artifact path for scripts that need to parse results
-- Link to Ralph and Trycycle repos as examples
-
 ### What This Means for SKILL.md
 
-The orchestration logic needs two modes:
+Two additions only:
 
-**Interactive (default):** Current behavior — progress tables, user can be asked questions, rich output.
+1. **JSON result artifact** — add to Phase 4 Final Report: always write `result.json` to the run directory + create `latest` symlink.
+2. **`quiet: true` config** — add to Configuration table. When set, suppress progress tables. Final verdict + output path still printed.
 
-**Autonomous:** Triggered by config (`autonomous: true` in CLAUDE.md or inline). Differences:
-- Skip all AskUserQuestion calls
-- Auto-detect profile without asking (use signals, fall back to coding)
-- Suppress progress tables (or minimize to one-line status updates)
-- Always write JSON result artifact to run dir
-- Ensure clean exit state (merge winner, cleanup worktrees, verify tests)
-- Report final verdict in a parseable format
+No autonomous mode. No interactive/headless split. The pipeline is the same in both cases.
 
-### Integration Examples
+### README Section (to add)
 
-**Ralph integration (CLAUDE.md):**
+Add a section to README.md titled **"## Works in Autonomous Loops"** with this content:
+
 ```markdown
+## Works in Autonomous Loops
+
+Slot-machine runs inside [Ralph](https://github.com/snarktank/ralph),
+[Trycycle](https://github.com/danshapiro/trycycle), and custom agent loops.
+No special setup — add config to your CLAUDE.md and the loop's AI instances
+pick it up automatically.
+
+Slot-machine self-regulates: it evaluates each task and only engages when the
+task has meaningful design choices. Mechanical tasks (add a field, rename a
+function) get single-shot implementation. You can blanket-enable slot-machine
+and trust it to only spend compute when competition adds value.
+
+**Setup (add to CLAUDE.md):**
+\```markdown
 ## Slot Machine Settings
-autonomous: true
+slot-machine-profile: coding
 slots: 3
-profile: coding
 quiet: true
-```
+\```
 
-Ralph's prompt template includes: "Use slot-machine to implement this story. Run fully autonomously."
+Every run writes a machine-readable result to
+`.slot-machine/runs/latest/result.json` that scripts can parse:
 
-**Trycycle integration (subagent prompt):**
-```
-Implement this spec using slot-machine with 3 slots.
-Run autonomously — no questions, no interactive prompts.
-Write results to .slot-machine/runs/ and leave the workspace clean.
-Spec: {plan_content}
-```
+\```json
+{
+  "verdict": "PICK",
+  "winning_slot": 2,
+  "confidence": "HIGH",
+  "files_changed": ["src/api.py", "tests/test_api.py"],
+  "tests_passing": 45
+}
+\```
 
-Trycycle's orchestrator reads the JSON result artifact and passes it to its review phase.
-
-**Custom loop (bash script):**
-```bash
-for story in $(jq -r '.stories[] | select(.passes == false) | .id' prd.json); do
-  SPEC=$(jq -r ".stories[] | select(.id == \"$story\") | .description" prd.json)
-  claude -p "Use slot-machine autonomously with 3 slots. Spec: $SPEC" \
-    --allowed-tools=all --permission-mode bypassPermissions
-  # Check result
-  RESULT=$(cat .slot-machine/runs/latest/result.json)
-  VERDICT=$(echo "$RESULT" | jq -r '.verdict')
-  if [ "$VERDICT" != "NONE_ADEQUATE" ]; then
-    jq ".stories[] |= if .id == \"$story\" then .passes = true else . end" prd.json > tmp.json
-    mv tmp.json prd.json
-  fi
-done
+Set `quiet: true` to suppress progress tables in unattended runs.
+The run directory (`.slot-machine/runs/`) keeps all artifacts
+(slot drafts, reviewer scorecards, judge verdict) for post-hoc inspection.
 ```
 
 ## Next Steps
 
-1. Ship the current branch (Phase 1 complete)
-2. Design and implement Phase 2: skill-per-slot (start with superpowers:tdd and ce:work)
-3. Spike Phase 3: prove Claude Code → Codex dispatch and review works end-to-end
-4. Add autonomous mode for loop integration
-5. Iterate on syntax based on user testing
-6. Generalize harness support based on ecosystem evolution
+1. **Ship the current branch** (Phase 1 complete — profiles, pipeline, run storage, output formatting, model inheritance)
+2. **Add JSON result artifact + quiet mode + README autonomous loop section** — small additions that enable loop integration without architectural changes
+3. **Design and implement Phase 2: skill-per-slot** — start with tdd and ce:work as the two slot-compatible skills
+4. **Spike Phase 3: native Codex dispatch** — prove Claude Code → Codex in a worktree, review the output, end-to-end
+5. **Iterate on syntax** based on user testing of Phases 2-3
+6. **Generalize harness support** based on ecosystem evolution (Gemini CLI, AMP, etc.)
