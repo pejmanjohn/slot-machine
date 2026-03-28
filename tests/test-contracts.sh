@@ -321,6 +321,69 @@ assert_contains "$SKILL_CONTENT" "all my skills\|all implementation skills" \
     "SKILL.md documents natural language discovery triggers" || FAILED=$((FAILED + 1))
 
 echo ""
+echo "=== Contract 14: Agent-Wrapped Codex Dispatch ==="
+# Codex slots must dispatch via Agent tool, not raw Bash
+assert_contains "$SKILL_CONTENT" "Agent tool.*codex\|wrapper.*agent.*codex\|subagent.*codex exec" \
+    "SKILL.md describes Codex dispatch via Agent wrapper" || FAILED=$((FAILED + 1))
+
+# Must NOT have Group 1 / Group 2 distinction
+GROUPS_FOUND=$(echo "$SKILL_CONTENT" | grep -c "Group 1\|Group 2" || true)
+if [ "$GROUPS_FOUND" -eq 0 ]; then
+    echo "  [PASS] No Group 1/Group 2 dispatch distinction"
+else
+    echo "  [FAIL] Still has Group 1/Group 2 distinction ($GROUPS_FOUND references)"
+    FAILED=$((FAILED + 1))
+fi
+
+# All slots should use Agent tool in dispatch table
+assert_contains "$SKILL_CONTENT" "Agent tool.*Agent tool.*Agent tool\|all.*slots.*Agent tool\|every.*slot.*Agent" \
+    "SKILL.md says all slots dispatch via Agent tool" || FAILED=$((FAILED + 1))
+
+echo ""
+echo "=== Contract 15: Model Version Display ==="
+# Must describe reading codex model from config
+assert_contains "$SKILL_CONTENT" "config.toml\|codex.*model.*version\|model.*codex.*config" \
+    "SKILL.md describes reading Codex model version from config" || FAILED=$((FAILED + 1))
+
+# Progress table must have Model column
+assert_contains "$SKILL_CONTENT" "| Model |\|| Model|" \
+    "SKILL.md progress table has Model column" || FAILED=$((FAILED + 1))
+
+# Must NOT have Via column (replaced by Model)
+PHASE2_TABLE=$(echo "$SKILL_CONTENT" | sed -n '/Phase 2.*Implementation/,/Phase 3/p')
+VIA_COUNT=$(echo "$PHASE2_TABLE" | grep -c "| Via |" || true)
+if [ "$VIA_COUNT" -eq 0 ]; then
+    echo "  [PASS] Phase 2 progress table has no Via column (replaced by Model)"
+else
+    echo "  [FAIL] Phase 2 progress table still has Via column ($VIA_COUNT found)"
+    FAILED=$((FAILED + 1))
+fi
+
+echo ""
+echo "=== Contract 16: Verdict Formatting ==="
+# Must NOT use blockquote for verdict
+VERDICT_SECTION=$(echo "$SKILL_CONTENT" | sed -n '/Report the verdict/,/Phase 4.*Resolution\|### Phase 4/p')
+BLOCKQUOTE_COUNT=$(echo "$VERDICT_SECTION" | grep -c "^>" || true)
+if [ "$BLOCKQUOTE_COUNT" -eq 0 ]; then
+    echo "  [PASS] Verdict does not use blockquote formatting"
+else
+    echo "  [FAIL] Verdict still uses blockquote formatting ($BLOCKQUOTE_COUNT lines)"
+    FAILED=$((FAILED + 1))
+fi
+
+# Must include slot identity with harness and model
+assert_contains "$SKILL_CONTENT" "Harness.*Model\|harness.*model.*skill\|Claude Code.*opus\|Codex.*gpt" \
+    "SKILL.md verdict includes slot identity with harness and model" || FAILED=$((FAILED + 1))
+
+# Must have one-sentence why summary
+assert_contains "$SKILL_CONTENT" "one-sentence.*why\|why.*summary\|human-readable.*explanation" \
+    "SKILL.md verdict requires a why summary" || FAILED=$((FAILED + 1))
+
+# Formatting rules must NOT mention blockquote for verdict
+assert_contains "$SKILL_CONTENT" "horizontal.*rule\|---.*verdict\|bounded.*section" \
+    "SKILL.md uses horizontal rules for verdict section" || FAILED=$((FAILED + 1))
+
+echo ""
 echo "=== Contract Tests Complete ==="
 echo "Failures: $FAILED"
 exit $FAILED
