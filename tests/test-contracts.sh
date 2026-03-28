@@ -212,6 +212,63 @@ for profile_dir in "$SKILL_DIR"/profiles/*/; do
 done
 
 echo ""
+echo "=== Contract 9: Run Storage ==="
+# SKILL.md must reference .slot-machine/runs/ for artifact storage (not mktemp or temp dirs)
+assert_contains "$SKILL_CONTENT" ".slot-machine/runs/" \
+    "SKILL.md references .slot-machine/runs/ for artifact storage" || FAILED=$((FAILED + 1))
+
+# SKILL.md must NOT reference mktemp for slot output (temp dirs replaced by run storage)
+MKTEMP_LINES=$(echo "$SKILL_CONTENT" | grep -n "mktemp" || true)
+if [ -n "$MKTEMP_LINES" ]; then
+    echo "  [FAIL] SKILL.md still references mktemp (should use .slot-machine/runs/)"
+    FAILED=$((FAILED + 1))
+else
+    echo "  [PASS] SKILL.md does not reference mktemp"
+fi
+
+# SKILL.md must reference saving review scorecards and verdict
+assert_contains "$SKILL_CONTENT" "review-.*\.md\|scorecard.*save\|save.*review\|review.*run_dir\|review.*run dir" \
+    "SKILL.md describes saving reviewer output to run dir" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "verdict.*\.md\|verdict.*save\|save.*verdict\|verdict.*run_dir\|verdict.*run dir" \
+    "SKILL.md describes saving judge verdict to run dir" || FAILED=$((FAILED + 1))
+
+echo ""
+echo "=== Contract 10: Model Inheritance ==="
+# Model config defaults should say "inherit" not hardcode specific models
+# The Configuration table should NOT have "sonnet" or "opus" as default values for model settings
+CONFIG_TABLE=$(echo "$SKILL_CONTENT" | sed -n '/^## Configuration$/,/^## /p')
+MODEL_DEFAULTS=$(echo "$CONFIG_TABLE" | grep -E 'implementer_model|reviewer_model|judge_model|synthesizer_model')
+
+# Check that no model config line has "sonnet" or "opus" as the default
+HARDCODED_DEFAULTS=$(echo "$MODEL_DEFAULTS" | grep -E '\| sonnet \|| \| opus \|' || true)
+if [ -n "$HARDCODED_DEFAULTS" ]; then
+    echo "  [FAIL] Configuration table has hardcoded model defaults (should inherit from session)"
+    echo "  Found: $HARDCODED_DEFAULTS"
+    FAILED=$((FAILED + 1))
+else
+    echo "  [PASS] No hardcoded model defaults in Configuration table"
+fi
+
+# The Agent dispatch tables in Phases should NOT specify model parameter unconditionally
+# They should say "omit" or "inherit" or "only if configured"
+PHASE2_DISPATCH=$(echo "$SKILL_CONTENT" | sed -n '/^### Phase 2/,/^### Phase 3/p')
+if echo "$PHASE2_DISPATCH" | grep -q '`"sonnet"`'; then
+    echo "  [FAIL] Phase 2 dispatch still hardcodes sonnet model"
+    FAILED=$((FAILED + 1))
+else
+    echo "  [PASS] Phase 2 dispatch does not hardcode sonnet"
+fi
+
+# Judge can still mention opus as a recommendation but should not force it
+JUDGE_DISPATCH=$(echo "$SKILL_CONTENT" | sed -n '/Step 2: Dispatch the judge/,/^###\|^#### /p')
+if echo "$JUDGE_DISPATCH" | grep -q '"opus".*do NOT omit'; then
+    echo "  [FAIL] Judge dispatch still forces opus with 'do NOT omit'"
+    FAILED=$((FAILED + 1))
+else
+    echo "  [PASS] Judge dispatch does not force opus"
+fi
+
+echo ""
 echo "=== Contract Tests Complete ==="
 echo "Failures: $FAILED"
 exit $FAILED
