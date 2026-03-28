@@ -474,7 +474,7 @@ Do NOT show full implementer reports, self-review findings, or file lists. The t
 
 Run the pre-check commands defined in the active profile's `profile.md` frontmatter. If `pre_checks` is `null`, skip pre-checks entirely and pass an empty string for `{{PRE_CHECK_RESULTS}}`.
 
-If `pre_checks` is set: for each successful slot, run the commands in the slot's worktree (for `worktree` isolation) or against the slot's output file (for `file` isolation). Before running, substitute `{test_command}` with the test command detected during Phase 1.
+If `pre_checks` is set: for each successful slot, `cd` into the slot's worktree first, then run the commands (for `worktree` isolation). For `file` isolation, run against the slot's output file. Before running, substitute `{test_command}` with the test command detected during Phase 1. Every pre-check Bash command must start with `cd {worktree_path} &&` — do not assume the shell is already in the right directory.
 
 Feed ALL pre-check results to the reviewer as `{{PRE_CHECK_RESULTS}}`. The more factual data the reviewer has, the less it has to discover — and the more it can focus on judgment calls that require reasoning.
 
