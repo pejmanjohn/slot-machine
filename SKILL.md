@@ -382,6 +382,7 @@ Do NOT use the Agent tool. Dispatch via Bash:
 
    ```bash
    cd {worktree_path} && codex exec "{If skill specified: '$codex_skill_name\n\n'}Implement this specification. Write all files to the current directory.
+   Do not ask questions or wait for confirmation — make your best judgment and proceed.
 
    Specification:
    {spec}
