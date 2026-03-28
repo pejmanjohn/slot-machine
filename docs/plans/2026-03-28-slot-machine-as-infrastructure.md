@@ -359,10 +359,133 @@ The heuristic proposes — the user decides. The saved config is the source of t
 
 4. **Evaluation pipeline pluggability** — Custom profiles already allow custom reviewer/judge prompts. For full pluggability (different model for review, different harness for judge), the profile could specify `reviewer_harness: codex` or `judge_model: gpt-5`. Not for v1 but the profile structure supports it.
 
+## Autonomous Loop Integration
+
+Slot-machine should work inside autonomous agent loops — frameworks like Ralph (outer bash loop, one story per iteration) and Trycycle (inner multi-phase orchestration with subagent dispatch). In these scenarios, slot-machine runs fully unattended for hours.
+
+### Two Integration Patterns
+
+**Pattern A: Slot-machine as a step in an outer loop (Ralph-style)**
+
+```
+Ralph's loop:
+  while stories_remain:
+    pick next story
+    → invoke slot-machine to implement it (replaces single AI instance)
+    run quality checks
+    if pass: mark done, commit
+    continue
+```
+
+Ralph doesn't care how the implementation happened. It spawns a fresh AI instance per story. Slot-machine replaces that single instance with N competing instances + review + judgment. Ralph's quality checks (typecheck, tests) validate the winner.
+
+**Pattern B: Slot-machine as a phase in an inner orchestrator (Trycycle-style)**
+
+```
+Trycycle's phases:
+  plan → strengthen → test plan → BUILD → review → fix → finish
+                                    ↑
+                        slot-machine replaces this
+```
+
+Trycycle dispatches subagents per phase and collects structured output. Slot-machine could be the build phase — dispatch N implementations, review, pick winner. Trycycle's own review phase provides an independent second check.
+
+### Requirements for Loop Integration
+
+1. **Fully autonomous mode.** When invoked programmatically, slot-machine must run to completion without interactive prompts. No "which profile?" — auto-detect or use configured defaults. No "does this look right?" — just execute. Add an `autonomous: true` config or detect non-interactive context.
+
+2. **Clean exit state.** After the run, the workspace must be in a known state:
+   - Winning code merged to the working branch (or output file written)
+   - All tests passing
+   - No dangling worktrees
+   - No uncommitted changes
+   The outer loop picks up exactly where slot-machine left off.
+
+3. **Machine-readable output artifact.** In addition to human-readable tables, write a structured JSON file to the run directory:
+
+   ```json
+   {
+     "verdict": "PICK",
+     "winning_slot": 2,
+     "confidence": "HIGH",
+     "slots_succeeded": 3,
+     "slots_failed": 0,
+     "tests_passing": 45,
+     "files_changed": ["src/task_queue.py", "tests/test_task_queue.py"],
+     "output_path": ".slot-machine/runs/2026-03-28-task-queue/output.md",
+     "run_dir": ".slot-machine/runs/2026-03-28-task-queue/"
+   }
+   ```
+
+   Outer loops can read this JSON to decide what to do next. Ralph reads it to update `prd.json`. Trycycle reads it to feed into its review phase.
+
+4. **Non-interactive invocation.** Loops invoke slot-machine either as:
+   - A subagent prompt: `"Use slot-machine autonomously. Profile: coding. Slots: 3. Spec: {story}"`
+   - A CLI invocation: `claude -p "slot-machine this..." --allowed-tools=all`
+   - A skill reference within another skill's orchestration
+
+5. **Configurable verbosity.** In a 12-hour loop, no one watches the terminal. Add a `quiet` mode that suppresses progress tables and only outputs the final verdict + path to run artifacts. The run directory still has everything for post-hoc inspection.
+
+6. **Deterministic behavior.** When `autonomous: true`, never ask the user anything. If the spec is ambiguous, use best judgment and note concerns in the verdict. If auto-detection can't determine the profile, fall back to `coding`. The loop must not stall.
+
+### What This Means for SKILL.md
+
+The orchestration logic needs two modes:
+
+**Interactive (default):** Current behavior — progress tables, user can be asked questions, rich output.
+
+**Autonomous:** Triggered by config (`autonomous: true` in CLAUDE.md or inline). Differences:
+- Skip all AskUserQuestion calls
+- Auto-detect profile without asking (use signals, fall back to coding)
+- Suppress progress tables (or minimize to one-line status updates)
+- Always write JSON result artifact to run dir
+- Ensure clean exit state (merge winner, cleanup worktrees, verify tests)
+- Report final verdict in a parseable format
+
+### Integration Examples
+
+**Ralph integration (CLAUDE.md):**
+```markdown
+## Slot Machine Settings
+autonomous: true
+slots: 3
+profile: coding
+quiet: true
+```
+
+Ralph's prompt template includes: "Use slot-machine to implement this story. Run fully autonomously."
+
+**Trycycle integration (subagent prompt):**
+```
+Implement this spec using slot-machine with 3 slots.
+Run autonomously — no questions, no interactive prompts.
+Write results to .slot-machine/runs/ and leave the workspace clean.
+Spec: {plan_content}
+```
+
+Trycycle's orchestrator reads the JSON result artifact and passes it to its review phase.
+
+**Custom loop (bash script):**
+```bash
+for story in $(jq -r '.stories[] | select(.passes == false) | .id' prd.json); do
+  SPEC=$(jq -r ".stories[] | select(.id == \"$story\") | .description" prd.json)
+  claude -p "Use slot-machine autonomously with 3 slots. Spec: $SPEC" \
+    --allowed-tools=all --permission-mode bypassPermissions
+  # Check result
+  RESULT=$(cat .slot-machine/runs/latest/result.json)
+  VERDICT=$(echo "$RESULT" | jq -r '.verdict')
+  if [ "$VERDICT" != "NONE_ADEQUATE" ]; then
+    jq ".stories[] |= if .id == \"$story\" then .passes = true else . end" prd.json > tmp.json
+    mv tmp.json prd.json
+  fi
+done
+```
+
 ## Next Steps
 
 1. Ship the current branch (Phase 1 complete)
 2. Design and implement Phase 2: skill-per-slot (start with superpowers:tdd and ce:work)
 3. Spike Phase 3: prove Claude Code → Codex dispatch and review works end-to-end
-4. Iterate on syntax based on user testing
-5. Generalize harness support based on ecosystem evolution
+4. Add autonomous mode for loop integration
+5. Iterate on syntax based on user testing
+6. Generalize harness support based on ecosystem evolution
