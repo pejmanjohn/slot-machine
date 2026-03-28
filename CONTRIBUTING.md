@@ -15,7 +15,7 @@ All PRs must pass the contract validation suite:
 ./tests/run-tests.sh
 ```
 
-If your change touches profiles (`profiles/*.md`) or SKILL.md workflow logic, also run:
+If your change touches profiles (`profiles/*/`) or SKILL.md workflow logic, also run:
 
 ```bash
 ./tests/run-tests.sh --smoke
@@ -36,7 +36,7 @@ If your change touches profiles (`profiles/*.md`) or SKILL.md workflow logic, al
 ## Creating Custom Profiles
 
 To create a custom profile, either:
-- Create a new `.md` file in `profiles/` following the structure of `coding.md` or `writing.md`
-- Create a profile that extends an existing one with `extends: coding` in the frontmatter
+- Create a new folder in `profiles/` (e.g., `profiles/my-profile/`) with `profile.md` + 4 prompt files (`implementer.md`, `reviewer.md`, `judge.md`, `synthesizer.md`). Use `profiles/coding/` or `profiles/writing/` as a template.
+- Create a profile that extends an existing one with `extends: coding` in the `profile.md` frontmatter. Only include files you want to override — missing files are inherited from the base.
 
-Run `./tests/run-tests.sh` to validate your profile has all required sections and consistent contracts.
+Run `./tests/run-tests.sh` to validate your profile has all required files and consistent contracts.

@@ -4,9 +4,12 @@ You are working on the slot-machine skill — a Claude Code skill for best-of-N 
 
 ## Structure
 - `SKILL.md` — Orchestration engine (shared across all task types)
-- `profiles/` — Task-specific profiles (prompts, hints, config)
-  - `coding.md` — Built-in: code implementation tasks
-  - `writing.md` — Built-in: writing/drafting tasks
+- `profiles/` — Task-specific profiles (one folder per profile)
+  - `coding/` — Built-in: code implementation tasks
+    - `profile.md` — Config: frontmatter + approach hints
+    - `implementer.md`, `reviewer.md`, `judge.md`, `synthesizer.md` — Agent prompts
+  - `writing/` — Built-in: writing/drafting tasks
+    - Same structure as coding, adapted for prose
 - `tests/` — Tiered test suite
 - `.claude-plugin/` — Plugin distribution metadata
 

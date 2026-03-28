@@ -44,7 +44,7 @@ source "$SCRIPT_DIR/test-helpers.sh"
 FIXTURE_DIR="$SCRIPT_DIR/fixtures/planted-bugs"
 GOLDEN_ISSUES="$FIXTURE_DIR/golden-issues.json"
 SPEC_FILE="$SCRIPT_DIR/fixtures/tiny-spec.md"
-REVIEWER_TEMPLATE="$SKILL_DIR/profiles/coding.md"  # Reviewer prompt is in the profile
+REVIEWER_TEMPLATE="$SKILL_DIR/profiles/coding/reviewer.md"  # Reviewer prompt file
 
 echo "=== Reviewer Accuracy Test (Planted Bugs) ==="
 echo ""
