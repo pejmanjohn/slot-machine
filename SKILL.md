@@ -333,8 +333,9 @@ The universal variables to fill in the implementer prompt:
 **For `worktree` isolation — worktree fallback:** If `isolation: "worktree"` fails (e.g., git repo not detected, permission issues), fall back to manual worktree creation:
 
 ```bash
+mkdir -p .slot-machine/worktrees
 for i in $(seq 1 $N); do
-    git worktree add "../{feature_name}-slot-$i" -b "slot-machine/{feature_name}/slot-$i"
+    git worktree add ".slot-machine/worktrees/slot-$i" -b "slot-machine/{feature_name}/slot-$i"
 done
 ```
 
@@ -375,7 +376,7 @@ Do NOT use the Agent tool. Dispatch via Bash:
 
 1. Create a git worktree for this slot (same as Claude Code slots):
    ```bash
-   git worktree add "../slot-machine-{feature}-slot-{i}" -b "slot-machine/{feature}/slot-{i}"
+   git worktree add ".slot-machine/worktrees/slot-{i}" -b "slot-machine/{feature}/slot-{i}"
    ```
 
 2. Run `codex exec` pointed at the worktree. Use the Bash tool with `timeout: 300000` (5 minutes) and `run_in_background: true`. The `--json` flag emits JSONL output — pipe it through the Python parser below to extract the agent's final report:
