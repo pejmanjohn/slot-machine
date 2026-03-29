@@ -256,16 +256,9 @@ Force a profile with `profile: writing` or `profile: coding`, or let auto-detect
 
 ## Works With Your Other Skills
 
-Each implementer subagent is a full Claude Code session with access to all your installed skills. If you use [superpowers](https://github.com/obra/superpowers), [gstack](https://github.com/garrytan/gstack), [compound-engineering](https://github.com/EveryInc/compound-engineering-plugin), or any other skills, the implementers can use them automatically.
+Each implementer slot is a full Claude Code session with access to all your installed skills. You can assign a specific skill per slot — or let implementers pick up skills automatically from your environment.
 
-| Your Skill | What Happens in Slot Machine |
-|-----------|------------------------------|
-| superpowers TDD | Each implementer writes tests first, watches them fail, then implements |
-| superpowers systematic-debugging | If an implementer gets stuck, it debugs methodically instead of guessing |
-| gstack /review | The judge can reference your project's review conventions |
-| compound-engineering workflows | Implementers follow your team's coding patterns |
-
-The orchestrator passes your `CLAUDE.md` conventions as project context to each implementer, so project-specific rules apply to every slot automatically.
+Works with [superpowers](https://github.com/obra/superpowers), [compound-engineering](https://github.com/EveryInc/compound-engineering-plugin), [gstack](https://github.com/garrytan/gstack), or any other implementation skill. The orchestrator passes your `CLAUDE.md` conventions as project context to each implementer, so project-specific rules apply to every slot automatically.
 
 ## What the Reviewer Actually Finds
 
