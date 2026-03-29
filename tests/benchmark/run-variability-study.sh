@@ -172,11 +172,19 @@ for code_slot in $(seq 1 "$SLOTS"); do
         cp "$BASE_DIR/tsconfig.json" "$CROSS_DIR/tsconfig.json"
         cp "$BASE_DIR/vitest.config.ts" "$CROSS_DIR/vitest.config.ts"
 
-        # Run tests
-        if cd "$CROSS_DIR" && npx vitest run 2>&1 | grep -q "passed"; then
+        # Run tests — capture output for debugging
+        CROSS_OUTPUT=$(cd "$CROSS_DIR" && npx vitest run 2>&1)
+        if echo "$CROSS_OUTPUT" | grep -q "passed"; then
             echo "PASS" > "$MATRIX_DIR/${code_slot}_${test_slot}"
         else
             echo "FAIL" > "$MATRIX_DIR/${code_slot}_${test_slot}"
+            # Save first failure for debugging
+            if [ ! -f "$MATRIX_DIR/first_failure.txt" ]; then
+                echo "Code: slot-$code_slot, Test: slot-$test_slot" > "$MATRIX_DIR/first_failure.txt"
+                echo "$CROSS_OUTPUT" >> "$MATRIX_DIR/first_failure.txt"
+                echo "---FILES---" >> "$MATRIX_DIR/first_failure.txt"
+                ls -la "$CROSS_DIR/src/" >> "$MATRIX_DIR/first_failure.txt" 2>&1
+            fi
         fi
 
         rm -rf "$CROSS_DIR"
@@ -347,7 +355,15 @@ echo ""
 echo "  Saved: $RESULT_FILE"
 echo ""
 
-# Cleanup
-rm -rf "$STUDY_DIR"
+# Show debug info if cross-tests failed
+if [ -f "$MATRIX_DIR/first_failure.txt" ]; then
+    echo "  DEBUG: First cross-test failure:"
+    cat "$MATRIX_DIR/first_failure.txt" | head -30
+    echo ""
+    echo "  Study dir preserved for inspection: $STUDY_DIR"
+else
+    # Cleanup only on success
+    rm -rf "$STUDY_DIR"
+fi
 
 echo "========================================"
