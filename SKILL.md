@@ -297,7 +297,7 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
 
 ### Phase 2: Parallel Implementation
 
-**Dispatch all N slots using background Agent calls** (`run_in_background: true`) so the orchestrator can react as each slot finishes. This enables streaming reviews — the first completed slot gets its pre-check and reviewer while slower slots are still implementing.
+**Dispatch all N slots in a SINGLE message** using N parallel Agent tool calls. This is critical — all calls must be in one message for true parallel execution.
 
 Dispatch is uniform: all slots dispatch via the Agent tool regardless of harness. For Codex slots, the subagent wraps `codex exec` internally and returns a standard implementer report. For mixed-harness runs, dispatch is transparent.
 
@@ -449,7 +449,7 @@ Do NOT include an approach hint — for bare `codex` slots, the prompt has no sk
 
 ---
 
-**As each background slot completes**, process its result immediately:
+**After all agents return**, process each result:
 
 | Result | Action |
 |--------|--------|
