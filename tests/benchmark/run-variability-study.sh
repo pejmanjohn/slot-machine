@@ -95,18 +95,7 @@ for i in $(seq 1 "$SLOTS"); do
     cp -r "$BASE_DIR" "$SLOT_DIR"
 
     (
-        claude -p "Implement this in the working directory. Commit your work with git add -A && git commit.
-
-$SPEC
-
-Working directory: $SLOT_DIR
-Test command: npx vitest run" \
-            --allowedTools 'Bash,Read,Write,Edit,Glob,Grep' \
-            --permission-mode bypassPermissions \
-            --verbose \
-            --output-format stream-json \
-            --max-turns 30 \
-            > "$SLOT_DIR/.transcript.jsonl" 2>&1
+        claude -p "Implement this in the working directory. Commit your work with git add -A && git commit. $SPEC Working directory: $SLOT_DIR Test command: npx vitest run" --allowedTools 'Bash,Read,Write,Edit,Glob,Grep' --permission-mode bypassPermissions --verbose --output-format stream-json --max-turns 30 > "$SLOT_DIR/.transcript.jsonl" 2>&1
     ) &
     PIDS="$PIDS $!"
     echo "  Slot $i dispatched"
@@ -137,10 +126,10 @@ LOC_COUNTS=""
 for i in $(seq 1 "$SLOTS"); do
     SLOT_DIR="$STUDY_DIR/slot-$i"
 
-    # Test count
+    # Test count — match "Tests  N passed" line specifically, not "Test Files"
     TC=0
     if [ -f "$SLOT_DIR/src/scheduler.test.ts" ]; then
-        TC=$(cd "$SLOT_DIR" && npx vitest run 2>&1 | grep -oE '[0-9]+ passed' | head -1 | grep -oE '[0-9]+' || echo "0")
+        TC=$(cd "$SLOT_DIR" && npx vitest run 2>&1 | grep "Tests" | grep -v "Test Files" | grep -oE '[0-9]+ passed' | grep -oE '[0-9]+' || echo "0")
         [ -z "$TC" ] && TC=0
     fi
 
