@@ -1,4 +1,4 @@
-# Slot Machine
+# 🎰 Slot Machine
 
 **An open-source agent skill for Claude Code.**
 
