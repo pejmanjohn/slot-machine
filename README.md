@@ -59,11 +59,19 @@ The key insight: the agent that implements never evaluates. The agent that revie
 
 ### Why Not Just Ask Claude to Do It 5 Times?
 
-We tried that. The baseline experiment that motivated this skill: five parallel implementations of the same spec, no skill, Claude doing what it naturally does. Claude dispatched agents, got five implementations back, looked them over, and picked a winner.
+We tried that. Five parallel implementations, no skill, Claude doing what it naturally does. The parallelism worked fine. Five things broke:
 
-The parallelism worked fine. The problem was evaluation. The same agent that watched all five codebases get written also made the comparison decision — no blind review, no structured criteria, no independent judgment. It picked the one that "looked best" without adversarial inspection. Three bugs shipped that independent reviewers would have caught.
+**Self-review finds nothing.** The same agent that wrote the code reviewed it. In our benchmark, self-review found 0 bugs. Independent reviewers found 3 — including a crash-severity TypeError. You can't objectively evaluate your own work.
 
-Slot-machine exists because the hard part isn't running N agents. It's evaluating their output honestly.
+**No structured comparison.** Without a rubric, Claude made an ad hoc "this one looks best" decision. No spec compliance check, no severity categorization, no file:line evidence. The judge in slot-machine reads structured scorecards with ranked findings — not vibes.
+
+**No synthesis.** When no single implementation is best at everything — one has the cleanest code, another has the best tests — Claude just picks one and loses the other's strengths. Slot-machine's judge can call SYNTHESIZE: combine the best code from one slot with the best tests from another.
+
+**No diversity.** Without approach hints, Claude produces similar implementations each time. Same architecture, same patterns, same blind spots. Slot-machine steers each slot toward a genuinely different design — simplicity vs robustness vs functional vs extensibility.
+
+**No trail.** Without the skill, the comparison is ephemeral — gone when the conversation ends. Slot-machine saves reviewer scorecards, judge verdict, and result artifacts to `.slot-machine/runs/` for post-hoc inspection.
+
+The hard part isn't running N agents. It's evaluating their output honestly.
 
 ## See It Work
 
