@@ -8,35 +8,40 @@ Run N independent implementations of the same feature in parallel. Each gets rev
 
 ## What You Can Do
 
-**Compete implementations against each other:**
+**Run competing implementations and pick the best one:**
 ```
 /slot-machine — Implement the payment webhook handler from PLAN.md
 ```
+Each slot gets a different architectural hint. Independent reviewers find bugs. A judge picks the winner.
 
-**Pit different AI models against each other on the same spec:**
-```
-/slot-machine with /superpowers:tdd, /ce:work, and codex — Implement the TaskScheduler
-```
-
-**Use different methodologies per slot:**
+**Assign a different skill to each slot:**
 ```
 /slot-machine with /superpowers:tdd and /ce:work — Build the rate limiter
 ```
+Slot 1 follows TDD (tests first). Slot 2 follows CE patterns (codebase-aware). Same spec, different methodologies, best result wins.
 
-**Draft prose with competing voices:**
+**Or even run some slots on Codex:**
+```
+/slot-machine with /superpowers:tdd, /ce:work, and codex — Implement the API
+```
+Three slots: Claude with TDD, Claude with CE patterns, and OpenAI Codex. Different models find different bugs — the evaluation pipeline reviews all of them the same way.
+
+**It works for writing too:**
 ```
 /slot-machine with profile: writing — Write the launch announcement
 ```
+Each slot drafts with a different voice and structure. The judge picks the strongest draft or synthesizes the best elements from several.
 
-**Set persistent defaults for your project:**
+**Set it once in your project and forget:**
 ```markdown
-## Slot Machine Settings
+## Slot Machine Settings (add to CLAUDE.md)
 slot-machine-slots:
   - /superpowers:tdd
   - /ce:work
   - codex
   - default
 ```
+Every `/slot-machine` invocation in this project uses these slots automatically.
 
 ## See It Work
 
