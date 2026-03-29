@@ -270,6 +270,18 @@ Critical: src/api.py:47 — Unhandled TypeError crash
 
 The reviewer cites the exact file and line, explains the impact, and suggests a fix. The implementer's self-review said "all requirements implemented, tests pass" — it missed this entirely.
 
+The judge then ranks all slots based on reviewer findings:
+
+```
+| Rank | Slot | Critical | Important | Minor | Spec | Verdict       |
+|------|------|----------|-----------|-------|------|---------------|
+| 1    | 2    | 0        | 1         | 1     | PASS | Winner        |
+| 2    | 3    | 0        | 2         | 1     | PASS | With concerns |
+| 3    | 1    | 1        | 1         | 0     | PASS | Disqualified  |
+```
+
+That's what goes into your codebase. Not the first thing, not the prettiest — the one that held up under independent scrutiny.
+
 ## Configuration
 
 | Setting | Default | Description |
@@ -299,6 +311,8 @@ Set in your project's `CLAUDE.md` or override inline: `/slot-machine with 3 slot
 - Simple mechanical changes (rename, add a field)
 - You already know exactly how it should be built
 - Spec is too vague — brainstorm first, then slot-machine
+
+Does this problem have a design space worth exploring? If yes, pull the lever.
 
 ## Works in Autonomous Loops
 
