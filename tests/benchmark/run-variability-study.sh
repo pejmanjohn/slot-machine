@@ -126,10 +126,12 @@ LOC_COUNTS=""
 for i in $(seq 1 "$SLOTS"); do
     SLOT_DIR="$STUDY_DIR/slot-$i"
 
-    # Test count — match "Tests  N passed" line specifically, not "Test Files"
+    # Test count — extract from vitest "Tests  N passed (N)" line
     TC=0
     if [ -f "$SLOT_DIR/src/scheduler.test.ts" ]; then
-        TC=$(cd "$SLOT_DIR" && npx vitest run 2>&1 | grep "Tests" | grep -v "Test Files" | grep -oE '[0-9]+ passed' | grep -oE '[0-9]+' || echo "0")
+        VITEST_OUT=$(cd "$SLOT_DIR" && npx vitest run 2>&1)
+        # Match "Tests  14 passed" but NOT "Test Files  1 passed"
+        TC=$(echo "$VITEST_OUT" | grep "^      Tests" | grep -oE '[0-9]+ passed' | grep -oE '[0-9]+' || echo "0")
         [ -z "$TC" ] && TC=0
     fi
 
@@ -158,11 +160,17 @@ for code_slot in $(seq 1 "$SLOTS"); do
         TEST_DIR="$STUDY_DIR/slot-$test_slot"
         [ -f "$TEST_DIR/src/scheduler.test.ts" ] || continue
 
-        # Create temp dir: code_slot's impl + test_slot's tests
+        # Create minimal cross-test dir: code_slot's impl + test_slot's tests
+        # Symlink node_modules and config from base to avoid copying
         CROSS_DIR="$STUDY_DIR/cross-tmp"
         rm -rf "$CROSS_DIR"
-        cp -r "$CODE_DIR" "$CROSS_DIR"
+        mkdir -p "$CROSS_DIR/src"
+        cp "$CODE_DIR/src/scheduler.ts" "$CROSS_DIR/src/scheduler.ts"
         cp "$TEST_DIR/src/scheduler.test.ts" "$CROSS_DIR/src/scheduler.test.ts"
+        ln -s "$BASE_DIR/node_modules" "$CROSS_DIR/node_modules"
+        cp "$BASE_DIR/package.json" "$CROSS_DIR/package.json"
+        cp "$BASE_DIR/tsconfig.json" "$CROSS_DIR/tsconfig.json"
+        cp "$BASE_DIR/vitest.config.ts" "$CROSS_DIR/vitest.config.ts"
 
         # Run tests
         if cd "$CROSS_DIR" && npx vitest run 2>&1 | grep -q "passed"; then
