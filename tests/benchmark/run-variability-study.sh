@@ -95,7 +95,7 @@ for i in $(seq 1 "$SLOTS"); do
     cp -r "$BASE_DIR" "$SLOT_DIR"
 
     (
-        claude -p "Implement this in the working directory. Commit your work with git add -A && git commit. $SPEC Working directory: $SLOT_DIR Test command: npx vitest run" --allowedTools 'Bash,Read,Write,Edit,Glob,Grep' --permission-mode bypassPermissions --verbose --output-format stream-json --max-turns 30 > "$SLOT_DIR/.transcript.jsonl" 2>&1
+        claude -p "Implement this in the working directory. Commit your work with git add -A && git commit. $SPEC Working directory: $SLOT_DIR Test command: npx vitest run" --allowedTools 'Bash,Read,Write,Edit,Glob,Grep' --permission-mode bypassPermissions --verbose --output-format stream-json --max-turns 15 > "$SLOT_DIR/.transcript.jsonl" 2>&1
     ) &
     PIDS="$PIDS $!"
     echo "  Slot $i dispatched"
