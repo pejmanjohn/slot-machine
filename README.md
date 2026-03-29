@@ -312,7 +312,7 @@ Set in your project's `CLAUDE.md` or override inline: `/slot-machine with 3 slot
 
 ## When to Use
 
-Slot-machine trades tokens and time for quality. A 3-slot run takes roughly 5x longer than a single implementation and uses ~3x the tokens. In return, you get independent review that catches bugs self-review misses, multiple design alternatives compared under structured criteria, and the option to synthesize the best parts of each.
+Slot-machine trades tokens and time for quality. In return, you get independent review that catches bugs self-review misses, multiple design alternatives compared under structured criteria, and the option to synthesize the best parts of each.
 
 That tradeoff is worth it when the cost of shipping a bug exceeds the cost of the extra compute. It's not worth it when the task is mechanical.
 
@@ -320,12 +320,13 @@ That tradeoff is worth it when the cost of shipping a bug exceeds the cost of th
 - Feature has meaningful design choices (architecture, patterns, tradeoffs)
 - The code will ship to production or be built on top of
 - Spec is clear enough for independent implementation
-- Medium complexity (1-4 hours of agent time per attempt)
+- Running in autonomous loops where you're not waiting at the terminal — the extra time costs nothing when the agent is working overnight
 
 **Skip when:**
 - Simple mechanical changes (rename, add a field)
 - You already know exactly how it should be built
 - Spec is too vague — brainstorm first, then slot-machine
+- Interactive back-and-forth where you're waiting for each response
 
 Does this problem have a design space worth exploring? If yes, pull the lever.
 
