@@ -57,6 +57,14 @@ Slot-machine dispatches a pipeline of specialized agents. Each role is isolated 
 
 The key insight: the agent that implements never evaluates. The agent that reviews never sees alternatives. The judge only sees structured scorecards, not raw code (unless it needs to inspect a specific disagreement). This separation prevents the bias that happens when one agent does everything.
 
+### Why Not Just Ask Claude to Do It 5 Times?
+
+We tried that. The baseline experiment that motivated this skill: five parallel implementations of the same spec, no skill, Claude doing what it naturally does. Claude dispatched agents, got five implementations back, looked them over, and picked a winner.
+
+The parallelism worked fine. The problem was evaluation. The same agent that watched all five codebases get written also made the comparison decision — no blind review, no structured criteria, no independent judgment. It picked the one that "looked best" without adversarial inspection. Three bugs shipped that independent reviewers would have caught.
+
+Slot-machine exists because the hard part isn't running N agents. It's evaluating their output honestly.
+
 ## See It Work
 
 You give it a spec:
