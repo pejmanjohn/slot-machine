@@ -129,7 +129,7 @@ When filling `{{TEST_COMMAND}}` for Python repos, prefer `python3 -m pytest ...`
 
 Slots can be configured per-slot instead of using the same profile implementer for all. Two axes compose with `+`:
 
-- **Skills** (`/superpowers:tdd`, `/ce:work`) — methodology guidance, slash-prefixed. Injected into the prompt of whatever harness runs the slot.
+- **Skills** (`/superpowers:test-driven-development`, `/ce:work`) — methodology guidance, slash-prefixed. Injected into the prompt of whatever harness runs the slot.
 - **Harnesses** (`codex`, `gemini`) — which AI system executes. No slash prefix. Determines the dispatch mechanism.
 
 ### Slot Definition Sources (precedence)
@@ -138,10 +138,10 @@ Slots can be configured per-slot instead of using the same profile implementer f
 2. **CLAUDE.md config:** Read `slot-machine-slots` list if present:
    ```markdown
    slot-machine-slots:
-     - /superpowers:tdd
+     - /superpowers:test-driven-development
      - /ce:work
      - codex
-     - /superpowers:tdd + codex
+     - /superpowers:test-driven-development + codex
      - default
    ```
 3. **Profile defaults:** If no slot definitions found, all slots use the profile's implementer prompt with randomly assigned approach hints. This is the Phase 1 behavior — unchanged.
@@ -152,15 +152,15 @@ Slots can be configured per-slot instead of using the same profile implementer f
 - If the user specifies only slot definitions (no count), the slot count equals the number of definitions
 - Each slot definition is a tuple: `(skill, harness)`:
   - `default` → `(null, null)` — profile implementer + hint
-  - `/superpowers:tdd` → `("/superpowers:tdd", null)` — Claude Code with skill
+  - `/superpowers:test-driven-development` → `("/superpowers:test-driven-development", null)` — Claude Code with skill
   - `codex` → `(null, "codex")` — Codex with generic prompt
-  - `/superpowers:tdd + codex` → `("/superpowers:tdd", "codex")` — Codex with skill
+  - `/superpowers:test-driven-development + codex` → `("/superpowers:test-driven-development", "codex")` — Codex with skill
 
 ### Skill Name Translation for External Harnesses
 
 Slot definitions use Claude Code's `/` prefix for skills. External harnesses use different syntax. When dispatching a skill to a non-Claude harness, translate the prefix:
 
-- **Codex:** `/superpowers:tdd` → `$superpowers:tdd` (replace `/` with `$`)
+- **Codex:** `/superpowers:test-driven-development` → `$superpowers:test-driven-development` (replace `/` with `$`)
 - **Future harnesses:** follow their native skill invocation syntax
 
 The skill is invoked natively by the target harness — Codex loads its own copy of the skill, not a text summary. The user is responsible for ensuring the skill is installed on the target harness.
@@ -171,7 +171,7 @@ Approach hints only apply to `default` slots. Skill-based slots do NOT get appro
 
 ### Poor Slot Candidate Warning
 
-If a parsed skill name matches a known multi-agent orchestrator (`/superpowers:subagent-driven-development`, `/superpowers:executing-plans`), warn the user: "⚠ {skill} is a multi-agent orchestrator — running it inside a slot creates nested pipelines (slower, redundant review). Consider using a single-session skill like /superpowers:tdd instead." Do not block — the user may have a reason.
+If a parsed skill name matches a known multi-agent orchestrator (`/superpowers:subagent-driven-development`, `/superpowers:executing-plans`), warn the user: "⚠ {skill} is a multi-agent orchestrator — running it inside a slot creates nested pipelines (slower, redundant review). Consider using a single-session skill like /superpowers:test-driven-development instead." Do not block — the user may have a reason.
 
 ## Skill Discovery
 
@@ -183,7 +183,7 @@ When the user says "all my skills", "all implementation skills", or uses `--disc
 |-----------|-----------------|
 | `/slot-machine this` | No — default profile + hints |
 | `/slot-machine this with 3 slots` | No — default hints |
-| `/slot-machine this with /superpowers:tdd and codex` | No — explicit list |
+| `/slot-machine this with /superpowers:test-driven-development and codex` | No — explicit list |
 | `/slot-machine this with all my skills` | **Yes** |
 | `/slot-machine this using all implementation skills` | **Yes** |
 | `/slot-machine --discover` | **Yes** |
@@ -205,7 +205,7 @@ Discovery ONLY fires on explicit "all my/implementation skills" language or `--d
 ```
 I scanned your installed skills and detected these slot-compatible workflows:
 
-  1. /superpowers:tdd — test-first development
+  1. /superpowers:test-driven-development — test-first development
   2. /ce:work — pattern-matching execution
   3. codex — OpenAI Codex (external harness)
 
@@ -216,7 +216,7 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
 
 ```markdown
 ## Discovered Implementation Skills
-- /superpowers:tdd
+- /superpowers:test-driven-development
 - /ce:work
 - codex
 ```
@@ -344,7 +344,7 @@ Then dispatch implementers WITHOUT `isolation: "worktree"`, pointing each to its
 
 ---
 
-**Path B — Skill-only slots (e.g., `/superpowers:tdd`, no harness):**
+**Path B — Skill-only slots (e.g., `/superpowers:test-driven-development`, no harness):**
 
 Do NOT read the profile's `1-implementer.md`. Dispatch via Agent tool with this prompt:
 
@@ -447,9 +447,9 @@ Do NOT include an approach hint — for bare `codex` slots, the prompt has no sk
 | Slot definition | Dispatch | Prompt | Isolation | Hint? |
 |----------------|----------|--------|-----------|-------|
 | `default` | Agent tool | Profile `1-implementer.md` + hint | Profile setting | Yes |
-| `/superpowers:tdd` | Agent tool | "Invoke {skill} via Skill tool" + spec | worktree | No |
+| `/superpowers:test-driven-development` | Agent tool | "Invoke {skill} via Skill tool" + spec | worktree | No |
 | `codex` | Agent tool (Codex wrapper) | Wrapper runs `codex exec` with spec | worktree | No |
-| `/superpowers:tdd + codex` | Agent tool (Codex wrapper) | Wrapper runs `codex exec` with `$superpowers:tdd` | worktree | No |
+| `/superpowers:test-driven-development + codex` | Agent tool (Codex wrapper) | Wrapper runs `codex exec` with `$superpowers:test-driven-development` | worktree | No |
 
 ---
 
@@ -470,8 +470,8 @@ Do NOT include an approach hint — for bare `codex` slots, the prompt has no sk
 
 | Slot | Status | Model | Words/Tests | Approach |
 |------|--------|-------|-------------|----------|
-| 1 | `DONE` | `claude-opus-4-6` | 13 tests | /superpowers:tdd |
-| 2 | `DONE` | `gpt-5.4` | 15 tests | /superpowers:tdd + codex |
+| 1 | `DONE` | `claude-opus-4-6` | 13 tests | /superpowers:test-driven-development |
+| 2 | `DONE` | `gpt-5.4` | 15 tests | /superpowers:test-driven-development + codex |
 | 3 | `DONE` | `claude-opus-4-6` | 21 tests | /ce:work |
 | 4 | `DONE_WITH_CONCERNS` | `gpt-5.4` | 8 tests | codex |
 
