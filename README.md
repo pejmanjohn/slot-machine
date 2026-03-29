@@ -16,13 +16,13 @@ Three agents implement the same spec independently, each steered toward a differ
 
 **Assign a different skill to each slot:**
 ```
-/slot-machine with /superpowers:tdd and /ce:work — Build the rate limiter
+/slot-machine with /superpowers:test-driven-development and /ce:work — Build the rate limiter
 ```
 Slot 1 follows TDD (tests first). Slot 2 follows CE patterns (codebase-aware). Same spec, different methodologies, best result wins.
 
 **Or even run some slots on Codex:**
 ```
-/slot-machine with /superpowers:tdd, /ce:work, and codex — Implement the API
+/slot-machine with /superpowers:test-driven-development, /ce:work, and codex — Implement the API
 ```
 Three slots: Claude with TDD, Claude with CE patterns, and OpenAI Codex. Different models find different bugs — the evaluation pipeline reviews all of them the same way.
 
@@ -36,12 +36,26 @@ Each slot drafts with a different voice and structure. The judge picks the stron
 ```markdown
 ## Slot Machine Settings (add to CLAUDE.md)
 slot-machine-slots:
-  - /superpowers:tdd
+  - /superpowers:test-driven-development
   - /ce:work
   - codex
   - default
 ```
 Every `/slot-machine` invocation in this project uses these slots automatically.
+
+## How It Works
+
+Slot-machine dispatches a pipeline of specialized agents. Each role is isolated — implementers never see each other's work, reviewers never see each other's reviews.
+
+| Step | Agent | What it does |
+|------|-------|-------------|
+| **Implement** | N implementers (parallel) | Each builds the full spec independently in an isolated git worktree. Different slots can use different skills or even different AI systems (Codex). |
+| **Review** | N reviewers (parallel) | Each reviews one implementation blind — spec compliance, adversarial bug hunting with file:line evidence, test gap analysis. |
+| **Judge** | 1 judge | Reads all reviewer scorecards, does targeted code inspection where reviewers disagree, and issues a verdict: **PICK** the winner, **SYNTHESIZE** the best elements, or **NONE_ADEQUATE**. |
+| **Synthesize** | 1 synthesizer (if needed) | Takes one slot as base, ports specific elements from donors per the judge's plan, verifies coherence, runs the full test suite. |
+| **Resolve** | Orchestrator | Merges the winner, cleans up worktrees, writes result artifacts with full model attribution. |
+
+The key insight: the agent that implements never evaluates. The agent that reviews never sees alternatives. The judge only sees structured scorecards, not raw code (unless it needs to inspect a specific disagreement). This separation prevents the bias that happens when one agent does everything.
 
 ## See It Work
 
@@ -185,8 +199,8 @@ Three slots: Claude Code with CE patterns, Codex with CE patterns, and bare Code
 
 ```
 /slot-machine with 4 slots:
-  slot 1: /superpowers:tdd
-  slot 2: /superpowers:tdd + codex
+  slot 1: /superpowers:test-driven-development
+  slot 2: /superpowers:test-driven-development + codex
   slot 3: /ce:work
   slot 4: codex
 ```
@@ -198,7 +212,7 @@ Or set project defaults in `CLAUDE.md`:
 ```markdown
 ## Slot Machine Settings
 slot-machine-slots:
-  - /superpowers:tdd
+  - /superpowers:test-driven-development
   - /ce:work
   - codex
   - default
@@ -255,17 +269,6 @@ Critical: src/api.py:47 — Unhandled TypeError crash
 ```
 
 The reviewer cites the exact file and line, explains the impact, and suggests a fix. The implementer's self-review said "all requirements implemented, tests pass" — it missed this entirely.
-
-## How It Works
-
-1. **Setup** — Validate the spec, gather project context, detect models and harnesses
-2. **Implement** — N agents work in parallel via Agent tool, each in an isolated worktree with a different approach. Codex slots run through a wrapper agent that dispatches `codex exec` and translates the output into the same report format.
-3. **Review** — Independent reviewers inspect each implementation: spec compliance (pass/fail), adversarial bug hunting (file:line evidence), test gap analysis
-4. **Judge** — A meta-judge compares all reviews, does targeted code inspection, and returns one of three verdicts:
-   - **PICK** — one slot is the clear winner, merge it
-   - **SYNTHESIZE** — multiple slots have complementary strengths, combine them
-   - **NONE_ADEQUATE** — all slots have critical issues, report to user
-5. **Resolve** — Merge the winner (or synthesis), clean up worktrees, report the outcome with full model attribution
 
 ## Configuration
 
