@@ -67,7 +67,7 @@ We tried that. Five parallel implementations, no skill, Claude doing what it nat
 
 **No synthesis.** When no single implementation is best at everything — one has the cleanest code, another has the best tests — Claude just picks one and loses the other's strengths. Slot-machine's judge can call SYNTHESIZE: combine the best code from one slot with the best tests from another.
 
-**No diversity.** Without approach hints, Claude produces similar implementations each time. Same architecture, same patterns, same blind spots. Slot-machine steers each slot toward a genuinely different design — simplicity vs robustness vs functional vs extensibility.
+**No diversity.** Without guidance, Claude produces similar implementations each time. Same architecture, same patterns, same blind spots. Slot-machine creates diversity at three levels: architectural hints steer each slot toward a different design (simplicity vs robustness vs functional), skills assign different methodologies per slot (TDD for one, CE patterns for another), and cross-model dispatch runs some slots on entirely different AI systems (Codex finds bugs Claude doesn't, and vice versa).
 
 **No trail.** Without the skill, the comparison is ephemeral — gone when the conversation ends. Slot-machine saves reviewer scorecards, judge verdict, and result artifacts to `.slot-machine/runs/` for post-hoc inspection.
 
