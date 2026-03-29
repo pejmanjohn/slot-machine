@@ -25,6 +25,7 @@ If your change touches profiles (`profiles/*/`) or SKILL.md workflow logic, also
 
 - **Contracts** — Variable references in prompts match SKILL.md definitions, status/verdict values are consistent across files, required sections exist
 - **Smoke** — Each agent phase (implementer, reviewer, judge) produces valid output structure
+- **Benchmark** — Speed tests comparing slot-machine vs baseline single-agent runs
 - **E2E** — Full slot-machine run on a tiny spec produces a working result
 
 ## Guidelines
