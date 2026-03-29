@@ -69,6 +69,8 @@ We tried that. Five parallel implementations, no skill, Claude doing what it nat
 
 **No diversity.** Without guidance, Claude produces similar implementations each time. Same architecture, same patterns, same blind spots. Slot-machine creates diversity at three levels: architectural hints steer each slot toward a different design (simplicity vs robustness vs functional), skills assign different methodologies per slot (TDD for one, CE patterns for another), and cross-model dispatch runs some slots on entirely different AI systems (Codex finds bugs Claude doesn't, and vice versa).
 
+**No isolation.** Without worktree management, parallel implementations write to the same files and clobber each other. Slot-machine gives each slot its own git worktree — fully isolated workspaces where implementations can't interfere. The winner's branch merges cleanly.
+
 **No trail.** Without the skill, the comparison is ephemeral — gone when the conversation ends. Slot-machine saves reviewer scorecards, judge verdict, and result artifacts to `.slot-machine/runs/` for post-hoc inspection.
 
 The hard part isn't running N agents. It's evaluating their output honestly.
