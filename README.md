@@ -316,7 +316,7 @@ Does this problem have a design space worth exploring? If yes, pull the lever.
 
 ## Works in Autonomous Loops
 
-Slot-machine runs inside [Ralph](https://github.com/snarktank/ralph) and custom agent loops. No special setup — add config to your `CLAUDE.md` and the loop's AI instances pick it up automatically.
+Slot-machine runs inside [Ralph Loop](https://ghuntley.com/loop/) and custom agent loops. No special setup — add config to your `CLAUDE.md` and the loop's AI instances pick it up automatically.
 
 Slot-machine self-regulates: it evaluates each task and only engages when the task has meaningful design choices. Mechanical tasks (add a field, rename a function) get single-shot implementation. You can blanket-enable slot-machine and trust it to only spend compute when competition adds value.
 
