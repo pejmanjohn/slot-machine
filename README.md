@@ -365,7 +365,7 @@ Set `quiet: true` to suppress progress tables in unattended runs. The run direct
 
 ## Custom Profiles
 
-Create your own profiles for domain-specific tasks. A profile is a folder with 5 files:
+Create your own profiles to customize how slot-machine implements, reviews, judges, and synthesizes. Use this to enforce your team's coding standards, define domain-specific review criteria, or change how the judge weighs tradeoffs. A profile is a folder with 5 files:
 
 ```
 my-profile/
