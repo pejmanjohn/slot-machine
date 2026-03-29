@@ -8,11 +8,11 @@ Run N independent implementations of the same feature in parallel. Each gets rev
 
 ## What You Can Do
 
-**Run competing implementations and pick the best one:**
+**Run 3 competing implementations and pick the best one:**
 ```
-/slot-machine — Implement the payment webhook handler from PLAN.md
+/slot-machine with 3 slots — Implement the payment webhook handler from PLAN.md
 ```
-Each slot gets a different architectural hint. Independent reviewers find bugs. A judge picks the winner.
+Three agents implement the same spec independently, each steered toward a different architecture. Independent reviewers hunt for bugs in each. A judge picks the winner — or synthesizes the best parts of several.
 
 **Assign a different skill to each slot:**
 ```
