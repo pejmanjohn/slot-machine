@@ -1,0 +1,26 @@
+{
+  "date": "2026-03-28",
+  "timestamp": "2026-03-28-160000",
+  "git_sha": "839915a",
+  "spec": "task-scheduler",
+  "runs": 1,
+  "baseline_seconds": 78,
+  "slot_machine_seconds": 396,
+  "ratio": 5.08,
+  "overhead_seconds": 162,
+  "slots": 3,
+  "verdict": "PICK",
+  "notes": "v2 streaming reviews + immediate judge dispatch.",
+  "budget": {
+    "ratio_limit": 7.0,
+    "overhead_limit_seconds": 90,
+    "ratio_passed": true,
+    "overhead_passed": false,
+    "overall": "FAIL"
+  },
+  "all_runs": {
+    "baseline_times": [78],
+    "slot_machine_times": [396],
+    "ratios": [5.08]
+  }
+}

@@ -4,6 +4,7 @@
 #   ./tests/run-tests.sh                  # Tier 1 only (contracts, instant)
 #   ./tests/run-tests.sh --smoke          # + Tier 2 (phase-level, ~10 min)
 #   ./tests/run-tests.sh --integration    # + Tier 3 (full E2E, ~20 min)
+#   ./tests/run-tests.sh --benchmark       # Speed benchmark (~15 min)
 #   ./tests/run-tests.sh --all            # Everything including LLM quality evals
 set -euo pipefail
 
@@ -19,18 +20,21 @@ echo ""
 RUN_SMOKE=false
 RUN_INTEGRATION=false
 RUN_QUALITY=false
+RUN_BENCHMARK=false
 SPECIFIC_TEST=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --smoke) RUN_SMOKE=true; shift ;;
         --integration) RUN_INTEGRATION=true; RUN_SMOKE=true; shift ;;
-        --all) RUN_SMOKE=true; RUN_INTEGRATION=true; RUN_QUALITY=true; shift ;;
+        --benchmark) RUN_BENCHMARK=true; shift ;;
+        --all) RUN_SMOKE=true; RUN_INTEGRATION=true; RUN_QUALITY=true; RUN_BENCHMARK=true; shift ;;
         --test|-t) SPECIFIC_TEST="$2"; shift 2 ;;
         --help|-h)
             echo "Usage: $0 [options]"
             echo "  --smoke          Run Tier 1 + Tier 2 (phase-level)"
             echo "  --integration    Run Tier 1 + Tier 2 + Tier 3 (E2E)"
+            echo "  --benchmark      Run speed benchmark (~15 min)"
             echo "  --all            Run everything"
             echo "  --test NAME      Run specific test"
             exit 0 ;;
@@ -84,13 +88,26 @@ for test in "${tests[@]}"; do
     echo ""
 done
 
+# Run benchmark if requested (separate from the test loop — it's a different format)
+if [ "$RUN_BENCHMARK" = true ]; then
+    echo "----------------------------------------"
+    echo "Running: Speed Benchmark"
+    echo "----------------------------------------"
+    if bash "$SCRIPT_DIR/benchmark/run-speed-test.sh"; then
+        passed=$((passed + 1))
+    else
+        failed=$((failed + 1))
+    fi
+    echo ""
+fi
+
 # Summary
 echo "========================================"
 echo " Results: $passed passed, $failed failed, $skipped skipped"
 echo "========================================"
 
-if [ "$RUN_SMOKE" = false ] && [ "$RUN_INTEGRATION" = false ]; then
-    echo "Note: Only Tier 1 (contract) tests ran. Use --smoke or --all for more."
+if [ "$RUN_SMOKE" = false ] && [ "$RUN_INTEGRATION" = false ] && [ "$RUN_BENCHMARK" = false ]; then
+    echo "Note: Only Tier 1 (contract) tests ran. Use --smoke, --benchmark, or --all for more."
 fi
 
 [ $failed -eq 0 ] && exit 0 || exit 1
