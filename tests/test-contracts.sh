@@ -408,6 +408,13 @@ assert_contains "$SKILL_CONTENT" "SINGLE message\|single message.*parallel\|para
     "SKILL.md dispatches implementers in a single parallel message" || FAILED=$((FAILED + 1))
 
 echo ""
+echo "=== Contract 18: Python Test Command Guidance ==="
+assert_contains "$SKILL_CONTENT" "python3 -m pytest" \
+    "SKILL.md prefers python3 pytest commands for Python repos" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "Do not assume.*python.*exists\|only guarantee.*python3\|Do not invent.*python -m pytest" \
+    "SKILL.md warns against assuming a bare python executable" || FAILED=$((FAILED + 1))
+
+echo ""
 echo "=== Contract Tests Complete ==="
 echo "Failures: $FAILED"
 exit $FAILED

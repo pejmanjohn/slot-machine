@@ -12,7 +12,7 @@
 # Pre-registered methodology: all metrics defined before execution.
 # All results reported — no cherry-picking.
 
-set -uo pipefail
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILL_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -35,6 +35,21 @@ STUDY_DIR=$(mktemp -d)
 MATRIX_DIR="$STUDY_DIR/matrix"
 mkdir -p "$MATRIX_DIR"
 
+if ! command -v claude >/dev/null 2>&1; then
+    echo "[SKIP] claude CLI is required for the variability study"
+    exit 2
+fi
+if ! command -v npm >/dev/null 2>&1; then
+    echo "[SKIP] npm is required for the variability study"
+    exit 2
+fi
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "[SKIP] python3 is required for the variability study"
+    exit 2
+fi
+
+mkdir -p "$RESULTS_DIR"
+
 echo "========================================"
 echo " Slot Machine Variability Study"
 echo "========================================"
@@ -56,6 +71,8 @@ BASE_DIR="$STUDY_DIR/base"
 mkdir -p "$BASE_DIR"
 cd "$BASE_DIR"
 git init -q
+git config user.name "Slot Machine Variability"
+git config user.email "variability@example.com"
 mkdir -p src
 npm init -y > /dev/null 2>&1
 npm install -D typescript vitest @types/node > /dev/null 2>&1
@@ -95,7 +112,8 @@ for i in $(seq 1 "$SLOTS"); do
     cp -r "$BASE_DIR" "$SLOT_DIR"
 
     (
-        claude -p "Implement this in the working directory. Commit your work with git add -A && git commit. $SPEC Working directory: $SLOT_DIR Test command: npx vitest run" --allowedTools 'Bash,Read,Write,Edit,Glob,Grep' --permission-mode bypassPermissions --verbose --output-format stream-json --max-turns 15 > "$SLOT_DIR/.transcript.jsonl" 2>&1
+        cd "$SLOT_DIR"
+        claude -p "Implement this in the working directory. Commit your work with git add -A && git commit. $SPEC Test command: npx vitest run" --allowedTools 'Bash,Read,Write,Edit,Glob,Grep' --permission-mode bypassPermissions --verbose --output-format stream-json --max-turns 15 > "$SLOT_DIR/.transcript.jsonl" 2>&1
     ) &
     PIDS="$PIDS $!"
     echo "  Slot $i dispatched"
@@ -116,36 +134,60 @@ IMPL_TIME=$((IMPL_END - START_TIME))
 echo "All implementations complete in ${IMPL_TIME}s ($((IMPL_TIME / 60))m $((IMPL_TIME % 60))s)."
 echo ""
 
+if [ "$FAILED_COUNT" -gt 0 ]; then
+    echo "[FAIL] $FAILED_COUNT slot runs failed before metrics collection"
+    echo "Study dir preserved for inspection: $STUDY_DIR"
+    exit 1
+fi
+
 # --- Phase 3: Collect per-slot metrics ---
 
 echo "Collecting metrics..."
 
 TEST_COUNTS=""
 LOC_COUNTS=""
+INCOMPLETE_SLOTS=0
 
 for i in $(seq 1 "$SLOTS"); do
     SLOT_DIR="$STUDY_DIR/slot-$i"
 
+    if [ ! -f "$SLOT_DIR/src/scheduler.ts" ] || [ ! -f "$SLOT_DIR/src/scheduler.test.ts" ]; then
+        echo "  [FAIL] Slot $i missing scheduler.ts or scheduler.test.ts"
+        INCOMPLETE_SLOTS=$((INCOMPLETE_SLOTS + 1))
+        continue
+    fi
+
     # Test count — extract from vitest "Tests  N passed (N)" line
     TC=0
-    if [ -f "$SLOT_DIR/src/scheduler.test.ts" ]; then
-        VITEST_OUT=$(cd "$SLOT_DIR" && npx vitest run 2>&1)
-        # Match "Tests  14 passed" but NOT "Test Files  1 passed"
-        TC=$(echo "$VITEST_OUT" | grep "^      Tests" | grep -oE '[0-9]+ passed' | grep -oE '[0-9]+' || echo "0")
-        [ -z "$TC" ] && TC=0
+    VITEST_OUT=$(cd "$SLOT_DIR" && npx vitest run 2>&1) || {
+        echo "  [FAIL] Slot $i produced failing tests"
+        echo "$VITEST_OUT"
+        echo "Study dir preserved for inspection: $STUDY_DIR"
+        exit 1
+    }
+    # Match "Tests  14 passed" but NOT "Test Files  1 passed"
+    TC=$(echo "$VITEST_OUT" | grep "^      Tests" | grep -oE '[0-9]+ passed' | grep -oE '[0-9]+' || true)
+    TC="${TC:-0}"
+    if [ "$TC" -eq 0 ]; then
+        echo "  [FAIL] Slot $i reported zero passing tests"
+        echo "Study dir preserved for inspection: $STUDY_DIR"
+        exit 1
     fi
 
     # LOC (implementation only)
-    LOC=0
-    if [ -f "$SLOT_DIR/src/scheduler.ts" ]; then
-        LOC=$(wc -l < "$SLOT_DIR/src/scheduler.ts" | tr -d ' ')
-    fi
+    LOC=$(wc -l < "$SLOT_DIR/src/scheduler.ts" | tr -d ' ')
 
     TEST_COUNTS="$TEST_COUNTS $TC"
     LOC_COUNTS="$LOC_COUNTS $LOC"
     echo "  Slot $i: $TC tests, $LOC LOC"
 done
 echo ""
+
+if [ "$INCOMPLETE_SLOTS" -gt 0 ]; then
+    echo "[FAIL] $INCOMPLETE_SLOTS slots were incomplete: missing scheduler.ts or scheduler.test.ts"
+    echo "Study dir preserved for inspection: $STUDY_DIR"
+    exit 1
+fi
 
 # --- Phase 4: Cross-test matrix ---
 
@@ -173,8 +215,7 @@ for code_slot in $(seq 1 "$SLOTS"); do
         cp "$BASE_DIR/vitest.config.ts" "$CROSS_DIR/vitest.config.ts"
 
         # Run tests — capture output for debugging
-        CROSS_OUTPUT=$(cd "$CROSS_DIR" && npx vitest run 2>&1)
-        if echo "$CROSS_OUTPUT" | grep -q "passed"; then
+        if CROSS_OUTPUT=$(cd "$CROSS_DIR" && npx vitest run 2>&1); then
             echo "PASS" > "$MATRIX_DIR/${code_slot}_${test_slot}"
         else
             echo "FAIL" > "$MATRIX_DIR/${code_slot}_${test_slot}"

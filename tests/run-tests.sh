@@ -2,13 +2,15 @@
 # Slot Machine Skill Test Runner
 # Usage:
 #   ./tests/run-tests.sh                  # Tier 1 only (contracts, instant)
-#   ./tests/run-tests.sh --smoke          # + Tier 2 (phase-level, ~10 min)
-#   ./tests/run-tests.sh --integration    # + Tier 3 (full E2E, ~20 min)
+#   ./tests/run-tests.sh --smoke          # + Tier 2 (headless checks, may skip)
+#   ./tests/run-tests.sh --integration    # + Tier 3 (headless E2E, may skip)
 #   ./tests/run-tests.sh --benchmark       # Speed benchmark (~15 min)
-#   ./tests/run-tests.sh --all            # Everything including LLM quality evals
+#   ./tests/run-tests.sh --all            # Everything, skipping unavailable headless tiers
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+TEST_ROOT_DIR="${TEST_ROOT_DIR:-$SCRIPT_DIR}"
+BENCHMARK_SCRIPT_PATH="${BENCHMARK_SCRIPT_PATH:-$SCRIPT_DIR/benchmark/run-speed-test.sh}"
 cd "$SCRIPT_DIR"
 
 echo "========================================"
@@ -32,8 +34,8 @@ while [[ $# -gt 0 ]]; do
         --test|-t) SPECIFIC_TEST="$2"; shift 2 ;;
         --help|-h)
             echo "Usage: $0 [options]"
-            echo "  --smoke          Run Tier 1 + Tier 2 (phase-level)"
-            echo "  --integration    Run Tier 1 + Tier 2 + Tier 3 (E2E)"
+            echo "  --smoke          Run Tier 1 + Tier 2 (headless checks may skip)"
+            echo "  --integration    Run Tier 1 + Tier 2 + Tier 3 (headless E2E may skip)"
             echo "  --benchmark      Run speed benchmark (~15 min)"
             echo "  --all            Run everything"
             echo "  --test NAME      Run specific test"
@@ -43,10 +45,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Test lists
-tier1_tests=(test-contracts.sh test-skill-structure.sh)
+tier1_tests=(test-contracts.sh test-skill-structure.sh test-harness-integrity.sh)
 tier2_tests=(test-implementer-smoke.sh test-reviewer-smoke.sh test-judge-smoke.sh)
 tier3_tests=(test-e2e-happy-path.sh test-e2e-edge-cases.sh)
-quality_tests=(test-prompt-quality.sh)
+quality_tests=(test-reviewer-accuracy.sh)
 
 # Build test list
 tests=("${tier1_tests[@]}")
@@ -67,23 +69,31 @@ for test in "${tests[@]}"; do
     echo "Running: $test"
     echo "----------------------------------------"
 
-    if [ ! -f "$SCRIPT_DIR/$test" ]; then
-        echo "  [SKIP] Test file not found"
-        skipped=$((skipped + 1))
+    test_path="$TEST_ROOT_DIR/$test"
+
+    if [ ! -f "$test_path" ]; then
+        echo "  [FAIL] Test file not found"
+        failed=$((failed + 1))
         continue
     fi
 
-    chmod +x "$SCRIPT_DIR/$test"
+    chmod +x "$test_path"
     start_time=$(date +%s)
 
-    if bash "$SCRIPT_DIR/$test"; then
+    if bash "$test_path"; then
         end_time=$(date +%s)
         echo "  [PASS] ($(( end_time - start_time ))s)"
         passed=$((passed + 1))
     else
+        status=$?
         end_time=$(date +%s)
-        echo "  [FAIL] ($(( end_time - start_time ))s)"
-        failed=$((failed + 1))
+        if [ "$status" -eq 2 ]; then
+            echo "  [SKIP] ($(( end_time - start_time ))s)"
+            skipped=$((skipped + 1))
+        else
+            echo "  [FAIL] ($(( end_time - start_time ))s)"
+            failed=$((failed + 1))
+        fi
     fi
     echo ""
 done
@@ -93,10 +103,16 @@ if [ "$RUN_BENCHMARK" = true ]; then
     echo "----------------------------------------"
     echo "Running: Speed Benchmark"
     echo "----------------------------------------"
-    if bash "$SCRIPT_DIR/benchmark/run-speed-test.sh"; then
+    if bash "$BENCHMARK_SCRIPT_PATH"; then
         passed=$((passed + 1))
     else
-        failed=$((failed + 1))
+        status=$?
+        if [ "$status" -eq 2 ]; then
+            skipped=$((skipped + 1))
+            echo "  [SKIP]"
+        else
+            failed=$((failed + 1))
+        fi
     fi
     echo ""
 fi
@@ -106,8 +122,12 @@ echo "========================================"
 echo " Results: $passed passed, $failed failed, $skipped skipped"
 echo "========================================"
 
-if [ "$RUN_SMOKE" = false ] && [ "$RUN_INTEGRATION" = false ] && [ "$RUN_BENCHMARK" = false ]; then
+if [ "$RUN_SMOKE" = false ] && [ "$RUN_INTEGRATION" = false ] && [ "$RUN_BENCHMARK" = false ] && [ "$RUN_QUALITY" = false ]; then
     echo "Note: Only Tier 1 (contract) tests ran. Use --smoke, --benchmark, or --all for more."
+fi
+
+if [ "$skipped" -gt 0 ]; then
+    echo "Note: Some requested checks were skipped. Read the per-test output before treating this as full coverage."
 fi
 
 [ $failed -eq 0 ] && exit 0 || exit 1

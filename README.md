@@ -422,12 +422,12 @@ Slot Machine gives the **same task** to N agents and compares their **full imple
 
 ```bash
 ./tests/run-tests.sh                  # Contract validation (instant)
-./tests/run-tests.sh --smoke          # + Phase-level tests (~10 min)
-./tests/run-tests.sh --integration    # + Full E2E (~20-30 min)
-./tests/run-tests.sh --all            # Everything
+./tests/run-tests.sh --smoke          # + Real implementer/reviewer/judge smoke tests
+./tests/run-tests.sh --integration    # + Smoke tier + real happy-path E2E + skipped edge-case E2E
+./tests/run-tests.sh --all            # Everything, with unavailable headless tiers skipped
 ```
 
-16 contracts with 100+ assertions verify format consistency across all agent prompts and orchestration documents.
+The fast suite verifies prompt contracts, repo structure, and harness integrity. The implementer, reviewer, and judge smoke tests plus the happy-path E2E test now run for real via headless `claude -p`; the edge-case E2E and reviewer-accuracy scripts still report explicit skips instead of passing silently.
 
 ## License
 

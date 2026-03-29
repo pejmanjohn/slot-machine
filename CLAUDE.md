@@ -23,6 +23,7 @@ You are working on the slot-machine skill — a Claude Code skill for best-of-N 
 
 ## Testing
 - `./tests/run-tests.sh` — Fast contract validation (always run this)
-- `./tests/run-tests.sh --smoke` — Phase-level tests
+- `./tests/run-tests.sh --smoke` — Real implementer/reviewer/judge smoke tests
+- `./tests/run-tests.sh --integration` — Smoke tier plus real happy-path E2E coverage
 - `./tests/run-tests.sh --benchmark` — Speed benchmarks
-- `./tests/run-tests.sh --all` — Full suite including E2E
+- `./tests/run-tests.sh --all` — Full suite, with edge-case E2E and reviewer-accuracy still skipping explicitly

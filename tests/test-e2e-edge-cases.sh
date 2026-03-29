@@ -148,4 +148,4 @@ echo ""
 echo "=== Edge Case E2E Tests Complete ==="
 echo "All tests SKIPPED — headless Claude execution not available"
 echo "Failures: $FAILED"
-exit 0
+exit 2

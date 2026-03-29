@@ -128,5 +128,5 @@ echo ""
 #     echo "  [WARN] High issue count ($ISSUE_COUNT) — possible false positives"
 # fi
 
-echo "[SKIP] Requires headless claude -p and planted-bugs fixture"
-exit 0
+echo "[SKIP] Placeholder until reviewer accuracy is executed through headless claude -p"
+exit 2

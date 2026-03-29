@@ -123,6 +123,8 @@ SKILL.md injects these variables into ALL profile prompts. If a variable isn't r
 | `{{APPROACH_HINT_USED}}` | The approach hint given to the implementer (used in reviewer context) |
 | `{{TEST_COMMAND}}` | How to run the test suite (empty string if not applicable) |
 
+When filling `{{TEST_COMMAND}}` for Python repos, prefer `python3 -m pytest ...` unless the project already standardizes on another command. Do not assume a bare `python` executable exists.
+
 ## Slot Definitions
 
 Slots can be configured per-slot instead of using the same profile implementer for all. Two axes compose with `+`:
@@ -325,6 +327,8 @@ The universal variables to fill in the implementer prompt:
 | `{{PROJECT_CONTEXT}}` | README, architecture notes, CLAUDE.md conventions, reference materials gathered in Phase 1. Include any user-specified skill guidance. |
 | `{{TEST_COMMAND}}` | How to run the test suite (empty string if not applicable) |
 
+For Python projects, prefer `python3 -m pytest ...` unless the repo already provides an explicit test command. Do not invent `python -m pytest` on systems that only guarantee `python3`.
+
 **For `file` isolation:** Each slot writes its output to `{RUN_DIR}/slot-{i}.md`. Include this path in the prompt so the implementer knows where to write. No worktrees, no git branches.
 
 **For `worktree` isolation — worktree fallback:** If `isolation: "worktree"` fails (e.g., git repo not detected, permission issues), fall back to manual worktree creation:
@@ -510,7 +514,9 @@ The reviewer reads actual content in the worktree/output file — it does NOT ha
 
 **When multiple slots complete close together**, batch their reviewers into a single message for parallel dispatch — this is faster than dispatching one at a time. The key rule is: don't wait for stragglers. If 2 of 3 slots are done, dispatch their 2 reviewers now rather than waiting for the 3rd.
 
-**Collect reviews as they return.** Save each reviewer's scorecard to `{RUN_DIR}/review-{i}.md`.
+**Collect reviews as they return.** Save each reviewer's full scorecard to `{RUN_DIR}/review-{i}.md` immediately when that reviewer finishes. Use Bash to persist the raw reviewer output verbatim. Do NOT postpone these writes until after the summary table, and do NOT replace the saved scorecard with only your orchestrator summary.
+
+**Before dispatching the judge, verify the review artifacts exist.** For every successful slot, confirm `{RUN_DIR}/review-{i}.md` exists and is non-empty. If any scorecard file is missing, write it before continuing. The judge phase is not allowed to start with missing review artifacts.
 
 **Report review results** after all reviews are collected, using a top-level markdown table and standout bullets. Do NOT show full reviewer scorecards, evidence chains, or pass-by-pass analysis — those are pipeline internals the judge uses, not the user.
 
@@ -554,7 +560,9 @@ The judge returns one of three verdicts:
 - **SYNTHESIZE** — multiple slots have complementary strengths worth combining
 - **NONE_ADEQUATE** — all slots have critical issues
 
-Save the judge's full verdict and reasoning to `{RUN_DIR}/verdict.md`.
+Save the judge's full verdict and reasoning to `{RUN_DIR}/verdict.md` using Bash before composing the user-facing verdict block.
+
+**Before continuing to the final report, verify `{RUN_DIR}/verdict.md` exists and is non-empty.** If the file is missing, write it before proceeding. The inline verdict shown to the user is not a substitute for the persisted run artifact.
 
 **Report the verdict** bounded by horizontal rules. This is the most important output — include a one-sentence why summary explaining the decision in plain language. Every slot reference must include full identity: `(Harness `Model` w/ skill)`.
 

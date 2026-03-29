@@ -10,7 +10,7 @@
 #
 # Results are saved to tests/benchmark/results/
 
-set -uo pipefail
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILL_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -33,6 +33,21 @@ done
 SPEC=$(cat "$SPEC_FILE")
 GIT_SHA=$(git -C "$SKILL_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
+if ! command -v claude >/dev/null 2>&1; then
+    echo "[SKIP] claude CLI is required for the speed benchmark"
+    exit 2
+fi
+if ! command -v npm >/dev/null 2>&1; then
+    echo "[SKIP] npm is required for the speed benchmark"
+    exit 2
+fi
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "[SKIP] python3 is required for the speed benchmark"
+    exit 2
+fi
+
+mkdir -p "$RESULTS_DIR"
+
 echo "========================================"
 echo " Slot Machine Speed Benchmark"
 echo "========================================"
@@ -48,6 +63,8 @@ setup_project() {
     local dir="$1"
     cd "$dir"
     git init -q
+    git config user.name "Slot Machine Benchmark"
+    git config user.email "benchmark@example.com"
     mkdir -p src
     npm init -y > /dev/null 2>&1
     npm install -D typescript vitest @types/node > /dev/null 2>&1
@@ -80,32 +97,49 @@ run_baseline() {
     project_dir=$(mktemp -d)
     setup_project "$project_dir"
 
-    local start end elapsed
+    local start end elapsed status test_count
+    local test_output=""
+    status="OK"
+    test_count=0
     start=$(date +%s)
 
-    claude -p "Implement this in the working directory. Commit your work.
+    if ! (
+        cd "$project_dir"
+        claude -p "Implement this in the working directory. Commit your work.
 
 $SPEC
 
-Working directory: $project_dir
 Test command: npx vitest run" \
-        --allowedTools 'Bash,Read,Write,Edit,Glob,Grep' \
-        --permission-mode bypassPermissions \
-        --output-format stream-json \
-        --max-turns 30 \
-        > /dev/null 2>&1
+            --allowedTools 'Bash,Read,Write,Edit,Glob,Grep' \
+            --permission-mode bypassPermissions \
+            --output-format stream-json \
+            --max-turns 30 \
+            > /dev/null 2>&1
+    ); then
+        status="CLAUDE_FAILED"
+    fi
 
     end=$(date +%s)
     elapsed=$((end - start))
 
-    # Verify tests pass
-    local test_count=0
-    if cd "$project_dir" && npx vitest run 2>&1 | grep -q "passed"; then
-        test_count=$(cd "$project_dir" && npx vitest run 2>&1 | grep -oE '[0-9]+ passed' | grep -oE '[0-9]+' || echo "0")
+    if [ ! -f "$project_dir/src/scheduler.ts" ] || [ ! -f "$project_dir/src/scheduler.test.ts" ]; then
+        status="MISSING_FILES"
+    fi
+
+    if [ "$status" = "OK" ]; then
+        if test_output=$(cd "$project_dir" && npx vitest run 2>&1); then
+            test_count=$(echo "$test_output" | grep "^      Tests" | grep -oE '[0-9]+ passed' | grep -oE '[0-9]+' || true)
+            test_count="${test_count:-0}"
+            if [ "$test_count" -eq 0 ]; then
+                status="NO_TESTS"
+            fi
+        else
+            status="TESTS_FAILED"
+        fi
     fi
 
     rm -rf "$project_dir"
-    echo "$elapsed:$test_count"
+    echo "$elapsed:$test_count:$status"
 }
 
 # Run slot-machine (3 slots, coding profile)
@@ -114,41 +148,60 @@ run_slot_machine() {
     project_dir=$(mktemp -d)
     setup_project "$project_dir"
 
-    local start end elapsed
+    local start end elapsed status test_count verdict
+    local test_output=""
+    status="OK"
+    test_count=0
+    verdict="UNKNOWN"
     start=$(date +%s)
 
-    claude -p "/slot-machine with 3 slots
+    if ! (
+        cd "$project_dir"
+        claude -p "/slot-machine with 3 slots
 
 Spec: $SPEC" \
-        --allowedTools 'all' \
-        --permission-mode bypassPermissions \
-        --output-format stream-json \
-        --max-turns 100 \
-        --add-dir "$SKILL_DIR" \
-        > "$project_dir/.slot-machine-transcript.jsonl" 2>&1
+            --allowedTools 'all' \
+            --permission-mode bypassPermissions \
+            --output-format stream-json \
+            --max-turns 100 \
+            --add-dir "$SKILL_DIR" \
+            > "$project_dir/.slot-machine-transcript.jsonl" 2>&1
+    ); then
+        status="CLAUDE_FAILED"
+    fi
 
     end=$(date +%s)
     elapsed=$((end - start))
 
-    # Extract phase timing from transcript if possible
-    local impl_time=0 review_time=0 judge_time=0
-    # Phase timing extraction is best-effort from the transcript
-    # The orchestrator reports phase boundaries in its text output
-
-    # Verify tests pass
-    local test_count=0
-    if cd "$project_dir" && npx vitest run 2>&1 | grep -q "passed"; then
-        test_count=$(cd "$project_dir" && npx vitest run 2>&1 | grep -oE '[0-9]+ passed' | grep -oE '[0-9]+' || echo "0")
+    if [ ! -s "$project_dir/.slot-machine-transcript.jsonl" ]; then
+        status="MISSING_TRANSCRIPT"
     fi
 
-    # Check for verdict in result.json
-    local verdict="UNKNOWN"
+    if [ ! -f "$project_dir/src/scheduler.ts" ] || [ ! -f "$project_dir/src/scheduler.test.ts" ]; then
+        status="MISSING_FILES"
+    fi
+
+    if [ "$status" = "OK" ]; then
+        if test_output=$(cd "$project_dir" && npx vitest run 2>&1); then
+            test_count=$(echo "$test_output" | grep "^      Tests" | grep -oE '[0-9]+ passed' | grep -oE '[0-9]+' || true)
+            test_count="${test_count:-0}"
+            if [ "$test_count" -eq 0 ]; then
+                status="NO_TESTS"
+            fi
+        else
+            status="TESTS_FAILED"
+        fi
+    fi
+
     if [ -f "$project_dir/.slot-machine/runs/latest/result.json" ]; then
         verdict=$(python3 -c "import json; print(json.load(open('$project_dir/.slot-machine/runs/latest/result.json')).get('verdict', 'UNKNOWN'))" 2>/dev/null || echo "UNKNOWN")
     fi
+    if [ "$verdict" = "UNKNOWN" ] && [ "$status" = "OK" ]; then
+        status="MISSING_VERDICT"
+    fi
 
     rm -rf "$project_dir"
-    echo "$elapsed:$test_count:$verdict"
+    echo "$elapsed:$test_count:$verdict:$status"
 }
 
 # Collect results across runs
@@ -163,14 +216,23 @@ for run in $(seq 1 "$RUNS"); do
 
     echo -n "  Baseline (single agent)... "
     result=$(run_baseline)
-    b_time="${result%%:*}"
-    b_tests="${result##*:}"
+    IFS=':' read -r b_time b_tests b_status <<< "$result"
+    if [ "$b_status" != "OK" ]; then
+        echo "FAILED (${b_status})"
+        echo "Benchmark aborted: baseline run is incomplete."
+        exit 1
+    fi
     baseline_times+=("$b_time")
     echo "${b_time}s (${b_tests} tests)"
 
     echo -n "  Slot Machine (3 slots)... "
     result=$(run_slot_machine)
-    IFS=':' read -r sm_time sm_tests sm_verdict <<< "$result"
+    IFS=':' read -r sm_time sm_tests sm_verdict sm_status <<< "$result"
+    if [ "$sm_status" != "OK" ]; then
+        echo "FAILED (${sm_status})"
+        echo "Benchmark aborted: slot-machine run is incomplete."
+        exit 1
+    fi
     sm_times+=("$sm_time")
     echo "${sm_time}s (${sm_tests} tests, ${sm_verdict})"
 

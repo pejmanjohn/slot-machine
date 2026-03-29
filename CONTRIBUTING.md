@@ -21,12 +21,15 @@ If your change touches profiles (`profiles/*/`) or SKILL.md workflow logic, also
 ./tests/run-tests.sh --smoke
 ```
 
+The implementer, reviewer, and judge smoke tests now execute real headless `claude -p` assertions. The remaining higher-tier E2E/reviewer-accuracy scripts still skip explicitly until they are wired the same way.
+The happy-path E2E test now also runs for real; the remaining skipped higher-tier checks are `test-e2e-edge-cases.sh` and `test-reviewer-accuracy.sh`.
+
 ## What the Tests Check
 
 - **Contracts** — Variable references in prompts match SKILL.md definitions, status/verdict values are consistent across files, required sections exist
-- **Smoke** — Each agent phase (implementer, reviewer, judge) produces valid output structure
+- **Smoke** — Real implementer/reviewer/judge headless checks
 - **Benchmark** — Speed tests comparing slot-machine vs baseline single-agent runs
-- **E2E** — Full slot-machine run on a tiny spec produces a working result
+- **E2E** — Real happy-path headless end-to-end coverage plus explicit skips for the still-unwired edge-case path
 
 ## Guidelines
 
