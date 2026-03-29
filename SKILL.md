@@ -61,7 +61,7 @@ Check for config in project's `CLAUDE.md`, `AGENTS.md`, or equivalent. User can 
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `slots` | 5 | Number of parallel attempts |
+| `slots` | 3 | Number of parallel attempts |
 | `approach_hints` | true | Give each slot a different architectural direction |
 | `auto_synthesize` | true | Allow judge to combine elements from multiple slots |
 | `max_retries` | 1 | Re-run failed slots (0 = no retry) |

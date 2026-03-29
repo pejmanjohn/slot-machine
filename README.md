@@ -297,7 +297,7 @@ That's what goes into your codebase. Not the first thing, not the prettiest — 
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `slots` | 5 | Number of parallel attempts |
+| `slots` | 3 | Number of parallel attempts |
 | `approach_hints` | true | Different architectural direction per slot |
 | `auto_synthesize` | true | Allow combining best elements from multiple slots |
 | `max_retries` | 1 | Re-run failed slots (0 = no retry) |
