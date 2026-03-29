@@ -12,7 +12,7 @@ Run N independent implementations of the same feature in parallel. Each gets rev
 ```
 /slot-machine with 3 slots — Implement the payment webhook handler from PLAN.md
 ```
-Three agents implement the same spec independently, each steered toward a different architecture. Independent reviewers hunt for bugs in each. A judge picks the winner — or synthesizes the best parts of several.
+Three agents implement the same spec independently, each steered toward a different emphasis such as simplicity, robustness, or functional style. Independent reviewers hunt for bugs in each. A judge picks the winner — or synthesizes the best parts of several.
 
 **Assign a different skill to each slot:**
 ```
@@ -49,7 +49,7 @@ Slot-machine dispatches a pipeline of specialized agents. Each role is isolated 
 
 | Step | Agent | What it does |
 |------|-------|-------------|
-| **Implement** | N implementers (parallel) | Each builds the full spec independently in an isolated git worktree. Different slots can use different skills or even different AI systems (Codex). |
+| **Implement** | N implementers (parallel) | Each builds the full spec independently in an isolated git worktree. Different slots can use different skills or even different agent harnesses (Codex). |
 | **Review** | N reviewers (parallel) | Each reviews one implementation blind — spec compliance, adversarial bug hunting with file:line evidence, test gap analysis. |
 | **Judge** | 1 judge | Reads all reviewer scorecards, does targeted code inspection where reviewers disagree, and issues a verdict: **PICK** the winner, **SYNTHESIZE** the best elements, or **NONE_ADEQUATE**. |
 | **Synthesize** | 1 synthesizer (if needed) | Takes one slot as base, ports specific elements from donors per the judge's plan, verifies coherence, runs the full test suite. |
@@ -61,13 +61,13 @@ The key insight: the agent that implements never evaluates. The agent that revie
 
 **Plugin:**
 ```
-/plugin marketplace add pejman/slot-machine
+/plugin marketplace add pejmanjohn/slot-machine
 /plugin install slot-machine@slot-machine
 ```
 
 **Manual:**
 ```bash
-git clone https://github.com/pejman/slot-machine.git ~/.claude/skills/slot-machine
+git clone https://github.com/pejmanjohn/slot-machine.git ~/.claude/skills/slot-machine
 ```
 
 ## See It Work
@@ -85,7 +85,7 @@ Feature: TaskScheduler
 Slots: 3 | Simplest approach (claude-opus-4-6), Robustness (claude-opus-4-6), Functional (claude-opus-4-6)
 ```
 
-Three agents implement the full spec independently, each in an isolated worktree with a different architectural direction. Then independent reviewers inspect each one — not a rubber stamp, an adversarial review with evidence:
+Three agents implement the full spec independently, each in an isolated worktree with a different implementation emphasis. Then independent reviewers inspect each one — not a rubber stamp, an adversarial review with evidence:
 
 ```
 Slot 1 Review:
@@ -179,7 +179,7 @@ The skill also triggers on natural language: "slot-machine this", "best-of-N", "
 
 ## Cross-Model Runs
 
-Run the same spec on different AI systems and pick the best result:
+Run the same spec across different agent harnesses and pick the best result:
 
 ```
 /slot-machine with /ce:work, /ce:work + codex, and codex
@@ -223,7 +223,7 @@ slot-machine-slots:
 Slot-machine auto-detects whether your spec is a coding task or a writing task and loads the right profile. Each profile has its own approach hints, reviewer criteria, and synthesis strategy.
 
 **Coding profile** (`isolation: worktree`):
-- Hints steer toward different architectures: simplicity, robustness, functional, idiomatic API, extensibility
+- Hints steer toward different implementation emphases: simplicity, robustness, functional style, idiomatic APIs, extensibility
 - Reviewer checks spec compliance, hunts bugs with file:line evidence, assesses test coverage
 - Pre-checks run your test suite before review
 - Each slot gets an isolated git worktree
@@ -404,7 +404,7 @@ We tried that. Five parallel implementations, no skill, Claude doing what it nat
 
 **No synthesis.** When no single implementation is best at everything — one has the cleanest code, another has the best tests — Claude just picks one and loses the other's strengths. Slot-machine's judge can call SYNTHESIZE: combine the best code from one slot with the best tests from another.
 
-**No diversity.** Without guidance, Claude produces similar implementations each time. Same architecture, same patterns, same blind spots. Slot-machine creates diversity at three levels: architectural hints steer each slot toward a different design (simplicity vs robustness vs functional), skills assign different methodologies per slot (TDD for one, CE patterns for another), and cross-model dispatch runs some slots on entirely different AI systems (Codex finds bugs Claude doesn't, and vice versa).
+**No diversity.** Without guidance, Claude produces similar implementations each time. Same patterns, same blind spots. Slot-machine creates diversity at three levels: hints steer each slot toward a different implementation emphasis (simplicity vs robustness vs functional style), skills assign different methodologies per slot (TDD for one, CE patterns for another), and cross-model dispatch runs some slots on entirely different agent harnesses (Codex finds bugs Claude doesn't, and vice versa).
 
 **No isolation.** Without worktree management, parallel implementations write to the same files and clobber each other. Slot-machine gives each slot its own git worktree — fully isolated workspaces where implementations can't interfere. The winner's branch merges cleanly.
 
