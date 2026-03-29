@@ -103,6 +103,7 @@ Working directory: $SLOT_DIR
 Test command: npx vitest run" \
             --allowedTools 'Bash,Read,Write,Edit,Glob,Grep' \
             --permission-mode bypassPermissions \
+            --verbose \
             --output-format stream-json \
             --max-turns 30 \
             > "$SLOT_DIR/.transcript.jsonl" 2>&1
