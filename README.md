@@ -59,15 +59,26 @@ The key insight: the agent that implements never evaluates. The agent that revie
 
 ## Install
 
-**Plugin:**
-```
-/plugin marketplace add pejmanjohn/slot-machine
-/plugin install slot-machine@slot-machine
-```
+This repo is currently distributed as a standalone Claude Code skill, not a plugin.
 
-**Manual:**
+Install it into your Claude Code user skills directory:
+
 ```bash
 git clone https://github.com/pejmanjohn/slot-machine.git ~/.claude/skills/slot-machine
+```
+
+If `~/.claude/skills` does not exist yet, create it first.
+
+Then invoke it from any Claude Code session:
+
+```text
+/slot-machine with 3 slots — Implement the payment webhook handler from PLAN.md
+```
+
+To update later:
+
+```bash
+git -C ~/.claude/skills/slot-machine pull
 ```
 
 ## See It Work
