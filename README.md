@@ -57,23 +57,18 @@ Slot-machine dispatches a pipeline of specialized agents. Each role is isolated 
 
 The key insight: the agent that implements never evaluates. The agent that reviews never sees alternatives. The judge only sees structured scorecards, not raw code (unless it needs to inspect a specific disagreement). This separation prevents the bias that happens when one agent does everything.
 
-### Why Not Just Ask Claude to Do It 5 Times?
+## Install
 
-We tried that. Five parallel implementations, no skill, Claude doing what it naturally does. The parallelism worked fine. Five things broke:
+**Plugin:**
+```
+/plugin marketplace add pejman/slot-machine
+/plugin install slot-machine@slot-machine
+```
 
-**Self-review finds nothing.** The same agent that wrote the code reviewed it. In our benchmark, self-review found 0 bugs. Independent reviewers found 3 — including a crash-severity TypeError. You can't objectively evaluate your own work.
-
-**No structured comparison.** Without a rubric, Claude made an ad hoc "this one looks best" decision. No spec compliance check, no severity categorization, no file:line evidence. The judge in slot-machine reads structured scorecards with ranked findings — not vibes.
-
-**No synthesis.** When no single implementation is best at everything — one has the cleanest code, another has the best tests — Claude just picks one and loses the other's strengths. Slot-machine's judge can call SYNTHESIZE: combine the best code from one slot with the best tests from another.
-
-**No diversity.** Without guidance, Claude produces similar implementations each time. Same architecture, same patterns, same blind spots. Slot-machine creates diversity at three levels: architectural hints steer each slot toward a different design (simplicity vs robustness vs functional), skills assign different methodologies per slot (TDD for one, CE patterns for another), and cross-model dispatch runs some slots on entirely different AI systems (Codex finds bugs Claude doesn't, and vice versa).
-
-**No isolation.** Without worktree management, parallel implementations write to the same files and clobber each other. Slot-machine gives each slot its own git worktree — fully isolated workspaces where implementations can't interfere. The winner's branch merges cleanly.
-
-**No trail.** Without the skill, the comparison is ephemeral — gone when the conversation ends. Slot-machine saves reviewer scorecards, judge verdict, and result artifacts to `.slot-machine/runs/` for post-hoc inspection.
-
-The hard part isn't running N agents. It's evaluating their output honestly.
+**Manual:**
+```bash
+git clone https://github.com/pejman/slot-machine.git ~/.claude/skills/slot-machine
+```
 
 ## See It Work
 
@@ -163,19 +158,6 @@ The synthesizer agent starts with one slot as the base, ports specific elements 
 | **Confidence** | "Looks good to me" | HIGH — judge verified via targeted code inspection |
 | **Design alternatives** | 0 (never explored) | 2 rejected alternatives with documented reasons |
 | **Cross-model** | N/A | Claude vs Codex on same spec — different models find different bugs |
-
-## Install
-
-**Plugin:**
-```
-/plugin marketplace add pejman/slot-machine
-/plugin install slot-machine@slot-machine
-```
-
-**Manual:**
-```bash
-git clone https://github.com/pejman/slot-machine.git ~/.claude/skills/slot-machine
-```
 
 ## Usage
 
@@ -411,6 +393,24 @@ slot-machine-profile: my-profile
 ```
 
 All prompts receive [universal variables](SKILL.md#universal-variables) (`{{SPEC}}`, `{{PROJECT_CONTEXT}}`, `{{APPROACH_HINT}}`, etc.) — your prompts just need to reference them.
+
+## Why Not Just Ask Claude to Do It 5 Times?
+
+We tried that. Five parallel implementations, no skill, Claude doing what it naturally does. The parallelism worked fine. Six things broke:
+
+**Self-review finds nothing.** The same agent that wrote the code reviewed it. In our benchmark, self-review found 0 bugs. Independent reviewers found 3 — including a crash-severity TypeError. You can't objectively evaluate your own work.
+
+**No structured comparison.** Without a rubric, Claude made an ad hoc "this one looks best" decision. No spec compliance check, no severity categorization, no file:line evidence. The judge in slot-machine reads structured scorecards with ranked findings — not vibes.
+
+**No synthesis.** When no single implementation is best at everything — one has the cleanest code, another has the best tests — Claude just picks one and loses the other's strengths. Slot-machine's judge can call SYNTHESIZE: combine the best code from one slot with the best tests from another.
+
+**No diversity.** Without guidance, Claude produces similar implementations each time. Same architecture, same patterns, same blind spots. Slot-machine creates diversity at three levels: architectural hints steer each slot toward a different design (simplicity vs robustness vs functional), skills assign different methodologies per slot (TDD for one, CE patterns for another), and cross-model dispatch runs some slots on entirely different AI systems (Codex finds bugs Claude doesn't, and vice versa).
+
+**No isolation.** Without worktree management, parallel implementations write to the same files and clobber each other. Slot-machine gives each slot its own git worktree — fully isolated workspaces where implementations can't interfere. The winner's branch merges cleanly.
+
+**No trail.** Without the skill, the comparison is ephemeral — gone when the conversation ends. Slot-machine saves reviewer scorecards, judge verdict, and result artifacts to `.slot-machine/runs/` for post-hoc inspection.
+
+The hard part isn't running N agents. It's evaluating their output honestly.
 
 ## This is NOT Standard Parallel Agents
 
