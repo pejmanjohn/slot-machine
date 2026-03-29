@@ -1,5 +1,6 @@
 # Test artifacts
 tests/tmp/
+tests/e2e-results/
 *.ndjson
 
 # Implementation files from test runs (not part of the skill)
