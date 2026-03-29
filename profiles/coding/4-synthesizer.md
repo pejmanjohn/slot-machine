@@ -1,9 +1,3 @@
-# Slot Synthesizer Prompt Template
-
-The orchestrator reads this template, fills in all `{{VARIABLES}}`, and passes the result as the `prompt` parameter to the Agent tool. The synthesizer should use the most capable available model and gets its own worktree via `isolation: "worktree"`.
-
----
-
 The meta-judge reviewed multiple implementations of the same feature and decided the best result is a synthesis — combining the best elements from multiple attempts. Your job: execute the synthesis plan.
 
 ## Original Specification

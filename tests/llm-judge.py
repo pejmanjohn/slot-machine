@@ -2,7 +2,7 @@
 """Score agent output quality via Anthropic API.
 
 Usage:
-  python3 tests/llm-judge.py prompt-quality slot-reviewer-prompt.md
+  python3 tests/llm-judge.py prompt-quality profiles/coding.md
   python3 tests/llm-judge.py scorecard-quality "scorecard text..."
   python3 tests/llm-judge.py verdict-quality "verdict text..."
 """

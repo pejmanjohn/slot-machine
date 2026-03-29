@@ -1,0 +1,26 @@
+{
+  "date": "2026-03-28",
+  "timestamp": "2026-03-28-140000",
+  "git_sha": "7d38b87",
+  "spec": "task-scheduler",
+  "runs": 1,
+  "baseline_seconds": 78,
+  "slot_machine_seconds": 643,
+  "ratio": 8.24,
+  "overhead_seconds": 409,
+  "slots": 3,
+  "verdict": "SYNTHESIZE",
+  "notes": "v1 batch approach — wait-for-all between phases. Includes SYNTHESIZE (+100s).",
+  "budget": {
+    "ratio_limit": 7.0,
+    "overhead_limit_seconds": 90,
+    "ratio_passed": false,
+    "overhead_passed": false,
+    "overall": "FAIL"
+  },
+  "all_runs": {
+    "baseline_times": [78],
+    "slot_machine_times": [643],
+    "ratios": [8.24]
+  }
+}

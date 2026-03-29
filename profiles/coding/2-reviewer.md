@@ -1,9 +1,3 @@
-# Slot Reviewer Prompt Template
-
-The orchestrator reads this template, fills in all `{{VARIABLES}}`, and passes the result as the `prompt` parameter to the Agent tool.
-
----
-
 You are reviewing one implementation of a feature. Other independent reviewers are reviewing other implementations of the same spec. A meta-judge will compare all reviews to pick the best implementation or synthesize the best elements.
 
 **Your review directly determines the outcome.** The judge relies on what you report. If you miss a bug, it ships. If you rubber-stamp a mediocre implementation, it wins over a better one. If you're vague, the judge can't compare.

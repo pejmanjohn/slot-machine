@@ -1,23 +1,23 @@
 ---
 name: slot-machine
-description: Use when a well-specified feature has meaningful design choices and you want to maximize implementation quality by comparing multiple independent attempts. Triggers on "slot-machine", "best-of-N", "pull the lever", "parallel implementations", or when quality matters more than speed and the spec is clear enough for independent work.
+description: Use when a well-specified task has meaningful design choices and you want to maximize quality by comparing multiple independent attempts. Works for coding, writing, and custom task types. Triggers on "slot-machine", "best-of-N", "pull the lever", "parallel implementations", or when quality matters more than speed and the spec is clear enough for independent work.
 ---
 
 # Slot Machine
 
-**Best-of-N parallel implementation for coding agents.**
+**Best-of-N parallel implementation for any task type.**
 
-Run N independent implementations of the same spec in parallel worktrees. Review each. Pick the best — or synthesize the best elements into a single winner.
+Run N independent attempts at the same spec in parallel. Review each. Pick the best — or synthesize the best elements into a single winner.
 
 **Core principle:** LLMs are probabilistic. More attempts = better outcomes. Trade compute for quality.
 
-**Announce at start:** "I'm using the slot-machine skill to run N parallel implementations."
+**Announce at start:** "I'm using the slot-machine skill ({profile_name} profile) to run N parallel implementations."
 
 ## What This Is NOT
 
 Standard multi-agent patterns split DIFFERENT tasks across agents (frontend, backend, tests in parallel). Every major tool does this — it's table stakes.
 
-**Slot-machine gives the SAME spec to N agents and compares their FULL implementations.** The value isn't parallelism — it's competition and selection. Each slot is an independent attempt at solving the same problem, not a piece of a divided workload.
+**Slot-machine gives the SAME spec to N agents and compares their FULL attempts.** The value isn't parallelism — it's competition and selection. Each slot is an independent attempt at the same task, not a piece of a divided workload. This applies to any task type — coding, writing, or custom profiles.
 
 If you want to split a plan into parallel tasks, use **superpowers:dispatching-parallel-agents** instead.
 
@@ -61,21 +61,184 @@ Check for config in project's `CLAUDE.md`, `AGENTS.md`, or equivalent. User can 
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `slots` | 5 | Number of parallel attempts |
+| `slots` | 3 | Number of parallel attempts |
 | `approach_hints` | true | Give each slot a different architectural direction |
 | `auto_synthesize` | true | Allow judge to combine elements from multiple slots |
 | `max_retries` | 1 | Re-run failed slots (0 = no retry) |
 | `cleanup` | true | Delete worktrees after completion |
-| `implementer_model` | sonnet | Model for implementer subagents |
-| `reviewer_model` | sonnet | Model for reviewer subagents |
-| `judge_model` | opus | Model for judge subagent |
-| `synthesizer_model` | opus | Model for synthesizer subagent |
+| `quiet` | false | Suppress progress tables — only show final verdict + output path. For autonomous loops. |
+| `implementer_model` | inherit | Model for implementer subagents (inherits from session if not set) |
+| `reviewer_model` | inherit | Model for reviewer subagents (inherits from session if not set) |
+| `judge_model` | inherit | Model for judge subagent (inherits from session if not set) |
+| `synthesizer_model` | inherit | Model for synthesizer subagent (inherits from session if not set) |
+
+## Profile Loading
+
+Profiles define the task-specific content for a slot-machine run: approach hints, agent prompts, isolation strategy, and pre-check commands. SKILL.md is a domain-agnostic orchestration engine — all task-specific content comes from the active profile.
+
+### Profile Discovery (order of precedence)
+
+1. **Explicit:** user says `--profile X` or `profile: X`
+2. **Project default:** `CLAUDE.md` sets `slot-machine-profile: X`
+3. **Local:** `./profiles/` folders in the project
+4. **User:** `~/.slot-machine/profiles/` (community or personal profiles)
+5. **Skill:** `profiles/` in the slot-machine skill directory (the built-in profiles)
+6. **Fallback:** `coding`
+
+### Profile Selection Logic
+
+- If explicit or project-configured → use it
+- If not → auto-detect between coding/writing from spec signals:
+  - **Coding signals:** implement, build, create, fix, refactor; references to tests, APIs, functions
+  - **Writing signals:** write, draft, compose, describe; references to audience, tone, structure
+- If not confident → ask one question: "This spec could be a coding task or a writing task. Which profile should I use?"
+
+### Profile Inheritance Resolution
+
+- If profile has `extends: X`, read base profile X first
+- Overlay the extending profile's files on top
+- Files present in extending profile's folder replace base files entirely
+- Missing files are inherited from the base folder
+- Frontmatter fields override individually
+- Max one level of inheritance
+
+### Universal Variables
+
+SKILL.md injects these variables into ALL profile prompts. If a variable isn't relevant for the active profile (e.g., `{{PRE_CHECK_RESULTS}}` for writing), pass an empty string.
+
+| Variable | Description |
+|----------|-------------|
+| `{{SPEC}}` | Full text of the spec/brief |
+| `{{APPROACH_HINT}}` | The hint assigned to this slot |
+| `{{PROJECT_CONTEXT}}` | README, architecture notes, CLAUDE.md conventions, reference materials |
+| `{{SLOT_NUMBER}}` | This slot's number |
+| `{{PRE_CHECK_RESULTS}}` | Output from pre-check commands (empty string if `pre_checks` is null) |
+| `{{IMPLEMENTER_REPORT}}` | The implementer's status report |
+| `{{WORKTREE_PATH}}` | Path to this slot's worktree or output file |
+| `{{ALL_SCORECARDS}}` | All reviewer scorecards concatenated |
+| `{{WORKTREE_PATHS}}` | List of all slot worktree/output paths |
+| `{{SLOT_COUNT}}` | Number of successful slots |
+| `{{SYNTHESIS_PLAN}}` | The judge's synthesis plan |
+| `{{BASE_SLOT_PATH}}` | The worktree/output path of the base slot |
+| `{{APPROACH_HINT_USED}}` | The approach hint given to the implementer (used in reviewer context) |
+| `{{TEST_COMMAND}}` | How to run the test suite (empty string if not applicable) |
+
+When filling `{{TEST_COMMAND}}` for Python repos, prefer `python3 -m pytest ...` unless the project already standardizes on another command. Do not assume a bare `python` executable exists.
+
+## Slot Definitions
+
+Slots can be configured per-slot instead of using the same profile implementer for all. Two axes compose with `+`:
+
+- **Skills** (`/superpowers:test-driven-development`, `/ce:work`) — methodology guidance, slash-prefixed. Injected into the prompt of whatever harness runs the slot.
+- **Harnesses** (`codex`, `gemini`) — which AI system executes. No slash prefix. Determines the dispatch mechanism.
+
+### Slot Definition Sources (precedence)
+
+1. **Inline:** Parsed from the user's command. Slash-prefixed names are skills, bare names are harnesses. `+` composes them. `default` means profile implementer + approach hint.
+2. **CLAUDE.md config:** Read `slot-machine-slots` list if present:
+   ```markdown
+   slot-machine-slots:
+     - /superpowers:test-driven-development
+     - /ce:work
+     - codex
+     - /superpowers:test-driven-development + codex
+     - default
+   ```
+3. **Profile defaults:** If no slot definitions found, all slots use the profile's implementer prompt with randomly assigned approach hints. This is the Phase 1 behavior — unchanged.
+
+### Parsing Rules
+
+- If the user specifies slot definitions AND a slot count higher than the number of definitions, remaining slots get profile defaults with approach hints
+- If the user specifies only slot definitions (no count), the slot count equals the number of definitions
+- Each slot definition is a tuple: `(skill, harness)`:
+  - `default` → `(null, null)` — profile implementer + hint
+  - `/superpowers:test-driven-development` → `("/superpowers:test-driven-development", null)` — Claude Code with skill
+  - `codex` → `(null, "codex")` — Codex with generic prompt
+  - `/superpowers:test-driven-development + codex` → `("/superpowers:test-driven-development", "codex")` — Codex with skill
+
+### Skill Name Translation for External Harnesses
+
+Slot definitions use Claude Code's `/` prefix for skills. External harnesses use different syntax. When dispatching a skill to a non-Claude harness, translate the prefix:
+
+- **Codex:** `/superpowers:test-driven-development` → `$superpowers:test-driven-development` (replace `/` with `$`)
+- **Future harnesses:** follow their native skill invocation syntax
+
+The skill is invoked natively by the target harness — Codex loads its own copy of the skill, not a text summary. The user is responsible for ensuring the skill is installed on the target harness.
+
+### Approach Hints and Skill Slots
+
+Approach hints only apply to `default` slots. Skill-based slots do NOT get approach hints — the skill IS the diversity mechanism. When mixing skill and default slots, assign hints only to the default slots.
+
+### Poor Slot Candidate Warning
+
+If a parsed skill name matches a known multi-agent orchestrator (`/superpowers:subagent-driven-development`, `/superpowers:executing-plans`), warn the user: "⚠ {skill} is a multi-agent orchestrator — running it inside a slot creates nested pipelines (slower, redundant review). Consider using a single-session skill like /superpowers:test-driven-development instead." Do not block — the user may have a reason.
+
+## Skill Discovery
+
+When the user says "all my skills", "all implementation skills", or uses `--discover`, the orchestrator scans for available slot-compatible skills and proposes a slot configuration.
+
+### Trigger Rules (strict — never auto-fires)
+
+| User says | Discovery fires? |
+|-----------|-----------------|
+| `/slot-machine this` | No — default profile + hints |
+| `/slot-machine this with 3 slots` | No — default hints |
+| `/slot-machine this with /superpowers:test-driven-development and codex` | No — explicit list |
+| `/slot-machine this with all my skills` | **Yes** |
+| `/slot-machine this using all implementation skills` | **Yes** |
+| `/slot-machine --discover` | **Yes** |
+
+Discovery ONLY fires on explicit "all my/implementation skills" language or `--discover`. Never as a suggestion. Never as a default.
+
+### Detection Heuristic
+
+1. Read skill descriptions from the system prompt
+2. Filter by signals:
+   - **Include:** "implement", "build", "execute plan", "write code", "development workflow"
+   - **Exclude:** "review", "deploy", "ship", "test-only", "audit", "monitor", "debug"
+3. Filter out known poor candidates: `/superpowers:subagent-driven-development`, `/superpowers:executing-plans`
+4. Check for external harnesses: run `which codex`, `which gemini` via Bash
+5. Propose the filtered list to the user
+
+### First-Time Flow
+
+```
+I scanned your installed skills and detected these slot-compatible workflows:
+
+  1. /superpowers:test-driven-development — test-first development
+  2. /ce:work — pattern-matching execution
+  3. codex — OpenAI Codex (external harness)
+
+Use all 3 as slots? Or adjust?
+```
+
+User confirms or edits. Save selection to `~/.slot-machine/config.md`:
+
+```markdown
+## Discovered Implementation Skills
+- /superpowers:test-driven-development
+- /ce:work
+- codex
+```
+
+### Subsequent Runs
+
+"All my skills" loads the saved list without re-scanning. User can re-trigger a fresh scan with `--discover`.
 
 ## The Process
 
 ### Phase 1: Setup
 
-1. **Validate the spec.** The spec (plan, requirements doc, or inline description) must be concrete enough for independent implementation. If ambiguous — stop and ask for clarification before spending compute.
+0. **Load profile.** Follow the [Profile Loading](#profile-loading) section to find the active profile folder and read `profile.md` from it for config. Report to user: "Using profile: {profile_name}"
+
+1. **Parse slot definitions.** Check for slot definitions in precedence order: (1) inline in the user's command, (2) `slot-machine-slots` in CLAUDE.md, (3) fall back to profile defaults. Record the slot list — each slot is `(skill, harness)` or `default`. Check harness availability (see below).
+
+   **Check harness availability and detect model.** For each slot that specifies a harness:
+   - `codex`: Run `which codex` via Bash. If not found, warn: 'Codex CLI not found — slot {i} will fall back to Claude Code. Install: `npm install -g @openai/codex`'. Change the slot's harness to `null` (falls back to Claude Code with the same skill guidance if any). If found, read the Codex model version from `~/.codex/config.toml` (look for `model = "..."` line). Record this as the slot's model identifier (e.g., `gpt-5.4`).
+   - **Claude Code slots:** The model is the session model (e.g., `claude-opus-4-6`) or the configured `implementer_model` override.
+   - Future harnesses: same pattern — check binary, read model from config, warn and fall back if missing.
+
+2. **Validate the spec.** The spec (plan, requirements doc, or inline description) must be concrete enough for independent attempts. If ambiguous — stop and ask for clarification before spending compute.
 
    Red flags that mean "not ready":
    - "Something like..." or "maybe we could..."
@@ -83,85 +246,236 @@ Check for config in project's `CLAUDE.md`, `AGENTS.md`, or equivalent. User can 
    - References to external context not provided
    - Contradictory requirements
 
-2. **Gather project context.** Collect what implementers need to understand the codebase:
+3. **Gather project context.** Collect what implementers need:
    - README or architecture docs (if they exist)
-   - Key file descriptions relevant to the feature
-   - Test patterns and how to run tests
+   - Key file descriptions relevant to the task
+   - Test patterns and how to run tests (if applicable)
    - Any CLAUDE.md conventions
+   - Reference materials, style guides, or source material (for writing tasks)
 
-   Keep context focused — don't dump the entire codebase. Implementers should get just enough to orient themselves.
+   Keep context focused — don't dump everything. Implementers should get just enough to orient themselves.
 
-3. **Ensure git repo is ready.** The project MUST be a git repository with at least one commit before Phase 2 can create worktrees. If the directory is not a git repo or has no commits:
+4. **Create run directory.** Create the run storage directory and add `.slot-machine/` to `.gitignore` if not already present:
    ```bash
-   git init && git add -A && git commit -m "initial commit"
+   RUN_DIR=".slot-machine/runs/$(date +%Y-%m-%d)-{feature_slug}"
+   mkdir -p "$RUN_DIR"
+   grep -q '.slot-machine/' .gitignore 2>/dev/null || echo '.slot-machine/' >> .gitignore
    ```
-   Without this, `isolation: "worktree"` on Agent calls will fail and agents will not get isolated workspaces.
+   All artifacts from this run will be saved to `{RUN_DIR}/`.
 
-4. **Verify test baseline.** Run the project's test suite to confirm tests pass BEFORE any implementation. If tests fail now, they'll fail in every slot — stop and fix first.
+5. **Prepare isolation.** Check the profile's `isolation` field:
+   - If `worktree`: The project MUST be a git repository with at least one commit before Phase 2 can create worktrees. If the directory is not a git repo or has no commits:
+     ```bash
+     git init && git add -A && git commit -m "initial commit"
+     ```
+     Without this, `isolation: "worktree"` on Agent calls will fail and agents will not get isolated workspaces.
+   - If `file`: No git repo required. Each slot will write its output to `{RUN_DIR}/slot-{i}.md`.
 
-5. **Assign approach hints.** If `approach_hints` is enabled, randomly assign one hint per slot (without replacement). Each hint steers toward a different architecture — see the [Approach Hints](#approach-hints) section for the full list.
+6. **Run pre-checks (if configured).** Read the active profile's `profile.md` frontmatter for the `pre_checks` field.
+   - If `null` → skip this step.
+   - If set → run the pre-check commands, substituting `{test_command}` with the detected test command. These establish the baseline. If baseline checks fail, stop and fix first.
 
-6. **Report setup to user:**
-   ```
-   🎰 Slot Machine: Pulling the lever with N slots
+7. **Assign approach hints.** If `approach_hints` is enabled, read hints from the active profile's `profile.md`. Randomly assign one hint per slot (without replacement). Each hint steers toward a different approach — the profile defines what diversity means for this task type.
+
+8. **Report setup to user** using this format (top-level markdown, not inside a code block):
+
+   **Slot Machine** — `{profile_name}` profile
+
    Feature: {feature_name}
-   Spec: {spec_source}
-   Baseline: {test_count} tests passing
-   Hints: {list of hint assignments}
-   ```
+   Slots: `{N}` | /ce:work (`claude-opus-4-6`), /ce:work + codex (`gpt-5.4`), codex (`gpt-5.4`), 2x default hints (`claude-opus-4-6`)
+
+   When all slots use profile defaults (no slot definitions):
+
+   Slots: `{N}` | Hints: {hint_1}, {hint_2}, ...
+
+   Formatting rules for ALL orchestrator output (apply throughout Phases 1-4):
+   - Tables MUST be top-level markdown — never indented or inside code blocks
+   - Status values in backticks: `DONE`, `PASS`, `FAIL`, `HIGH`, `MEDIUM`, `LOW`
+   - Profile name and key numbers in backticks
+   - Bold for phase labels and verdicts
+   - No italics anywhere — they de-emphasize in monospace terminals
+   - Verdict section bounded by horizontal rules (`---`) — no blockquotes (they render as dim italics in terminals)
+   - H1 (`#`) for Final Output header only
 
 ### Phase 2: Parallel Implementation
 
-**Dispatch all N implementers in a SINGLE message** using N parallel Agent tool calls. This is critical — all calls must be in one message for true parallel execution.
+**Dispatch all N slots in a SINGLE message** using N parallel Agent tool calls. This is critical — all calls must be in one message for true parallel execution.
+
+Dispatch is uniform: all slots dispatch via the Agent tool regardless of harness. For Codex slots, the subagent wraps `codex exec` internally and returns a standard implementer report. For mixed-harness runs, dispatch is transparent.
+
+---
+
+**Path A — Default slots (no skill, no harness):**
+
+Unchanged from Phase 1. Read `1-implementer.md` from the active profile, fill universal `{{VARIABLES}}`, include the assigned approach hint. Dispatch via Agent tool with `isolation: "worktree"` (or omit if `file` profile).
 
 For each slot i (1 to N), make an Agent tool call with:
 
 | Parameter | Value |
 |-----------|-------|
 | `description` | `"Slot {i}: Implement {feature_name}"` |
-| `isolation` | `"worktree"` |
-| `model` | configured `implementer_model` (default: `"sonnet"`) |
-| `prompt` | Read `./slot-implementer-prompt.md` and fill in all `{{VARIABLES}}` |
+| `isolation` | `"worktree"` if profile isolation is `worktree`; omit if `file` |
+| `model` | Omit unless user configured `implementer_model` — inherits from session by default |
+| `prompt` | Read `implementer.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
 
-The variables to fill in the implementer prompt template:
+The universal variables to fill in the implementer prompt:
 
 | Variable | Source |
 |----------|--------|
 | `{{SPEC}}` | Full text of the spec — paste it, don't make the subagent read a file |
 | `{{APPROACH_HINT}}` | The hint assigned to this slot (or omit section if hints disabled) |
-| `{{PROJECT_CONTEXT}}` | README, architecture notes, CLAUDE.md conventions, key file descriptions gathered in Phase 1. Include any user-specified skill guidance (e.g., "follow TDD", "use existing patterns in src/services/"). |
-| `{{TEST_COMMAND}}` | How to run the test suite in this project |
+| `{{PROJECT_CONTEXT}}` | README, architecture notes, CLAUDE.md conventions, reference materials gathered in Phase 1. Include any user-specified skill guidance. |
+| `{{TEST_COMMAND}}` | How to run the test suite (empty string if not applicable) |
 
-**Worktree fallback:** If `isolation: "worktree"` fails (e.g., git repo not detected, permission issues), fall back to manual worktree creation:
+For Python projects, prefer `python3 -m pytest ...` unless the repo already provides an explicit test command. Do not invent `python -m pytest` on systems that only guarantee `python3`.
+
+**For `file` isolation:** Each slot writes its output to `{RUN_DIR}/slot-{i}.md`. Include this path in the prompt so the implementer knows where to write. No worktrees, no git branches.
+
+**For `worktree` isolation — worktree fallback:** If `isolation: "worktree"` fails (e.g., git repo not detected, permission issues), fall back to manual worktree creation:
 
 ```bash
+mkdir -p .slot-machine/worktrees
 for i in $(seq 1 $N); do
-    git worktree add "../{feature_name}-slot-$i" -b "slot-machine/{feature_name}/slot-$i"
+    git worktree add ".slot-machine/worktrees/slot-$i" -b "slot-machine/{feature_name}/slot-$i"
 done
 ```
 
-Then dispatch implementers WITHOUT `isolation: "worktree"`, pointing each to its worktree directory. Track worktree paths manually for cleanup in Phase 4.
+Then dispatch implementers WITHOUT `isolation: "worktree"`, pointing each to its worktree directory. Track worktree paths manually for cleanup in Phase 4. For `worktree` isolation, save each slot's diff to `{RUN_DIR}/slot-{i}.diff` before cleanup.
+
+---
+
+**Path B — Skill-only slots (e.g., `/superpowers:test-driven-development`, no harness):**
+
+Do NOT read the profile's `1-implementer.md`. Dispatch via Agent tool with this prompt:
+
+```
+You are implementing a feature in an isolated workspace.
+
+IMPORTANT: You MUST invoke the {skill_name} skill using the Skill tool before beginning implementation. Follow its workflow exactly.
+
+Specification:
+{spec}
+
+Project Context:
+{project_context}
+
+After implementation is complete, end with this report format:
+**Status:** [DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT]
+**What I implemented:** [bullet list]
+**Files changed:** [list]
+**Test results:** [if applicable]
+**Concerns (if any):** [issues]
+```
+
+Use `isolation: "worktree"` on the Agent call. Do NOT include an approach hint — the skill is the diversity mechanism.
+
+---
+
+**Path C — Codex slots (harness = `codex`, with or without skill):**
+
+Dispatch via Agent tool — same as Paths A and B. The subagent acts as a thin wrapper that runs `codex exec` and translates the output into a standard implementer report.
+
+Agent tool call:
+
+| Parameter | Value |
+|-----------|-------|
+| `description` | `"Slot {i}: Implement {feature_name} (via Codex)"` |
+| `isolation` | `"worktree"` if profile isolation is `worktree`; omit if `file` |
+| `model` | Omit (the subagent is a wrapper — the actual model is Codex's) |
+| `prompt` | See Codex wrapper prompt below |
+
+**Codex wrapper prompt:**
+
+```
+You are a wrapper agent that dispatches implementation to Codex CLI and reports back.
+
+1. Run `codex exec` in the current directory using the Bash tool. The `--json` flag emits JSONL output — pipe it through the Python parser to extract the final report:
+
+   ```bash
+   codex exec "{If skill specified: '$codex_skill_name\n\n'}Implement this specification. Write all files to the current directory.
+   Do not ask questions or wait for confirmation — make your best judgment and proceed.
+
+   Specification:
+   {spec}
+
+   Project context:
+   {project_context}
+
+   When done, provide a summary of:
+   - What you implemented (bullet list)
+   - Files created or modified
+   - Test results if you wrote tests
+   - Any concerns or issues encountered" \
+     -s workspace-write \
+     -c 'model_reasoning_effort="high"' \
+     --json 2>codex-stderr.txt | python3 -c "
+   import sys, json
+   for line in sys.stdin:
+       line = line.strip()
+       if not line: continue
+       try:
+           obj = json.loads(line)
+           t = obj.get('type', '')
+           if t == 'item.completed' and 'item' in obj:
+               item = obj['item']
+               if item.get('type') == 'agent_message' and item.get('text'):
+                   print(item['text'])
+               elif item.get('type') == 'command_execution':
+                   cmd = item.get('command', '')
+                   if cmd: print(f'[codex ran] {cmd}')
+       except: pass
+   " > codex-report.txt
+   ```
+
+2. After `codex exec` completes:
+   - If non-zero exit code, empty report, or timeout → report Status: BLOCKED with error details
+   - Otherwise → commit files: `git add -A && git commit -m "feat: {feature_name}"`
+
+3. Read `codex-report.txt` and translate to standard report format:
+
+   **Status:** DONE (or DONE_WITH_CONCERNS if Codex reported concerns, BLOCKED if codex failed)
+   **What I implemented:** [from Codex report]
+   **Files changed:** [list files in current directory]
+   **Test results:** [from Codex report]
+   **Concerns (if any):** [from Codex report]
+```
+
+Do NOT include an approach hint — for bare `codex` slots, the prompt has no skill prefix. For `skill + codex` slots, the `$codex_skill_name` prefix triggers native skill loading in Codex.
+
+---
+
+| Slot definition | Dispatch | Prompt | Isolation | Hint? |
+|----------------|----------|--------|-----------|-------|
+| `default` | Agent tool | Profile `1-implementer.md` + hint | Profile setting | Yes |
+| `/superpowers:test-driven-development` | Agent tool | "Invoke {skill} via Skill tool" + spec | worktree | No |
+| `codex` | Agent tool (Codex wrapper) | Wrapper runs `codex exec` with spec | worktree | No |
+| `/superpowers:test-driven-development + codex` | Agent tool (Codex wrapper) | Wrapper runs `codex exec` with `$superpowers:test-driven-development` | worktree | No |
+
+---
 
 **After all agents return**, process each result:
 
 | Result | Action |
 |--------|--------|
-| Agent succeeded, implementer status DONE | Record worktree path + branch from result. Save implementer report. |
-| Agent succeeded, status DONE_WITH_CONCERNS | Record worktree path + branch. Save report including concerns. |
+| Agent succeeded, implementer status DONE | Record worktree path + branch. Save implementer report. Run pre-checks and dispatch reviewer (see Phase 3 streaming). |
+| Agent succeeded, status DONE_WITH_CONCERNS | Record path. Save report including concerns. Run pre-checks and dispatch reviewer. |
 | Agent succeeded, status BLOCKED or NEEDS_CONTEXT | If `max_retries` > 0: re-dispatch with additional context. Else: mark FAILED. |
 | Agent errored/crashed | If `max_retries` > 0: re-dispatch fresh. Else: mark FAILED. |
 
 **Retry handling:** When retrying, dispatch a SINGLE Agent call (not parallel) with the same template but additional context addressing the block. Use a fresh subagent — don't try to continue the failed one.
 
-**Report progress:**
-```
-Implementation complete:
-  ✅ Slot 1: DONE (worktree: {path})
-  ✅ Slot 2: DONE_WITH_CONCERNS (worktree: {path})
-  ❌ Slot 3: FAILED after retry (reason)
-  ✅ Slot 4: DONE (worktree: {path})
-  ✅ Slot 5: DONE (worktree: {path})
-```
+**Report progress** using a top-level markdown table. For writing profiles, show word count. For coding profiles, show test count. Include a one-line summary of each slot's approach (from the hint influence):
+
+**Phase 2:** Implementation — `done`
+
+| Slot | Status | Model | Words/Tests | Approach |
+|------|--------|-------|-------------|----------|
+| 1 | `DONE` | `claude-opus-4-6` | 13 tests | /superpowers:test-driven-development |
+| 2 | `DONE` | `gpt-5.4` | 15 tests | /superpowers:test-driven-development + codex |
+| 3 | `DONE` | `claude-opus-4-6` | 21 tests | /ce:work |
+| 4 | `DONE_WITH_CONCERNS` | `gpt-5.4` | 8 tests | codex |
+
+Do NOT show full implementer reports, self-review findings, or file lists. The table summarizes the essential information. Agent internals are pipeline noise.
 
 **Minimum viable:** At least 2 successful slots needed for meaningful comparison. If fewer than 2 succeed, report to user and recommend: re-run with different slot count, fix spec issues, or manual implementation.
 
@@ -169,78 +483,76 @@ Implementation complete:
 
 **The review/judgment pipeline is the skill's core value.** Baseline testing showed that Claude naturally does parallel dispatch and even synthesis — but it centralizes all evaluation in the orchestrator. This phase delegates evaluation to specialized agents for higher-quality, unbiased assessment.
 
-#### Step 0: Run pre-checks (code-based, before LLM reviewers)
+#### Streaming Review: Review as Slots Complete
 
-Before dispatching reviewers, run code-based checks in each successful slot's worktree. These give reviewers FACTS, not things to discover:
+**Do NOT wait for all implementations to finish before starting reviews.** As each slot completes, immediately run its pre-checks and dispatch its reviewer. This overlaps review work with implementation — a slot that finishes early gets reviewed while slower slots are still implementing.
 
-```bash
-# For each worktree:
-cd {worktree_path}
+**For each slot, as it returns successfully:**
 
-# 1. Test results
-{test_command} 2>&1  # capture pass/fail count
+1. **Run pre-checks** for that slot. If `pre_checks` is `null`, skip and pass an empty string for `{{PRE_CHECK_RESULTS}}`. If set, `cd` into the slot's worktree first, then run the commands. Every pre-check Bash command must start with `cd {worktree_path} &&` — do not assume the shell is already in the right directory.
 
-# 2. Files created/modified
-git diff --name-only HEAD~1
-
-# 3. Line counts
-find src/ tests/ -name "*.py" -exec wc -l {} + 2>/dev/null || true
-
-# 4. Import validation (catch broken imports early)
-python3 -c "import importlib, pathlib; [importlib.import_module(p.stem) for p in pathlib.Path('src').glob('*.py')]" 2>&1 || true
-
-# 5. Linter (if available — non-blocking)
-python3 -m ruff check src/ tests/ 2>/dev/null || python3 -m flake8 src/ tests/ 2>/dev/null || true
-```
-
-Feed ALL pre-check results to the reviewer as `{{PRE_CHECK_RESULTS}}`. The more factual data the reviewer has, the less it has to discover by reading code — and the more it can focus on judgment calls (bugs, design quality) that require reasoning.
-
-Collect results as `{{PRE_CHECK_RESULTS}}` for each slot.
-
-#### Step 1: Dispatch reviewers for all successful slots
-
-**Dispatch all reviewers in a SINGLE message** — one parallel Agent tool call per successful slot.
-
-For each successful slot i, make an Agent tool call with:
+2. **Dispatch its reviewer immediately** — do not wait for other slots. Make an Agent tool call with:
 
 | Parameter | Value |
 |-----------|-------|
 | `description` | `"Review Slot {i} implementation"` |
-| `model` | configured `reviewer_model` (default: `"sonnet"`) |
-| `prompt` | Read `./slot-reviewer-prompt.md` and fill in all `{{VARIABLES}}` |
+| `model` | Omit unless user configured `reviewer_model` — inherits from session by default |
+| `prompt` | Read `reviewer.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
 
-The variables to fill in the reviewer prompt template:
+The universal variables to fill in the reviewer prompt:
 
 | Variable | Source |
 |----------|--------|
 | `{{SPEC}}` | Full text of the original spec |
 | `{{IMPLEMENTER_REPORT}}` | The implementer's status report (what they claim they built) |
-| `{{WORKTREE_PATH}}` | Path to this slot's worktree (from Phase 2 results) |
+| `{{WORKTREE_PATH}}` | Path to this slot's worktree or output file (from Phase 2 results) |
 | `{{SLOT_NUMBER}}` | This slot's number |
-| `{{PRE_CHECK_RESULTS}}` | Test output, file list, line counts from Step 0 |
+| `{{PRE_CHECK_RESULTS}}` | Pre-check output from the step above (empty string if pre_checks is null) |
 | `{{APPROACH_HINT_USED}}` | The approach hint that was given to this slot's implementer |
 
-The reviewer reads actual code in the worktree — it does NOT have `isolation: "worktree"` (it inspects an existing worktree, not its own).
+The reviewer reads actual content in the worktree/output file — it does NOT have `isolation: "worktree"` (it inspects existing work, not its own workspace).
 
-After all reviewers return, collect all reviews.
+**When multiple slots complete close together**, batch their reviewers into a single message for parallel dispatch — this is faster than dispatching one at a time. The key rule is: don't wait for stragglers. If 2 of 3 slots are done, dispatch their 2 reviewers now rather than waiting for the 3rd.
 
-#### Step 2: Dispatch the judge
+**Collect reviews as they return.** Save each reviewer's full scorecard to `{RUN_DIR}/review-{i}.md` immediately when that reviewer finishes. Use Bash to persist the raw reviewer output verbatim. Do NOT postpone these writes until after the summary table, and do NOT replace the saved scorecard with only your orchestrator summary.
+
+**Before dispatching the judge, verify the review artifacts exist.** For every successful slot, confirm `{RUN_DIR}/review-{i}.md` exists and is non-empty. If any scorecard file is missing, write it before continuing. The judge phase is not allowed to start with missing review artifacts.
+
+**Report review results** after all reviews are collected, using a top-level markdown table and standout bullets. Do NOT show full reviewer scorecards, evidence chains, or pass-by-pass analysis — those are pipeline internals the judge uses, not the user.
+
+**Phase 3:** Review — `done`
+
+| Slot | Compliance | Critical | Important | Minor | Verdict |
+|------|------------|----------|-----------|-------|---------|
+| 1 | `PASS` | 0 | 0 | 3 | **Contender** |
+| 2 | `PASS` | 0 | 1 | 2 | **Contender** |
+| 3 | `FAIL` | 1 | 0 | 1 | Eliminated |
+
+**Standout elements:**
+- Slot 1: {the reviewer's top strength for this slot — one line}
+- Slot 2: {the reviewer's top strength}
+
+Extract standout elements from each reviewer's "Strengths" section. Pick the single most notable strength per slot — the one the judge is most likely to care about.
+
+#### Dispatch the judge immediately
+
+As soon as all reviews are collected, dispatch the judge — do not pause for orchestrator reporting. The review report table above can be shown *after* the judge is already running, or combined with the verdict output. The goal is to eliminate idle time between the last review returning and the judge starting.
 
 Make a SINGLE Agent tool call. **The judge MUST use the most capable model** — this is where architectural judgment matters most:
 
 | Parameter | Value |
 |-----------|-------|
 | `description` | `"Judge Slot Machine results for {feature_name}"` |
-| `model` | **`"opus"`** (or configured `judge_model`) — do NOT omit this parameter |
-| `prompt` | Read `./slot-judge-prompt.md` and fill in all `{{VARIABLES}}` |
+| `model` | Omit unless user configured `judge_model` — inherits from session by default. The judge benefits from the most capable model available. |
+| `prompt` | Read `judge.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
 
-The variables to fill in the judge prompt template:
+The universal variables to fill in the judge prompt:
 
 | Variable | Source |
 |----------|--------|
 | `{{SPEC}}` | Full text of the original spec |
 | `{{ALL_SCORECARDS}}` | All reviewer scorecards concatenated |
-| `{{WORKTREE_PATHS}}` | List of all slot worktree paths (for targeted code inspection) |
+| `{{WORKTREE_PATHS}}` | List of all slot worktree/output paths (for targeted inspection) |
 | `{{SLOT_COUNT}}` | Number of successful slots |
 
 The judge returns one of three verdicts:
@@ -248,9 +560,41 @@ The judge returns one of three verdicts:
 - **SYNTHESIZE** — multiple slots have complementary strengths worth combining
 - **NONE_ADEQUATE** — all slots have critical issues
 
+Save the judge's full verdict and reasoning to `{RUN_DIR}/verdict.md` using Bash before composing the user-facing verdict block.
+
+**Before continuing to the final report, verify `{RUN_DIR}/verdict.md` exists and is non-empty.** If the file is missing, write it before proceeding. The inline verdict shown to the user is not a substitute for the persisted run artifact.
+
+**Report the verdict** bounded by horizontal rules. This is the most important output — include a one-sentence why summary explaining the decision in plain language. Every slot reference must include full identity: `(Harness `Model` w/ skill)`.
+
+**Phase 4:** Verdict
+
+---
+
+**Verdict: `SYNTHESIZE`** | Confidence: `HIGH`
+
+Slot 3 has the cleanest code. Slot 1 has the best tests. Combining both produces something better than either.
+
+- **Base:** Slot 3 (Codex `gpt-5.4`) — cleanest implementation, no NaN bug, proper drain waiter pattern
+- **+ Slot 1** (Claude Code `opus-4.6` w/ /ce:work) — 19-test suite: nested scheduling, timing verification, counter tracking
+- **Keep Slot 3:** event-ordering drain test, error propagation test
+
+---
+
+For PICK verdicts:
+
+---
+
+**Verdict: `PICK Slot 2`** (Claude Code `opus-4.6` w/ /ce:work) | Confidence: `HIGH`
+
+Zero critical issues, strongest test coverage (45 tests), correct lock granularity. No synthesis needed — clear winner.
+
+---
+
 ### Phase 4: Resolution
 
 #### If PICK:
+
+**For `worktree` isolation:**
 
 1. The judge named a winning slot. Merge its branch:
    ```bash
@@ -262,6 +606,11 @@ The judge returns one of three verdicts:
 
 3. If tests fail: investigate. The worktree passed tests in isolation — merge conflicts or environment differences are the likely cause. Fix before proceeding.
 
+**For `file` isolation:**
+
+1. Copy the winning slot's output file to the target location specified in the spec (or ask the user where to place it).
+2. Report the winning output to the user.
+
 #### If SYNTHESIZE:
 
 1. The judge produced a concrete synthesis plan (which base slot, what to port from where).
@@ -271,40 +620,42 @@ The judge returns one of three verdicts:
    | Parameter | Value |
    |-----------|-------|
    | `description` | `"Synthesize best elements for {feature_name}"` |
-   | `isolation` | `"worktree"` |
-   | `model` | **`"opus"`** (or configured `synthesizer_model`) — do NOT omit this parameter |
-   | `prompt` | Read `./slot-synthesizer-prompt.md` and fill in all `{{VARIABLES}}` |
+   | `isolation` | `"worktree"` if profile isolation is `worktree`; omit if `file` |
+   | `model` | Omit unless user configured `synthesizer_model` — inherits from session by default |
+   | `prompt` | Read `synthesizer.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
 
-   The variables to fill in the synthesizer prompt template:
+   The universal variables to fill in the synthesizer prompt:
 
    | Variable | Source |
    |----------|--------|
-   | `{{SPEC}}` | Full text of the original spec |
+   | `{{SPEC}}` | Full text of the spec |
    | `{{SYNTHESIS_PLAN}}` | The judge's synthesis plan (which base, what to port) |
-   | `{{WORKTREE_PATHS}}` | All slot worktree paths the synthesizer needs to read from |
-   | `{{BASE_SLOT_PATH}}` | The worktree path of the base slot specifically |
+   | `{{WORKTREE_PATHS}}` | All slot worktree/output paths the synthesizer needs to read from |
+   | `{{BASE_SLOT_PATH}}` | The worktree/output path of the base slot specifically |
 
-3. Run full test suite to verify.
+3. Run full test suite to verify (for `worktree` isolation). For `file` isolation, the synthesizer writes its output to `{RUN_DIR}/output.md` (or appropriate extension). Tell the synthesizer this destination path in its prompt.
 
-4. **Post-synthesis review.** Dispatch ONE reviewer to check the synthesized code for integration issues:
+4. **Post-synthesis review.** Dispatch ONE reviewer to check the synthesized result for integration issues:
 
    | Parameter | Value |
    |-----------|-------|
    | `description` | `"Review synthesis for {feature_name}"` |
-   | `model` | configured `reviewer_model` (default: `"sonnet"`) |
-   | `prompt` | Read `./slot-reviewer-prompt.md` and fill in `{{VARIABLES}}` using the synthesis worktree |
+   | `model` | Omit unless user configured `reviewer_model` — inherits from session by default |
+   | `prompt` | Read `reviewer.md` from the active profile's folder and fill in `{{VARIABLES}}` using the synthesis worktree/output |
 
    The reviewer checks:
    - Coherence: does it read like one person wrote it?
-   - Integration: did porting introduce bugs or naming conflicts?
-   - Coverage: did any tests get dropped during synthesis?
+   - Integration: did porting introduce bugs, naming conflicts, or tonal inconsistencies?
+   - Coverage: did any requirements get dropped during synthesis?
 
-   If the reviewer finds critical issues, fix them before merging. Important/minor issues can be noted in the final report.
+   If the reviewer finds critical issues, fix them before finalizing. Important/minor issues can be noted in the final report.
 
-5. After synthesizer completes, merge its branch:
-   ```bash
-   git merge {synthesis_branch} --no-ff -m "feat: {feature_name} (slot-machine synthesis: slot {base} base + elements from slots {donors})"
-   ```
+5. **Finalize the synthesis:**
+   - For `worktree` isolation: merge the synthesis branch:
+     ```bash
+     git merge {synthesis_branch} --no-ff -m "feat: {feature_name} (slot-machine synthesis: slot {base} base + elements from slots {donors})"
+     ```
+   - For `file` isolation: copy the synthesized output file to the target location.
 
 #### If NONE_ADEQUATE:
 
@@ -318,7 +669,9 @@ The judge returns one of three verdicts:
 
 #### Cleanup
 
-If `cleanup` is true (default), remove all worktrees:
+If `cleanup` is true (default):
+
+**For `worktree` isolation:** remove all worktrees:
 
 ```bash
 # For each worktree path tracked during the run:
@@ -330,19 +683,67 @@ git worktree remove {worktree_path} --force
 git branch -D {branch_name}
 ```
 
-If `cleanup` is false, report worktree locations so the user can inspect them.
+Slot diffs are preserved in `{RUN_DIR}/`.
+
+**For `file` isolation:** Run artifacts are kept permanently — no cleanup needed. All slot outputs, reviews, and the verdict remain in `{RUN_DIR}/`.
+
+If `cleanup` is false, report worktree/output locations so the user can inspect them.
 
 #### Final Report
 
+The final report has three parts: the H1 header, the output content, and the footer line.
+
+**Part 1: H1 header** (use markdown `#` — this is the most visually distinct element):
+
+# Final Output
+
+**Part 2: Output content** — depends on profile isolation and output length:
+
+**For `file` isolation (writing):** Count lines in the final output file. The winner (or synthesis) is saved to `{RUN_DIR}/output.md`.
+- If ≤ 60 lines: show the full content inline after the header.
+- If > 60 lines: show the first ~20 lines, then: `Full output at \`.slot-machine/runs/{date}-{feature}/output.md\``
+
+**For `worktree` isolation (coding):** Show a file change summary table:
+
+# Final Output — merged to `{branch}`
+
+| File | Lines | What |
+|------|-------|------|
+| src/task_queue.py | +142 | TaskQueue class with priority support |
+| tests/test_task_queue.py | +245 | 45 tests including concurrency |
+
+`3` files changed, `474` insertions
+`45` tests passing
+
+**Part 3: Result artifact** — always write a machine-readable JSON file to the run directory:
+
+```bash
+cat > {RUN_DIR}/result.json << RESULT
+{
+  "verdict": "{PICK|SYNTHESIZE|NONE_ADEQUATE}",
+  "winning_slot": {N or null},
+  "confidence": "{HIGH|MEDIUM|LOW}",
+  "slots": {total},
+  "slots_succeeded": {succeeded},
+  "files_changed": [{list}],
+  "tests_passing": {count or null},
+  "run_dir": "{RUN_DIR}"
+}
+RESULT
+
+# Create latest symlink for easy script access
+ln -sfn "$(basename {RUN_DIR})" "$(dirname {RUN_DIR})/latest"
 ```
-🎰 Slot Machine Complete
-Feature: {feature_name}
-Slots: N ({succeeded} succeeded, {failed} failed)
-Verdict: {PICK slot-N | SYNTHESIZE (base + donors) | NONE_ADEQUATE}
-Winner score: {score}/5
-Tests: {count} passing
-Wall clock: {duration}
-```
+
+This is always written, every run. Humans ignore it. Autonomous loops and scripts parse it via `.slot-machine/runs/latest/result.json`.
+
+**Part 4: Footer** — a horizontal rule followed by a one-line summary:
+
+---
+
+**Complete** — `{word_count} words` | `{N} slots` | `{verdict}`
+
+**Quiet mode:** If `quiet: true` is set, suppress all Phase 2-3 progress tables and standout elements. Only output the Phase 4 verdict blockquote, the Final Output section, and the footer. The run directory still has everything for post-hoc inspection.
 
 #### Metrics (optional)
 
@@ -383,40 +784,22 @@ Implementer subagents report one of four statuses in their output:
 
 ## Model Selection
 
-Use the Agent tool's `model` parameter to assign appropriate model tiers:
+By default, all agents inherit the model from your current session. If you're running Opus, every slot gets Opus. If you're running Sonnet, every slot gets Sonnet. This means you always get the quality level you're paying for.
 
-| Role | Default Model | Configurable As | Rationale |
-|------|--------------|-----------------|-----------|
-| Implementer | `"sonnet"` | `implementer_model` | Mechanical implementation work — standard model is sufficient |
-| Reviewer | `"sonnet"` | `reviewer_model` | Structured evaluation against criteria — standard model handles this well |
-| Judge | `"opus"` | `judge_model` | Cross-implementation comparison requires best architectural judgment |
-| Synthesizer | `"opus"` | `synthesizer_model` | Combining code from multiple sources coherently needs strong reasoning |
+To override, set model configs in your project's `CLAUDE.md` or inline. Only pass the `model` parameter to the Agent tool when the user has explicitly configured an override — otherwise omit it so the session model is inherited.
 
-The user can override any of these in config or inline. For cost-sensitive runs, `"sonnet"` for all roles is viable. For maximum quality, `"opus"` everywhere.
+| Role | Default | Configurable As | When to override |
+|------|---------|-----------------|------------------|
+| Implementer | inherit | `implementer_model` | Downgrade to save cost on mechanical tasks |
+| Reviewer | inherit | `reviewer_model` | Downgrade to save cost on structured evaluation |
+| Judge | inherit | `judge_model` | Upgrade if running a cheaper session model |
+| Synthesizer | inherit | `synthesizer_model` | Upgrade if running a cheaper session model |
 
 ## Approach Hints
 
-When `approach_hints` is enabled (default: true), each slot gets a different architectural direction to encourage genuinely divergent implementations. Assign randomly without replacement.
+Approach hints are defined in the active profile's `profile.md`. See `profiles/coding/0-profile.md` for the coding defaults and `profiles/writing/0-profile.md` for writing defaults.
 
-The goal is structural diversity — different designs, not different priorities on the same design. Each hint steers toward a distinct architecture so the judge sees real alternatives.
-
-**Default hints (for N ≤ 5):**
-
-1. "Use the simplest possible approach — single class, minimal API surface, fewest lines of code that fully satisfy the spec. When in doubt, do less."
-2. "Design for robustness — thorough input validation, defensive error handling, edge case coverage. Think about what happens with invalid inputs, concurrent access, and resource exhaustion."
-3. "Explore a functional or data-oriented approach — use the language's data structures (dataclasses in Python, plain objects/discriminated unions in TS, structs in Go, enums in Rust) instead of complex class hierarchies. Prefer immutability and composition over inheritance."
-4. "Design around an idiomatic API — context managers in Python, builder pattern in TS/Rust, functional options in Go. The API should feel natural to developers in the project's language."
-5. "Build for extensibility — use protocols, interfaces, dependency injection, or the strategy pattern. Make it easy to swap implementations or add new behavior without modifying existing code."
-
-**Extended hints (for N > 5):**
-
-6. "Async/concurrency-first — use asyncio in Python, Promises in TS, goroutines/channels in Go, tokio in Rust. Design for concurrent access from the start."
-7. "Decorator/wrapper pattern — Python decorators, TS/Go middleware, Rust macros or newtypes. Expose the core as something users apply declaratively."
-8. "Observable and debuggable — add structured logging, metrics hooks, and clear error messages. Optimize for production debugging, not just correctness."
-9. "Follow existing codebase patterns exactly — match the project's style, naming conventions, and architectural patterns precisely. Integrate, don't innovate."
-10. "Security-hardened — defense in depth, input sanitization, least privilege. Design as if the caller is untrusted."
-
-Each hint is a nudge, not a mandate. Every implementation must still fully satisfy the spec regardless of its hint.
+When `approach_hints` is enabled (default: true), each slot gets a different hint to encourage genuinely divergent attempts. Assign randomly without replacement. The profile defines what "diversity" means for its task type — architectural diversity for coding, voice/structure diversity for writing.
 
 ## Common Mistakes
 

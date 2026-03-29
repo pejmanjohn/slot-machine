@@ -1,374 +1,233 @@
 #!/usr/bin/env bash
 # Tier 3: Full E2E integration test — happy path
-#
-# Full E2E: invoke slot-machine with 3 slots on a real spec,
-# verify the entire pipeline via NDJSON transcript analysis.
-#
-# Compare against baseline (without skill):
-#   tests/fixtures/baseline-transcript-0de344b8.jsonl
-#
-# Baseline gaps this test should verify are NOW present:
-#   - Independent reviewer agents dispatched (not orchestrator reading code)
-#   - Structured scorecards with 6 weighted criteria
-#   - Formal judge agent with PICK/SYNTHESIZE/NONE_ADEQUATE verdict
-#   - Dedicated synthesizer agent (if SYNTHESIZE)
-#   - Worktree cleanup after completion
-#
-# Runtime: ~20-30 minutes (headless claude -p)
+# Runs a real slot-machine pipeline end-to-end on a temporary Python project
+# and validates the transcript, run artifacts, merged output, and cleanup.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/test-helpers.sh"
 
-BASELINE_TRANSCRIPT="$SCRIPT_DIR/fixtures/baseline-transcript-0de344b8.jsonl"
-TINY_SPEC="$SCRIPT_DIR/fixtures/tiny-spec.md"
+if ! command -v claude >/dev/null 2>&1; then
+    echo "[SKIP] claude CLI not installed"
+    exit 2
+fi
+
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "[SKIP] python3 not installed"
+    exit 2
+fi
+
+if ! python3 - <<'PY' >/dev/null 2>&1
+import pytest
+PY
+then
+    echo "[SKIP] pytest not available"
+    exit 2
+fi
 
 echo "=== E2E Happy Path Test ==="
 echo ""
-
-# ---------------------------------------------------------------------------
-# Phase 1: Setup — create temp test project
-# ---------------------------------------------------------------------------
-#
-# TMPDIR=$(mktemp -d)
-# trap 'rm -rf "$TMPDIR"' EXIT
-#
-# cd "$TMPDIR"
-# git init
-# mkdir -p src tests
-#
-# # Minimal Python project structure
-# cat > pyproject.toml <<'PYPROJ'
-# [project]
-# name = "test-project"
-# version = "0.1.0"
-#
-# [tool.pytest.ini_options]
-# testpaths = ["tests"]
-# PYPROJ
-#
-# cat > src/__init__.py <<'PY'
-# PY
-#
-# cat > tests/__init__.py <<'PY'
-# PY
-#
-# git add -A && git commit -m "initial commit"
-
-echo "Phase 1: Setup"
-echo "  - Create temp directory with git init"
-echo "  - Minimal Python project (src/, tests/, pyproject.toml)"
-echo "  - Initial commit so worktrees can be created"
+echo "Test plan:"
+echo "  1. Create a temp Python repo with an initial git commit"
+echo "  2. Run /slot-machine with 2 slots against the tiny spec"
+echo "  3. Assert transcript sanity: non-empty, Agent calls, worktree isolation"
+echo "  4. Assert run artifacts: result.json, review-*.md, and verdict output"
+echo "  5. Assert final merged project contains implementation and tests"
+echo "  6. Assert generated pytest suite passes"
+echo "  7. Assert worktrees are cleaned up"
 echo ""
 
-# ---------------------------------------------------------------------------
-# Phase 2: Execute — run slot-machine skill via claude -p
-# ---------------------------------------------------------------------------
-#
-# SPEC_CONTENT=$(cat "$TINY_SPEC")
-# TRANSCRIPT="$TMPDIR/transcript.jsonl"
-#
-# timeout 1800 claude -p \
-#     "Use the slot-machine skill to implement the following spec with 3 slots:
-#
-# $SPEC_CONTENT" \
-#     --allowed-tools=all \
-#     --permission-mode bypassPermissions \
-#     --output-format stream-json \
-#     --max-turns 200 \
-#     --add-dir "$SKILL_DIR" \
-#     --add-dir "$TMPDIR" \
-#     > "$TRANSCRIPT" 2>&1 || true
-#
-# # Sanity: transcript must not be empty
-# if [ ! -s "$TRANSCRIPT" ]; then
-#     echo "  [FAIL] Transcript is empty — claude -p produced no output"
-#     exit 1
-# fi
-# TRANSCRIPT_TEXT=$(cat "$TRANSCRIPT")
+SPEC_FILE="$SCRIPT_DIR/fixtures/tiny-spec.md"
+SLOT_COUNT=2
+TMPDIR=$(mktemp -d)
+TEST_BIN="$TMPDIR/.test-bin"
+TRANSCRIPT_FILE=$(mktemp)
+PYTEST_OUTPUT=$(mktemp)
+trap 'rm -rf "$TMPDIR" "$TRANSCRIPT_FILE" "$PYTEST_OUTPUT"' EXIT
 
-echo "Phase 2: Execute"
-echo "  - Run claude -p with slot-machine skill (3 slots)"
-echo "  - Capture NDJSON stream to transcript file"
-echo "  - Timeout: 1800s (30 min)"
-echo "  - --add-dir for skill root AND test project"
-echo ""
+cd "$TMPDIR"
+git init -q
+git config user.name "Slot Machine E2E"
+git config user.email "slot-machine-e2e@example.com"
+mkdir -p src tests
 
-# ---------------------------------------------------------------------------
-# Phase 3: Phase ordering assertions
-# ---------------------------------------------------------------------------
-#
-# echo "=== Phase Ordering ==="
-#
-# # Skill announcement
-# assert_contains "$TRANSCRIPT_TEXT" "slot-machine" \
-#     "Skill name mentioned in transcript"
-#
-# # Agent calls with worktree isolation
-# assert_worktree_isolation "$TRANSCRIPT" \
-#     "Agent calls use isolation:worktree"
-#
-# # Slot mentions (implementation phase)
-# assert_contains "$TRANSCRIPT_TEXT" "Slot 1" \
-#     "Slot 1 mentioned"
-# assert_contains "$TRANSCRIPT_TEXT" "Slot 2" \
-#     "Slot 2 mentioned"
-# assert_contains "$TRANSCRIPT_TEXT" "Slot 3" \
-#     "Slot 3 mentioned"
-#
-# # Phase ordering: implementation before review, review before judge
-# assert_order "$TRANSCRIPT_TEXT" "Slot 1" "Scorecard" \
-#     "Implementation before review"
-# assert_order "$TRANSCRIPT_TEXT" "Scorecard" "verdict" \
-#     "Review before judge"
+cat > pyproject.toml <<'EOF'
+[project]
+name = "slot-machine-e2e"
+version = "0.1.0"
 
-echo "Phase 3: Phase ordering assertions"
-echo "  - Skill 'slot-machine' announced in transcript"
-echo "  - Agent calls use isolation:worktree"
-echo "  - Slot 1, Slot 2, Slot 3 all mentioned"
-echo "  - Implementation phase precedes review phase"
-echo "  - Review phase precedes judge phase"
-echo ""
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+EOF
 
-# ---------------------------------------------------------------------------
-# Phase 4: Review phase assertions
-# ---------------------------------------------------------------------------
-#
-# echo "=== Review Phase ==="
-#
-# # Structured scorecards present
-# assert_contains "$TRANSCRIPT_TEXT" "Scorecard" \
-#     "Scorecard present in output"
-# assert_contains "$TRANSCRIPT_TEXT" "Weighted Score" \
-#     "Weighted Score present in output"
-#
-# # 6 weighted criteria from reviewer prompt
-# for criterion in "Spec Compliance" "Correctness" "Test Quality" \
-#                   "Code Quality" "Simplicity" "Architecture"; do
-#     assert_contains "$TRANSCRIPT_TEXT" "$criterion" \
-#         "Criterion '$criterion' in scorecard"
-# done
-#
-# # Severity levels in issue lists
-# SEVERITY_FOUND=false
-# for severity in CRITICAL IMPORTANT MINOR; do
-#     if echo "$TRANSCRIPT_TEXT" | grep -q "$severity"; then
-#         SEVERITY_FOUND=true
-#     fi
-# done
-# if [ "$SEVERITY_FOUND" = true ]; then
-#     echo "  [PASS] At least one severity level (CRITICAL/IMPORTANT/MINOR) found"
-# else
-#     echo "  [FAIL] No severity levels found in review output"
-# fi
-#
-# # Independent reviewers dispatched (not orchestrator reading code)
-# REVIEWER_AGENT_COUNT=$(count_agent_calls "$TRANSCRIPT")
-# if [ "$REVIEWER_AGENT_COUNT" -ge 3 ]; then
-#     echo "  [PASS] At least 3 Agent calls found ($REVIEWER_AGENT_COUNT total)"
-# else
-#     echo "  [FAIL] Expected >= 3 Agent calls, found $REVIEWER_AGENT_COUNT"
-# fi
+cat > src/__init__.py <<'EOF'
+EOF
 
-echo "Phase 4: Review phase assertions"
-echo "  - Scorecard present in output"
-echo "  - Weighted Score present in output"
-echo "  - All 6 criteria present: Spec Compliance, Correctness, Test Quality,"
-echo "    Code Quality, Simplicity, Architecture"
-echo "  - At least one severity level (CRITICAL/IMPORTANT/MINOR) found"
-echo "  - Independent reviewer agents dispatched (>= 3 Agent calls)"
-echo ""
+cat > tests/__init__.py <<'EOF'
+EOF
 
-# ---------------------------------------------------------------------------
-# Phase 5: Judge phase assertions
-# ---------------------------------------------------------------------------
-#
-# echo "=== Judge Phase ==="
-#
-# # Verdict present — one of PICK, SYNTHESIZE, NONE_ADEQUATE
-# VERDICT_FOUND=false
-# VERDICT_VALUE=""
-# for verdict in PICK SYNTHESIZE NONE_ADEQUATE; do
-#     if echo "$TRANSCRIPT_TEXT" | grep -q "$verdict"; then
-#         VERDICT_FOUND=true
-#         VERDICT_VALUE="$verdict"
-#     fi
-# done
-# if [ "$VERDICT_FOUND" = true ]; then
-#     echo "  [PASS] Verdict found: $VERDICT_VALUE"
-# else
-#     echo "  [FAIL] No verdict (PICK/SYNTHESIZE/NONE_ADEQUATE) found"
-# fi
-#
-# # Ranking present
-# assert_contains "$TRANSCRIPT_TEXT" "Ranking" \
-#     "Ranking present in judge output"
-#
-# # Reasoning present
-# assert_contains "$TRANSCRIPT_TEXT" "Reasoning" \
-#     "Reasoning present in judge output"
-#
-# # Baseline comparison: judge phase is a NEW behavior not in baseline
-# if [ -f "$BASELINE_TRANSCRIPT" ]; then
-#     BASELINE_TEXT=$(cat "$BASELINE_TRANSCRIPT")
-#     assert_not_contains "$BASELINE_TEXT" "PICK\|SYNTHESIZE\|NONE_ADEQUATE" \
-#         "Baseline lacks formal verdict (confirming skill adds value)"
-# fi
+# The slot-machine prompts sometimes invoke `python -m pytest`.
+# Provide a local shim so the E2E environment matches the guaranteed `python3`.
+mkdir -p "$TEST_BIN"
+cat > "$TEST_BIN/python" <<'EOF'
+#!/usr/bin/env bash
+exec python3 "$@"
+EOF
+chmod +x "$TEST_BIN/python"
+export PATH="$TEST_BIN:$PATH"
 
-echo "Phase 5: Judge phase assertions"
-echo "  - Verdict present: one of PICK, SYNTHESIZE, NONE_ADEQUATE"
-echo "  - Ranking present in judge output"
-echo "  - Reasoning present in judge output"
-echo "  - Baseline transcript lacks formal verdict (confirming skill adds value)"
-echo ""
+git add -A
+git commit -q -m "initial"
 
-# ---------------------------------------------------------------------------
-# Phase 6: Resolution — files exist, worktrees cleaned up
-# ---------------------------------------------------------------------------
-#
-# echo "=== Resolution ==="
-#
-# # Implementation files exist in the test project
-# if ls "$TMPDIR"/src/*.py 1>/dev/null 2>&1; then
-#     echo "  [PASS] Python files exist in src/"
-# else
-#     echo "  [FAIL] No .py files in src/"
-# fi
-#
-# if ls "$TMPDIR"/tests/*.py 1>/dev/null 2>&1; then
-#     echo "  [PASS] Test files exist in tests/"
-# else
-#     echo "  [FAIL] No .py files in tests/"
-# fi
-#
-# # Worktrees cleaned up
-# WORKTREE_COUNT=$(cd "$TMPDIR" && git worktree list 2>/dev/null | wc -l)
-# if [ "$WORKTREE_COUNT" -le 1 ]; then
-#     echo "  [PASS] Worktrees cleaned up ($WORKTREE_COUNT remaining)"
-# else
-#     echo "  [FAIL] Worktrees NOT cleaned up ($WORKTREE_COUNT remaining, expected <= 1)"
-# fi
-#
-# # No leftover slot-* branches (optional — skill may or may not clean these)
-# SLOT_BRANCHES=$(cd "$TMPDIR" && git branch --list 'slot-*' 2>/dev/null | wc -l)
-# echo "  [INFO] Slot branches remaining: $SLOT_BRANCHES"
+SPEC=$(cat "$SPEC_FILE")
+PROMPT="/slot-machine with $SLOT_COUNT slots
 
-echo "Phase 6: Resolution assertions"
-echo "  - Python implementation files exist in src/"
-echo "  - Python test files exist in tests/"
-echo "  - Worktrees cleaned up (<= 1 remaining)"
-echo "  - Report leftover slot-* branches"
-echo ""
+Spec: $SPEC"
 
-# ---------------------------------------------------------------------------
-# Phase 7: LLM quality eval (optional — requires anthropic SDK)
-# ---------------------------------------------------------------------------
-#
-# echo "=== LLM Quality Eval (optional) ==="
-#
-# LLM_JUDGE="$SCRIPT_DIR/llm-judge.py"
-# if command -v python3 &>/dev/null && python3 -c "import anthropic" 2>/dev/null; then
-#     # Extract first scorecard from transcript
-#     SCORECARD=$(echo "$TRANSCRIPT_TEXT" | \
-#         grep -oP '(?<=Scorecard).*?(?=---|\Z)' | head -1 || echo "")
-#     if [ -n "$SCORECARD" ]; then
-#         SCORECARD_EVAL=$(python3 "$LLM_JUDGE" scorecard-quality "$SCORECARD")
-#         echo "  Scorecard quality: $SCORECARD_EVAL"
-#
-#         # Check minimum quality bar (all dimensions >= 3)
-#         for dim in thoroughness specificity fairness; do
-#             SCORE=$(echo "$SCORECARD_EVAL" | python3 -c "import sys,json; print(json.load(sys.stdin).get('$dim',0))")
-#             if [ "$SCORE" -ge 3 ]; then
-#                 echo "  [PASS] $dim >= 3 ($SCORE)"
-#             else
-#                 echo "  [FAIL] $dim < 3 ($SCORE)"
-#             fi
-#         done
-#     else
-#         echo "  [SKIP] Could not extract scorecard from transcript"
-#     fi
-#
-#     # Extract verdict from transcript
-#     VERDICT_TEXT=$(echo "$TRANSCRIPT_TEXT" | \
-#         grep -oP '(?<=Verdict|verdict).*?(?=---|## |\Z)' | head -1 || echo "")
-#     if [ -n "$VERDICT_TEXT" ]; then
-#         VERDICT_EVAL=$(python3 "$LLM_JUDGE" verdict-quality "$VERDICT_TEXT")
-#         echo "  Verdict quality: $VERDICT_EVAL"
-#
-#         for dim in reasoning specificity decisiveness; do
-#             SCORE=$(echo "$VERDICT_EVAL" | python3 -c "import sys,json; print(json.load(sys.stdin).get('$dim',0))")
-#             if [ "$SCORE" -ge 3 ]; then
-#                 echo "  [PASS] $dim >= 3 ($SCORE)"
-#             else
-#                 echo "  [FAIL] $dim < 3 ($SCORE)"
-#             fi
-#         done
-#     else
-#         echo "  [SKIP] Could not extract verdict from transcript"
-#     fi
-# else
-#     echo "  [SKIP] anthropic SDK not available — skipping LLM quality eval"
-# fi
+set +e
+run_claude_to_file "$TRANSCRIPT_FILE" "$PROMPT" 1200 200 "$TMPDIR"
+CLAUDE_RC=$?
+set -e
 
-echo "Phase 7: LLM quality eval (optional)"
-echo "  - Extract scorecard from transcript, run llm-judge.py scorecard-quality"
-echo "  - Assert thoroughness, specificity, fairness >= 3/5"
-echo "  - Extract verdict from transcript, run llm-judge.py verdict-quality"
-echo "  - Assert reasoning, specificity, decisiveness >= 3/5"
-echo "  - Gracefully skip if anthropic SDK not installed"
-echo ""
+TRANSCRIPT_TEXT=$(cat "$TRANSCRIPT_FILE")
+FINAL_REPORT=$(extract_result_text "$TRANSCRIPT_FILE")
 
-# ---------------------------------------------------------------------------
-# Phase 8: Final report present
-# ---------------------------------------------------------------------------
-#
-# echo "=== Final Report ==="
-#
-# # The skill should produce a final status report
-# assert_contains "$TRANSCRIPT_TEXT" "Status:" \
-#     "Final status report present"
-#
-# # Check that the transcript is substantially different from baseline
-# if [ -f "$BASELINE_TRANSCRIPT" ]; then
-#     BASELINE_AGENTS=$(count_agent_calls "$BASELINE_TRANSCRIPT")
-#     SKILL_AGENTS=$(count_agent_calls "$TRANSCRIPT")
-#     echo "  [INFO] Baseline Agent calls: $BASELINE_AGENTS"
-#     echo "  [INFO] Skill Agent calls: $SKILL_AGENTS"
-#
-#     # Skill should dispatch MORE agents (reviewers, judge, possibly synthesizer)
-#     if [ "$SKILL_AGENTS" -gt "$BASELINE_AGENTS" ]; then
-#         echo "  [PASS] Skill dispatches more agents than baseline ($SKILL_AGENTS > $BASELINE_AGENTS)"
-#     else
-#         echo "  [WARN] Skill did not dispatch more agents than baseline"
-#     fi
-# fi
+if [ "$CLAUDE_RC" -eq 2 ]; then
+    echo "$TRANSCRIPT_TEXT"
+    exit 2
+fi
 
-echo "Phase 8: Final report assertions"
-echo "  - Final 'Status:' report present in transcript"
-echo "  - Compare Agent call count: skill > baseline"
-echo "  - Skill dispatches more agents (reviewers + judge + synthesizer)"
-echo ""
+if [ "$CLAUDE_RC" -ne 0 ]; then
+    echo "  [FAIL] claude -p exited with code $CLAUDE_RC"
+    echo "$TRANSCRIPT_TEXT"
+    exit 1
+fi
 
-# ---------------------------------------------------------------------------
-# Phase 9: Cleanup
-# ---------------------------------------------------------------------------
-#
-# # trap handles cleanup: rm -rf "$TMPDIR"
-# echo "=== Cleanup ==="
-# echo "  Temp directory cleaned up via trap"
+if [ ! -s "$TRANSCRIPT_FILE" ]; then
+    echo "  [FAIL] Transcript is empty"
+    exit 1
+fi
 
-echo "Phase 9: Cleanup"
-echo "  - Temp directory removed via EXIT trap"
-echo ""
+echo "  [PASS] Transcript captured"
+assert_worktree_isolation "$TRANSCRIPT_FILE" "Agent calls use isolation:worktree"
 
-# ---------------------------------------------------------------------------
-# Summary
-# ---------------------------------------------------------------------------
-echo "=== Test Structure Summary ==="
-echo "  9 phases, ~25 assertions covering the full slot-machine pipeline"
-echo "  Verifies baseline gaps are filled: independent reviewers, structured"
-echo "  scorecards, formal judge verdicts, synthesizer dispatch, worktree cleanup"
-echo ""
-echo "[SKIP] Requires headless claude -p (~20-30 min)"
-exit 0
+AGENT_CALLS=$(count_agent_calls "$TRANSCRIPT_FILE")
+if [ "$AGENT_CALLS" -ge 5 ]; then
+    echo "  [PASS] Transcript includes at least 5 Agent calls ($AGENT_CALLS)"
+else
+    echo "  [FAIL] Expected at least 5 Agent calls, found $AGENT_CALLS"
+    exit 1
+fi
+
+assert_contains "$FINAL_REPORT" "Verdict\\|Final Output\\|Complete" "Final report present"
+
+LATEST_RUN="$TMPDIR/.slot-machine/runs/latest"
+RESULT_JSON="$LATEST_RUN/result.json"
+VERDICT_FILE="$LATEST_RUN/verdict.md"
+
+if [ -f "$RESULT_JSON" ]; then
+    echo "  [PASS] result.json written to latest run dir"
+else
+    echo "  [FAIL] result.json missing at $RESULT_JSON"
+    exit 1
+fi
+
+SLOTS_SUCCEEDED=$(python3 - <<'PY' "$RESULT_JSON"
+import json
+import sys
+
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+print(data.get("slots_succeeded", 0))
+PY
+)
+VERDICT_VALUE=$(python3 - <<'PY' "$RESULT_JSON"
+import json
+import sys
+
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+print(data.get("verdict", "UNKNOWN"))
+PY
+)
+
+if [ "$SLOTS_SUCCEEDED" -ge 2 ]; then
+    echo "  [PASS] At least 2 slots succeeded ($SLOTS_SUCCEEDED)"
+else
+    echo "  [FAIL] Need at least 2 successful slots, found $SLOTS_SUCCEEDED"
+    exit 1
+fi
+
+if echo "$VERDICT_VALUE" | grep -Eq "PICK|SYNTHESIZE"; then
+    echo "  [PASS] Verdict is actionable ($VERDICT_VALUE)"
+else
+    echo "  [FAIL] Unexpected verdict value: $VERDICT_VALUE"
+    exit 1
+fi
+
+if [ -f "$VERDICT_FILE" ]; then
+    echo "  [PASS] verdict.md written to latest run dir"
+    VERDICT_LENGTH=$(wc -c <"$VERDICT_FILE" | tr -d ' ')
+    if [ "$VERDICT_LENGTH" -ge 40 ]; then
+        echo "  [PASS] Judge verdict file is non-empty and substantive"
+    else
+        echo "  [FAIL] Judge verdict is unexpectedly short ($VERDICT_LENGTH chars)"
+        exit 1
+    fi
+else
+    assert_contains "$FINAL_REPORT" "Verdict\\|PICK\\|SYNTHESIZE" \
+        "Final report carries the judge verdict when verdict.md is absent"
+fi
+
+shopt -s nullglob
+review_files=("$LATEST_RUN"/review-*.md)
+shopt -u nullglob
+
+if [ "${#review_files[@]}" -eq "$SLOTS_SUCCEEDED" ]; then
+    echo "  [PASS] Review artifact count matches successful slots (${#review_files[@]})"
+else
+    echo "  [FAIL] Expected $SLOTS_SUCCEEDED review artifacts, found ${#review_files[@]}"
+    exit 1
+fi
+
+for review_file in "${review_files[@]}"; do
+    REVIEW_TEXT=$(cat "$review_file")
+    assert_contains "$REVIEW_TEXT" "## Slot" "$(basename "$review_file") has slot review header"
+    assert_contains "$REVIEW_TEXT" "Spec Compliance:\\|### Spec Compliance:" \
+        "$(basename "$review_file") has spec compliance summary"
+    assert_contains "$REVIEW_TEXT" "Critical:\\|\\*\\*Critical\\*\\*" \
+        "$(basename "$review_file") records critical issue count"
+    assert_contains "$REVIEW_TEXT" "Important:\\|\\*\\*Important\\*\\*" \
+        "$(basename "$review_file") records important issue count"
+    assert_contains "$REVIEW_TEXT" "Minor:\\|\\*\\*Minor\\*\\*" \
+        "$(basename "$review_file") records minor issue count"
+done
+
+if find "$TMPDIR/src" -maxdepth 1 -type f -name '*.py' ! -name '__init__.py' | grep -q .; then
+    echo "  [PASS] Implementation files exist in src/"
+else
+    echo "  [FAIL] No implementation files created in src/"
+    exit 1
+fi
+
+if find "$TMPDIR/tests" -maxdepth 1 -type f -name '*.py' ! -name '__init__.py' | grep -q .; then
+    echo "  [PASS] Test files exist in tests/"
+else
+    echo "  [FAIL] No test files created in tests/"
+    exit 1
+fi
+
+if (cd "$TMPDIR" && python3 -m pytest tests/ -v >"$PYTEST_OUTPUT" 2>&1); then
+    echo "  [PASS] Final merged pytest suite passes"
+else
+    echo "  [FAIL] Final merged pytest suite does not pass"
+    cat "$PYTEST_OUTPUT"
+    exit 1
+fi
+
+WORKTREE_COUNT=$(cd "$TMPDIR" && git worktree list 2>/dev/null | wc -l | tr -d ' ')
+if [ "$WORKTREE_COUNT" -le 1 ]; then
+    echo "  [PASS] Worktrees cleaned up ($WORKTREE_COUNT remaining)"
+else
+    echo "  [FAIL] Worktrees not cleaned up ($WORKTREE_COUNT remaining)"
+    exit 1
+fi

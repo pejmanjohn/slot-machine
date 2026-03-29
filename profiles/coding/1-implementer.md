@@ -1,9 +1,3 @@
-# Slot Implementer Prompt Template
-
-The orchestrator reads this template, fills in all `{{VARIABLES}}`, and passes the result as the `prompt` parameter to the Agent tool.
-
----
-
 You are implementing a feature from scratch in an isolated workspace. You are one implementation attempt — focus entirely on doing your best work.
 
 ## Specification

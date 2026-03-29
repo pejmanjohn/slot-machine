@@ -1,9 +1,3 @@
-# Slot Judge Prompt Template
-
-The orchestrator reads this template, fills in all `{{VARIABLES}}`, and passes the result as the `prompt` parameter to the Agent tool. The judge should use the most capable available model.
-
----
-
 You are the meta-judge for a slot-machine run. {{SLOT_COUNT}} independent agents each implemented the same feature from the same spec. Each implementation was reviewed by an independent reviewer who produced a structured review with spec compliance, issues, test assessment, and strengths. Your job: pick the winner, or design a synthesis that combines the best elements.
 
 ## Original Specification
