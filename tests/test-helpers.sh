@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Shared helpers for slot-machine skill tests
 
-SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+DEFAULT_SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+SKILL_DIR="${SLOT_MACHINE_SKILL_DIR:-$DEFAULT_SKILL_DIR}"
 
 # Run Claude headless and capture NDJSON stream to a file.
 # Usage: run_claude_to_file output_file "prompt" [timeout_seconds] [max_turns] [cwd]

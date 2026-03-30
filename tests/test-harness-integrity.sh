@@ -58,6 +58,8 @@ assert_contains "$RUNNER_CONTENT" "test-harness-integrity.sh" \
     "Tier 1 includes harness integrity checks" || FAILED=$((FAILED + 1))
 assert_contains "$RUNNER_CONTENT" "test-e2e-manual-handoff.sh" \
     "Tier 3 includes manual handoff integration coverage" || FAILED=$((FAILED + 1))
+assert_contains "$RUNNER_CONTENT" "test-claude-host-codex-smoke.sh" \
+    "Smoke tier includes the Claude-host + Codex regression test" || FAILED=$((FAILED + 1))
 
 echo ""
 echo "=== Harness Integrity: Repo Guidance ==="
@@ -78,6 +80,7 @@ REVIEWER_SMOKE_CONTENT=$(cat "$SKILL_DIR/tests/test-reviewer-smoke.sh")
 JUDGE_SMOKE_CONTENT=$(cat "$SKILL_DIR/tests/test-judge-smoke.sh")
 E2E_HAPPY_CONTENT=$(cat "$SKILL_DIR/tests/test-e2e-happy-path.sh")
 MANUAL_E2E_CONTENT=$(cat "$SKILL_DIR/tests/test-e2e-manual-handoff.sh" 2>/dev/null || echo "")
+CLAUDE_CODEX_SMOKE_CONTENT=$(cat "$SKILL_DIR/tests/test-claude-host-codex-smoke.sh")
 assert_not_contains "$IMPLEMENTER_SMOKE_CONTENT" "Placeholder until headless claude -p execution is wired to real assertions" \
     "test-implementer-smoke.sh is no longer a placeholder" || FAILED=$((FAILED + 1))
 assert_contains "$IMPLEMENTER_SMOKE_CONTENT" "run_claude_to_file" \
@@ -105,6 +108,13 @@ assert_contains "$E2E_HAPPY_CONTENT" "run_claude_to_file" \
     "test-e2e-happy-path.sh invokes Claude headlessly" || FAILED=$((FAILED + 1))
 assert_contains "$E2E_HAPPY_CONTENT" "result.json" \
     "test-e2e-happy-path.sh checks run artifacts" || FAILED=$((FAILED + 1))
+
+assert_contains "$CLAUDE_CODEX_SMOKE_CONTENT" "run_claude_to_file" \
+    "test-claude-host-codex-smoke.sh invokes Claude headlessly" || FAILED=$((FAILED + 1))
+assert_contains "$CLAUDE_CODEX_SMOKE_CONTENT" "review-1.md" \
+    "test-claude-host-codex-smoke.sh checks review artifacts explicitly" || FAILED=$((FAILED + 1))
+assert_contains "$CLAUDE_CODEX_SMOKE_CONTENT" "SLOT_MACHINE_SKILL_DIR" \
+    "test-claude-host-codex-smoke.sh can target installed skills" || FAILED=$((FAILED + 1))
 
 assert_contains "$MANUAL_E2E_CONTENT" "handoff.md" \
     "test-e2e-manual-handoff.sh checks handoff artifact output" || FAILED=$((FAILED + 1))

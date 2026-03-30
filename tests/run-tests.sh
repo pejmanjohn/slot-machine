@@ -46,7 +46,7 @@ done
 
 # Test lists
 tier1_tests=(test-contracts.sh test-skill-structure.sh test-harness-integrity.sh test-codex-wrapper-parser.sh)
-tier2_tests=(test-implementer-smoke.sh test-reviewer-smoke.sh test-judge-smoke.sh)
+tier2_tests=(test-implementer-smoke.sh test-reviewer-smoke.sh test-judge-smoke.sh test-claude-host-codex-smoke.sh)
 tier3_tests=(test-e2e-happy-path.sh test-e2e-manual-handoff.sh test-e2e-edge-cases.sh)
 quality_tests=(test-reviewer-accuracy.sh)
 
