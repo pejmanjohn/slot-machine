@@ -1,11 +1,36 @@
 #!/usr/bin/env bash
 # Shared helpers for slot-machine skill tests
 
-SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Run Claude headless and capture NDJSON stream to a file.
-# Usage: run_claude_to_file output_file "prompt" [timeout_seconds] [max_turns] [cwd]
+host_available() {
+    case "$1" in
+        claude) command -v claude >/dev/null 2>&1 ;;
+        codex) command -v codex >/dev/null 2>&1 ;;
+        *) return 1 ;;
+    esac
+}
+
+run_host_to_file() {
+    local host="$1"
+    local output_file="$2"
+    local prompt="$3"
+    local timeout_seconds="${4:-600}"
+    local max_turns="${5:-100}"
+    local cwd="${6:-$SKILL_DIR}"
+
+    case "$host" in
+        claude) _run_claude_to_file "$output_file" "$prompt" "$timeout_seconds" "$max_turns" "$cwd" ;;
+        codex) _run_codex_to_file "$output_file" "$prompt" "$timeout_seconds" "$max_turns" "$cwd" ;;
+        *) echo "[SKIP] unsupported host: $host" > "$output_file"; return 2 ;;
+    esac
+}
+
 run_claude_to_file() {
+    run_host_to_file claude "$@"
+}
+
+_run_claude_to_file() {
     local output_file="$1"
     local prompt="$2"
     local timeout_seconds="${3:-600}"
@@ -127,6 +152,67 @@ except subprocess.TimeoutExpired:
 PY
 }
 
+_run_codex_to_file() {
+    local output_file="$1"
+    local prompt="$2"
+    local timeout_seconds="${3:-600}"
+    local max_turns="${4:-100}"
+    local cwd="${5:-$SKILL_DIR}"
+
+    if ! command -v codex >/dev/null 2>&1; then
+        echo "[SKIP] codex CLI not installed" > "$output_file"
+        return 2
+    fi
+
+    if ! command -v python3 >/dev/null 2>&1; then
+        echo "[SKIP] python3 not installed" > "$output_file"
+        return 2
+    fi
+
+    python3 - "$cwd" "$output_file" "$timeout_seconds" "$max_turns" "$prompt" <<'PY'
+import pathlib
+import subprocess
+import sys
+
+cwd = sys.argv[1]
+output_file = sys.argv[2]
+timeout_seconds = int(sys.argv[3])
+prompt = sys.argv[5]
+
+pathlib.Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+
+cmd = [
+    "codex",
+    "exec",
+    "--json",
+    "-s",
+    "workspace-write",
+    "--skip-git-repo-check",
+    "-C",
+    cwd,
+    prompt,
+]
+
+with open(output_file, "w", encoding="utf-8") as out:
+    proc = subprocess.Popen(
+        cmd,
+        cwd=cwd,
+        stdout=out,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    try:
+        proc.wait(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait(timeout=2)
+        out.write('\n{"type":"local_test_event","status":"timeout"}\n')
+        sys.exit(124)
+
+sys.exit(proc.returncode or 0)
+PY
+}
+
 # Run Claude headless and print the NDJSON stream.
 # Usage: run_claude "prompt" [timeout_seconds] [max_turns] [cwd]
 run_claude() {
@@ -144,17 +230,21 @@ run_claude() {
     return "$rc"
 }
 
-# Extract the final text result from a Claude stream-json output file.
-# Usage: extract_result_text path/to/output.jsonl
+# Extract the final text result from a host transcript file.
+# Usage: extract_result_text host path/to/output.jsonl
 extract_result_text() {
-    local output_file="$1"
+    local host="$1"
+    local output_file="$2"
 
-    python3 - "$output_file" <<'PY'
+    python3 - "$host" "$output_file" <<'PY'
 import json
 import sys
 
+host = sys.argv[1]
+path = sys.argv[2]
 result = ""
-with open(sys.argv[1], encoding="utf-8") as f:
+
+with open(path, encoding="utf-8") as f:
     for line in f:
         line = line.strip()
         if not line:
@@ -163,8 +253,13 @@ with open(sys.argv[1], encoding="utf-8") as f:
             payload = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if payload.get("type") == "result":
+
+        if host == "claude" and payload.get("type") == "result":
             result = payload.get("result", "")
+        elif host == "codex" and payload.get("type") == "item.completed":
+            item = payload.get("item", {})
+            if item.get("type") == "agent_message":
+                result = item.get("text", "")
 
 print(result)
 PY

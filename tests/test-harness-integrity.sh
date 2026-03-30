@@ -101,6 +101,18 @@ done
 
 echo ""
 echo "=== Harness Integrity: Test Helpers ==="
+HELPERS_CONTENT=$(cat "$SKILL_DIR/tests/test-helpers.sh")
+assert_contains "$HELPERS_CONTENT" "run_host_to_file" \
+    "test helpers expose a host-neutral runner" || FAILED=$((FAILED + 1))
+assert_contains "$HELPERS_CONTENT" "host_available" \
+    "test helpers expose host availability detection" || FAILED=$((FAILED + 1))
+assert_contains "$HELPERS_CONTENT" 'case "\$host" in' \
+    "test helpers dispatch by host" || FAILED=$((FAILED + 1))
+assert_contains "$HELPERS_CONTENT" 'run_host_to_file claude "\$@"' \
+    "run_claude_to_file remains a compatibility wrapper" || FAILED=$((FAILED + 1))
+assert_contains "$HELPERS_CONTENT" 'local host="\$1"' \
+    "extract_result_text accepts a host argument" || FAILED=$((FAILED + 1))
+
 LARGE_OUTPUT=$(python3 - <<'PY'
 print("TARGET_START")
 print("x" * 200000)
@@ -127,13 +139,19 @@ sleep 5
 EOF
 chmod +x "$FAKE_BIN_DIR/claude"
 
+cat > "$FAKE_BIN_DIR/codex" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"synthetic codex success"}}'
+EOF
+chmod +x "$FAKE_BIN_DIR/codex"
+
 HELPER_START=$(python3 - <<'PY'
 import time
 print(time.time())
 PY
 )
 set +e
-PATH="$FAKE_BIN_DIR:$PATH" run_claude_to_file "$RESULT_STREAM" "synthetic prompt" 1 5 "$TMPDIR"
+PATH="$FAKE_BIN_DIR:$PATH" run_host_to_file claude "$RESULT_STREAM" "synthetic prompt" 1 5 "$TMPDIR"
 HELPER_STATUS=$?
 set -e
 HELPER_END=$(python3 - <<'PY'
@@ -149,16 +167,31 @@ PY
 
 if [ "$HELPER_STATUS" -eq 0 ] &&
    grep -q '"type":"result"' "$RESULT_STREAM" &&
+   [ "$(extract_result_text claude "$RESULT_STREAM")" = "synthetic success" ] &&
    python3 - <<'PY' "$HELPER_ELAPSED"
 import sys
 sys.exit(0 if float(sys.argv[1]) < 3 else 1)
 PY
 then
-    echo "  [PASS] run_claude_to_file stops after the result event"
+    echo "  [PASS] run_host_to_file stops after the Claude result event"
 else
-    echo "  [FAIL] run_claude_to_file waits for process exit after the result event"
+    echo "  [FAIL] run_host_to_file does not stop after the Claude result event"
     echo "  Status: $HELPER_STATUS"
     echo "  Elapsed: $HELPER_ELAPSED"
+    FAILED=$((FAILED + 1))
+fi
+
+set +e
+PATH="$FAKE_BIN_DIR:$PATH" run_host_to_file codex "$RESULT_STREAM" "synthetic prompt" 1 5 "$TMPDIR"
+HELPER_STATUS=$?
+set -e
+
+if [ "$HELPER_STATUS" -eq 0 ] &&
+   grep -q 'synthetic codex success' "$RESULT_STREAM" &&
+   [ "$(extract_result_text codex "$RESULT_STREAM")" = "synthetic codex success" ]; then
+    echo "  [PASS] run_host_to_file handles codex JSONL output"
+else
+    echo "  [FAIL] run_host_to_file does not handle codex JSONL output"
     FAILED=$((FAILED + 1))
 fi
 
@@ -169,8 +202,12 @@ VARIABILITY_CONTENT=$(cat "$VARIABILITY_BENCH")
 
 assert_contains "$SPEED_CONTENT" "set -euo pipefail" \
     "Speed benchmark uses strict shell flags" || FAILED=$((FAILED + 1))
-assert_contains "$SPEED_CONTENT" "if ! command -v claude" \
-    "Speed benchmark checks for claude before running" || FAILED=$((FAILED + 1))
+assert_contains "$SPEED_CONTENT" 'BENCHMARK_HOST="\${BENCHMARK_HOST:-claude}"' \
+    "Speed benchmark accepts BENCHMARK_HOST" || FAILED=$((FAILED + 1))
+assert_contains "$SPEED_CONTENT" 'host_available "\$BENCHMARK_HOST"' \
+    "Speed benchmark checks benchmark host availability" || FAILED=$((FAILED + 1))
+assert_contains "$SPEED_CONTENT" 'run_host_to_file "\$BENCHMARK_HOST"' \
+    "Speed benchmark uses the shared host runner" || FAILED=$((FAILED + 1))
 assert_contains "$SPEED_CONTENT" 'if \[ "\$b_status" != "OK" \]' \
     "Speed benchmark fails if the baseline run is incomplete" || FAILED=$((FAILED + 1))
 assert_contains "$SPEED_CONTENT" 'if \[ "\$sm_status" != "OK" \]' \
@@ -178,8 +215,12 @@ assert_contains "$SPEED_CONTENT" 'if \[ "\$sm_status" != "OK" \]' \
 
 assert_contains "$VARIABILITY_CONTENT" "set -euo pipefail" \
     "Variability study uses strict shell flags" || FAILED=$((FAILED + 1))
-assert_contains "$VARIABILITY_CONTENT" "if ! command -v claude" \
-    "Variability study checks for claude before running" || FAILED=$((FAILED + 1))
+assert_contains "$VARIABILITY_CONTENT" 'BENCHMARK_HOST="\${BENCHMARK_HOST:-claude}"' \
+    "Variability study accepts BENCHMARK_HOST" || FAILED=$((FAILED + 1))
+assert_contains "$VARIABILITY_CONTENT" 'host_available "\$BENCHMARK_HOST"' \
+    "Variability study checks benchmark host availability" || FAILED=$((FAILED + 1))
+assert_contains "$VARIABILITY_CONTENT" 'run_host_to_file "\$BENCHMARK_HOST"' \
+    "Variability study uses the shared host runner" || FAILED=$((FAILED + 1))
 assert_contains "$VARIABILITY_CONTENT" 'if \[ "\$FAILED_COUNT" -gt 0 \]' \
     "Variability study fails when slot runs fail" || FAILED=$((FAILED + 1))
 assert_contains "$VARIABILITY_CONTENT" "missing scheduler.ts or scheduler.test.ts" \

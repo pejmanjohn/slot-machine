@@ -14,8 +14,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILL_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+source "$SCRIPT_DIR/../test-helpers.sh"
+
 SPEC_FILE="$SCRIPT_DIR/specs/task-scheduler.md"
 RESULTS_DIR="$SCRIPT_DIR/results"
+BENCHMARK_HOST="${BENCHMARK_HOST:-claude}"
 
 # Speed budgets
 RATIO_LIMIT=7.0
@@ -33,8 +36,8 @@ done
 SPEC=$(cat "$SPEC_FILE")
 GIT_SHA=$(git -C "$SKILL_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
-if ! command -v claude >/dev/null 2>&1; then
-    echo "[SKIP] claude CLI is required for the speed benchmark"
+if ! host_available "$BENCHMARK_HOST"; then
+    echo "[SKIP] $BENCHMARK_HOST CLI is required for the speed benchmark"
     exit 2
 fi
 if ! command -v npm >/dev/null 2>&1; then
@@ -55,6 +58,7 @@ echo ""
 echo "Spec: task-scheduler (TypeScript)"
 echo "Runs: $RUNS"
 echo "Git SHA: $GIT_SHA"
+echo "Host: $BENCHMARK_HOST"
 echo "Budgets: ratio < ${RATIO_LIMIT}x, overhead < ${OVERHEAD_LIMIT}s"
 echo ""
 
@@ -98,29 +102,30 @@ run_baseline() {
     setup_project "$project_dir"
 
     local start end elapsed status test_count
+    local transcript_file="$project_dir/.baseline.jsonl"
     local test_output=""
     status="OK"
     test_count=0
     start=$(date +%s)
 
-    if ! (
-        cd "$project_dir"
-        claude -p "Implement this in the working directory. Commit your work.
+    if ! run_host_to_file "$BENCHMARK_HOST" "$transcript_file" \
+        "Implement this in the working directory. Commit your work.
 
 $SPEC
 
 Test command: npx vitest run" \
-            --allowedTools 'Bash,Read,Write,Edit,Glob,Grep' \
-            --permission-mode bypassPermissions \
-            --output-format stream-json \
-            --max-turns 30 \
-            > /dev/null 2>&1
-    ); then
-        status="CLAUDE_FAILED"
+        1800 \
+        30 \
+        "$project_dir"; then
+        status="HOST_FAILED"
     fi
 
     end=$(date +%s)
     elapsed=$((end - start))
+
+    if [ "$status" = "OK" ] && [ ! -s "$transcript_file" ]; then
+        status="MISSING_TRANSCRIPT"
+    fi
 
     if [ ! -f "$project_dir/src/scheduler.ts" ] || [ ! -f "$project_dir/src/scheduler.test.ts" ]; then
         status="MISSING_FILES"
@@ -149,31 +154,27 @@ run_slot_machine() {
     setup_project "$project_dir"
 
     local start end elapsed status test_count verdict
+    local transcript_file="$project_dir/.slot-machine-transcript.jsonl"
     local test_output=""
     status="OK"
     test_count=0
     verdict="UNKNOWN"
     start=$(date +%s)
 
-    if ! (
-        cd "$project_dir"
-        claude -p "/slot-machine with 3 slots
+    if ! run_host_to_file "$BENCHMARK_HOST" "$transcript_file" \
+        "/slot-machine with 3 slots
 
 Spec: $SPEC" \
-            --allowedTools 'all' \
-            --permission-mode bypassPermissions \
-            --output-format stream-json \
-            --max-turns 100 \
-            --add-dir "$SKILL_DIR" \
-            > "$project_dir/.slot-machine-transcript.jsonl" 2>&1
-    ); then
-        status="CLAUDE_FAILED"
+        1800 \
+        100 \
+        "$project_dir"; then
+        status="HOST_FAILED"
     fi
 
     end=$(date +%s)
     elapsed=$((end - start))
 
-    if [ ! -s "$project_dir/.slot-machine-transcript.jsonl" ]; then
+    if [ "$status" = "OK" ] && [ ! -s "$transcript_file" ]; then
         status="MISSING_TRANSCRIPT"
     fi
 
@@ -280,6 +281,7 @@ cat > "$result_file" << RESULTEOF
   "timestamp": "$timestamp",
   "git_sha": "$GIT_SHA",
   "spec": "task-scheduler",
+  "host": "$BENCHMARK_HOST",
   "runs": $RUNS,
   "baseline_seconds": $median_baseline,
   "slot_machine_seconds": $median_sm,
