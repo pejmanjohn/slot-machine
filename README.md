@@ -55,11 +55,11 @@ Slot-machine dispatches a pipeline of specialized agents. Each role is isolated 
 
 | Step | Agent | What it does |
 |------|-------|-------------|
-| **Implement** | N implementers (parallel) | Each builds the full spec independently in an isolated git worktree. Different slots can use different skills or even different agent harnesses (Codex). |
+| **Implement** | N implementers (parallel) | Each builds the full spec independently in the active profile's isolated slot workspace: a git worktree for worktree profiles, or a per-slot file/directory target for file-isolated profiles. Different slots can use different skills or even different agent harnesses (Codex). |
 | **Review** | N reviewers (parallel) | Each reviews one implementation blind — spec compliance, adversarial bug hunting with file:line evidence, test gap analysis. |
 | **Judge** | 1 judge | Reads all reviewer scorecards, does targeted code inspection where reviewers disagree, and issues a verdict: **PICK** the winner, **SYNTHESIZE** the best elements, or **NONE_ADEQUATE**. |
 | **Synthesize** | 1 synthesizer (if needed) | Takes one slot as base, ports specific elements from donors per the judge's plan, verifies coherence, runs the full test suite. |
-| **Resolve** | Orchestrator | Merges the winner, cleans up worktrees, writes result artifacts with full model attribution. |
+| **Resolve** | Orchestrator | Finalizes the winner or synthesis result, cleans up worktrees when the profile uses them, and writes result artifacts with full model attribution. |
 
 The key insight: the agent that implements never evaluates. The agent that reviews never sees alternatives. The judge only sees structured scorecards, not raw code (unless it needs to inspect a specific disagreement). This separation prevents the bias that happens when one agent does everything.
 
@@ -445,7 +445,7 @@ We tried that. Five parallel implementations, no skill, Claude doing what it nat
 
 **No diversity.** Without guidance, Claude produces similar implementations each time. Same patterns, same blind spots. Slot-machine creates diversity at three levels: hints steer each slot toward a different implementation emphasis (simplicity vs robustness vs functional style), skills assign different methodologies per slot (TDD for one, CE patterns for another), and cross-model dispatch runs some slots on entirely different agent harnesses (Codex finds bugs Claude doesn't, and vice versa).
 
-**No isolation.** Without worktree management, parallel implementations write to the same files and clobber each other. Slot-machine gives each slot its own git worktree — fully isolated workspaces where implementations can't interfere. The winner's branch merges cleanly.
+**No isolation.** Without per-slot isolation, parallel attempts write into the same place and clobber each other. Slot-machine isolates each slot using the active profile's storage model: git worktrees for coding-style worktree profiles, or separate per-slot files/directories for file-isolated profiles. The attempts stay independent, and the final winner or synthesis can be resolved cleanly.
 
 **No trail.** Without the skill, the comparison is ephemeral — gone when the conversation ends. Slot-machine saves reviewer scorecards, judge verdict, and result artifacts to `.slot-machine/runs/` for post-hoc inspection.
 
