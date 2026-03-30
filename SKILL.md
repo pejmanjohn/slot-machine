@@ -307,28 +307,30 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
 
 ### Phase 2: Parallel Implementation
 
-**Dispatch all N slots in a SINGLE parallel wave.** Group 1 native-host slots run through the host's native isolated subagent path. Group 2 external-harness slots launch external CLI processes in parallel using the active profile isolation. This is critical — start the full wave together for true parallel execution.
+**Dispatch all N slots in a SINGLE parallel wave from a SINGLE message.** Group 1 native-host slots run through the host's native isolated subagent path. Group 2 external-harness slots launch external CLI processes in parallel using the active profile isolation. This is critical — start the full wave together for true parallel execution.
 
 Use this execution matrix to choose the path per slot:
 
 | Active host | Slot harness | Execution path |
 |-------------|--------------|----------------|
 | Claude | Claude | Native Claude orchestration/subagent path |
-| Claude | Codex | Worktree + `codex exec` |
-| Codex | Codex | Worktree + `codex exec` |
-| Codex | Claude | Worktree + `claude -p` |
+| Claude | Codex | Profile-isolated slot workspace + `codex exec` |
+| Codex | Codex | Native Codex slot workspace + `codex exec` |
+| Codex | Claude | Profile-isolated slot workspace + `claude -p` |
 
 Group 1 — Native-host slots: slots whose `harness_ref` is empty or matches the active host. Dispatch them through the host's native isolated subagent mechanism.
 
 Group 2 — External-harness slots: slots whose `harness_ref` names the other CLI. If profile isolation is `worktree`, create one worktree per slot and launch one external CLI process per worktree. If profile isolation is `file`, create one per-slot run directory/output target under `{RUN_DIR}` and launch one external CLI process there, telling it where to write the output file.
 
+Host-relative routing is deterministic: `claude` on Claude and `codex` on Codex are Group 1 native-host slots; `claude` on Codex and `codex` on Claude are Group 2 external-harness slots. Apply the same rule to `skill + harness` slots.
+
 ---
 
 **Path A — Native-host default slots (no skill, no harness):**
 
-Unchanged from Phase 1. Read `1-implementer.md` from the active profile, fill universal `{{VARIABLES}}`, include the assigned approach hint. Dispatch via Agent tool with `isolation: "worktree"` (or omit if `file` profile).
+Unchanged from Phase 1. Read `1-implementer.md` from the active profile, fill universal `{{VARIABLES}}`, include the assigned approach hint, and dispatch through the native-host implementer path. On Claude, the native-host implementer path is an Agent tool call with `isolation: "worktree"` (or omitted for `file`). On Codex, the native-host implementer path uses the assigned isolated slot workspace and the same prompt contract.
 
-For each slot i (1 to N), make an Agent tool call with:
+For each slot i (1 to N), use this native-host dispatch contract:
 
 | Parameter | Value |
 |-----------|-------|
@@ -365,7 +367,7 @@ Then dispatch implementers WITHOUT `isolation: "worktree"`, pointing each to its
 
 **Path B — Native-host skill-only slots (e.g., `/superpowers:test-driven-development`, no harness):**
 
-Do NOT read the profile's `1-implementer.md`. Dispatch via Agent tool with this prompt:
+Do NOT read the profile's `1-implementer.md`. Dispatch through the native-host implementer path with this prompt:
 
 ```
 You are implementing a feature in an isolated workspace.
@@ -386,11 +388,21 @@ After implementation is complete, end with this report format:
 **Concerns (if any):** [issues]
 ```
 
-Use `isolation: "worktree"` on the Agent call. Do NOT include an approach hint — the skill is the diversity mechanism.
+On Claude, this is an Agent tool call with `isolation: "worktree"`. On Codex, use the same native-host slot workspace contract. Do NOT include an approach hint — the skill is the diversity mechanism.
 
 ---
 
-**Path C — External Claude harness slots (harness = `claude`, active host = Codex):**
+**Path C — Native Claude harness slots (harness = `claude`, active host = Claude):**
+
+These are Group 1 native-host slots. Use the native Claude implementation path in the assigned isolated slot workspace. On Claude, that means an Agent tool call with the same generic spec prompt contract used for explicit harness slots. For `skill + claude` slots, translate the normalized skill to Claude syntax such as `/superpowers:test-driven-development`.
+
+**Path D — Native Codex harness slots (harness = `codex`, active host = Codex):**
+
+These are Group 1 native-host slots. Use the native Codex implementation path in the assigned isolated slot workspace: run `codex exec` in that slot workspace using the same generic spec prompt contract used for explicit Codex harness slots. For `skill + codex` slots, translate the normalized skill to Codex syntax such as `$superpowers:test-driven-development`.
+
+---
+
+**Path E — External Claude harness slots (harness = `claude`, active host = Codex):**
 
 Follow the active profile isolation. If isolation is `worktree`, create one worktree per slot, `cd` into that worktree, and launch `claude -p` directly. If isolation is `file`, create a per-slot directory under `{RUN_DIR}`, launch `claude -p` there, and tell it exactly which `{RUN_DIR}/slot-{i}.md` file to write. Do not wrap this in a native subagent.
 
@@ -423,7 +435,7 @@ Native skill prefix translation for external Claude:
 - Use no prefix for bare `claude` slots.
 - For `skill + claude` slots, translate the host-neutral skill reference to Claude syntax, for example `superpowers:test-driven-development` → `/superpowers:test-driven-development`.
 
-**Path D — External Codex harness slots (harness = `codex`, active host = Claude or Codex):**
+**Path F — External Codex harness slots (harness = `codex`, active host = Claude):**
 
 Follow the active profile isolation. If isolation is `worktree`, create one worktree per slot, `cd` into that worktree, and launch `codex exec` directly. If isolation is `file`, create a per-slot directory under `{RUN_DIR}`, launch `codex exec` there, and tell it exactly which `{RUN_DIR}/slot-{i}.md` file to write. Do not route this through a wrapper subagent.
 
@@ -464,10 +476,10 @@ Native skill prefix translation for external Codex:
 |----------------|----------|--------|-----------|-------|
 | `default` | Native host subagent path | Profile `1-implementer.md` + hint | Profile setting | Yes |
 | `/superpowers:test-driven-development` | Native host subagent path | "Invoke {skill} via Skill tool" + spec | worktree | No |
-| `claude` | External Claude harness | `claude -p` with spec | Profile setting (`worktree` or `file`) | No |
-| `/superpowers:test-driven-development + claude` | External Claude harness | `claude -p` with `/superpowers:test-driven-development` | Profile setting (`worktree` or `file`) | No |
-| `codex` | External Codex harness | `codex exec` with spec | Profile setting (`worktree` or `file`) | No |
-| `/superpowers:test-driven-development + codex` | External Codex harness | `codex exec` with `$superpowers:test-driven-development` | Profile setting (`worktree` or `file`) | No |
+| `claude` | Native Claude path on Claude; external Claude harness on Codex | Native-host generic spec prompt or `claude -p` with spec | Profile setting (`worktree` or `file`) | No |
+| `/superpowers:test-driven-development + claude` | Native Claude path on Claude; external Claude harness on Codex | Native-host skill prompt or `claude -p` with `/superpowers:test-driven-development` | Profile setting (`worktree` or `file`) | No |
+| `codex` | Native Codex path on Codex; external Codex harness on Claude | `codex exec` with spec | Profile setting (`worktree` or `file`) | No |
+| `/superpowers:test-driven-development + codex` | Native Codex path on Codex; external Codex harness on Claude | `codex exec` with `$superpowers:test-driven-development` | Profile setting (`worktree` or `file`) | No |
 
 ---
 
@@ -511,7 +523,7 @@ Do NOT show full implementer reports, self-review findings, or file lists. The t
 
 1. **Run pre-checks** for that slot. If `pre_checks` is `null`, skip and pass an empty string for `{{PRE_CHECK_RESULTS}}`. If set, `cd` into the slot's worktree first, then run the commands. Every pre-check Bash command must start with `cd {worktree_path} &&` — do not assume the shell is already in the right directory.
 
-2. **Dispatch its reviewer immediately** — do not wait for other slots. Make an Agent tool call with:
+2. **Dispatch its reviewer immediately** — do not wait for other slots. Use the native-host review path. On Claude, this is an Agent tool call. On Codex, use the native-host review execution path with the same prompt contract:
 
 | Parameter | Value |
 |-----------|-------|
@@ -558,7 +570,7 @@ Extract standout elements from each reviewer's "Strengths" section. Pick the sin
 
 As soon as all reviews are collected, dispatch the judge — do not pause for orchestrator reporting. The review report table above can be shown *after* the judge is already running, or combined with the verdict output. The goal is to eliminate idle time between the last review returning and the judge starting.
 
-Make a SINGLE Agent tool call. **The judge MUST use the most capable model** — this is where architectural judgment matters most:
+Make a SINGLE native-host judge dispatch. On Claude, this is an Agent tool call. On Codex, use the native-host judge execution path. **The judge MUST use the most capable model** — this is where architectural judgment matters most:
 
 | Parameter | Value |
 |-----------|-------|
@@ -635,7 +647,7 @@ Zero critical issues, strongest test coverage (45 tests), correct lock granulari
 
 1. The judge produced a concrete synthesis plan (which base slot, what to port from where).
 
-2. Dispatch the synthesizer as a SINGLE Agent tool call:
+2. Dispatch the synthesizer as a SINGLE native-host synthesis dispatch. On Claude, this is an Agent tool call. On Codex, use the native-host synthesizer execution path:
 
    | Parameter | Value |
    |-----------|-------|
@@ -806,7 +818,7 @@ Implementer subagents report one of four statuses in their output:
 
 By default, all agents inherit the model from your current session. If you're running Opus, every slot gets Opus. If you're running Sonnet, every slot gets Sonnet. This means you always get the quality level you're paying for.
 
-To override, set model configs in your project's `AGENTS.md`, `CLAUDE.md`, or both. Treat them as equal first-class sources and read whichever exists, or both if both exist. Merge non-conflicting `slot-machine-*` settings from both files; if both define the same key, prefer the active host file: `AGENTS.md` in Codex, `CLAUDE.md` in Claude. Inline overrides still win. Only pass the `model` parameter to the Agent tool when the user has explicitly configured an override — otherwise omit it so the session model is inherited.
+To override, set model configs in your project's `AGENTS.md`, `CLAUDE.md`, or both. Treat them as equal first-class sources and read whichever exists, or both if both exist. Merge non-conflicting `slot-machine-*` settings from both files; if both define the same key, prefer the active host file: `AGENTS.md` in Codex, `CLAUDE.md` in Claude. Inline overrides still win. Only pass a model override to the native-host dispatch mechanism when the user has explicitly configured one — otherwise omit it so the session model is inherited.
 
 | Role | Default | Configurable As | When to override |
 |------|---------|-----------------|------------------|
