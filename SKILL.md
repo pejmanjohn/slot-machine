@@ -241,7 +241,8 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
 1. **Parse slot definitions.** Check for slot definitions in precedence order: (1) inline in the user's command, (2) `slot-machine-slots` in `AGENTS.md`, `CLAUDE.md`, or both, treating them as equal first-class sources and reading whichever exists or both if both exist, merging non-conflicting `slot-machine-*` settings from both files and preferring the active host file if both define the same key, (3) fall back to profile defaults. Record the slot list — each slot is `(normalized_skill, harness)` or `default`. Check harness availability (see below).
 
    **Check harness availability and detect model.** For each slot that specifies a harness:
-   - `codex`: Run `which codex` via Bash. If not found, warn: 'Codex CLI not found — slot {i} will fall back to Claude Code. Install: `npm install -g @openai/codex`'. Change the slot's harness to `null` (falls back to Claude Code with the same skill guidance if any). If found, read the Codex model version from `~/.codex/config.toml` (look for `model = "..."` line). Record this as the slot's model identifier (e.g., `gpt-5.4`).
+   - `codex`: Run `which codex` via Bash. If not found, warn: 'Codex CLI not found — slot {i} will fall back to the native host path. Install: `npm install -g @openai/codex`'. Change the slot's harness to `null` (falls back to the native host with the same skill guidance if any). If found, read the Codex model version from `~/.codex/config.toml` (look for `model = "..."` line). Record this as the slot's model identifier (e.g., `gpt-5.4`).
+   - `claude`: Run `which claude` via Bash. If not found, warn: 'Claude CLI not found — slot {i} will fall back to the native host path.' Change the slot's harness to `null` (falls back to the native host with the same skill guidance if any). If found, record the reported or configured Claude model identifier if available; otherwise record `unknown`.
    - **Claude Code slots:** The model is the session model (e.g., `claude-opus-4-6`) or the configured `implementer_model` override.
    - Future harnesses: same pattern — check binary, read model from config, warn and fall back if missing.
 
@@ -306,7 +307,7 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
 
 ### Phase 2: Parallel Implementation
 
-**Dispatch all N slots in a SINGLE parallel wave.** Group 1 native-host slots run through the host's native isolated subagent path. Group 2 external-harness slots launch one external CLI process per worktree. This is critical — start the full wave together for true parallel execution.
+**Dispatch all N slots in a SINGLE parallel wave.** Group 1 native-host slots run through the host's native isolated subagent path. Group 2 external-harness slots launch external CLI processes in parallel using the active profile isolation. This is critical — start the full wave together for true parallel execution.
 
 Use this execution matrix to choose the path per slot:
 
@@ -319,7 +320,7 @@ Use this execution matrix to choose the path per slot:
 
 Group 1 — Native-host slots: slots whose `harness_ref` is empty or matches the active host. Dispatch them through the host's native isolated subagent mechanism.
 
-Group 2 — External-harness slots: slots whose `harness_ref` names the other CLI. Create one worktree per slot, then launch one external CLI process per worktree.
+Group 2 — External-harness slots: slots whose `harness_ref` names the other CLI. If profile isolation is `worktree`, create one worktree per slot and launch one external CLI process per worktree. If profile isolation is `file`, create one per-slot run directory/output target under `{RUN_DIR}` and launch one external CLI process there, telling it where to write the output file.
 
 ---
 
@@ -391,12 +392,12 @@ Use `isolation: "worktree"` on the Agent call. Do NOT include an approach hint �
 
 **Path C — External Claude harness slots (harness = `claude`, active host = Codex):**
 
-Create one worktree per slot, `cd` into that worktree, and launch `claude -p` directly. Do not wrap this in a native subagent.
+Follow the active profile isolation. If isolation is `worktree`, create one worktree per slot, `cd` into that worktree, and launch `claude -p` directly. If isolation is `file`, create a per-slot directory under `{RUN_DIR}`, launch `claude -p` there, and tell it exactly which `{RUN_DIR}/slot-{i}.md` file to write. Do not wrap this in a native subagent.
 
 External Claude command contract:
 
 ```bash
-claude -p "{If skill specified: '/claude_skill_name\n\n'}Implement this specification. Write all files to the current directory.
+claude -p "{If skill specified: '/claude_skill_name\n\n'}Implement this specification. {If isolation is worktree: 'Write all files to the current directory.'}{If isolation is file: 'Write the final output to {RUN_DIR}/slot-{i}.md and do not write elsewhere.'}
 Do not ask questions or wait for confirmation — make your best judgment and proceed.
 
 Specification:
@@ -424,12 +425,12 @@ Native skill prefix translation for external Claude:
 
 **Path D — External Codex harness slots (harness = `codex`, active host = Claude or Codex):**
 
-Create one worktree per slot, `cd` into that worktree, and launch `codex exec` directly. Do not route this through a wrapper subagent.
+Follow the active profile isolation. If isolation is `worktree`, create one worktree per slot, `cd` into that worktree, and launch `codex exec` directly. If isolation is `file`, create a per-slot directory under `{RUN_DIR}`, launch `codex exec` there, and tell it exactly which `{RUN_DIR}/slot-{i}.md` file to write. Do not route this through a wrapper subagent.
 
 External Codex command contract:
 
 ```bash
-codex exec "{If skill specified: '$codex_skill_name\n\n'}Implement this specification. Write all files to the current directory.
+codex exec "{If skill specified: '$codex_skill_name\n\n'}Implement this specification. {If isolation is worktree: 'Write all files to the current directory.'}{If isolation is file: 'Write the final output to {RUN_DIR}/slot-{i}.md and do not write elsewhere.'}
 Do not ask questions or wait for confirmation — make your best judgment and proceed.
 
 Specification:
@@ -463,10 +464,10 @@ Native skill prefix translation for external Codex:
 |----------------|----------|--------|-----------|-------|
 | `default` | Native host subagent path | Profile `1-implementer.md` + hint | Profile setting | Yes |
 | `/superpowers:test-driven-development` | Native host subagent path | "Invoke {skill} via Skill tool" + spec | worktree | No |
-| `claude` | External Claude harness | `claude -p` with spec | worktree | No |
-| `/superpowers:test-driven-development + claude` | External Claude harness | `claude -p` with `/superpowers:test-driven-development` | worktree | No |
-| `codex` | External Codex harness | `codex exec` with spec | worktree | No |
-| `/superpowers:test-driven-development + codex` | External Codex harness | `codex exec` with `$superpowers:test-driven-development` | worktree | No |
+| `claude` | External Claude harness | `claude -p` with spec | Profile setting (`worktree` or `file`) | No |
+| `/superpowers:test-driven-development + claude` | External Claude harness | `claude -p` with `/superpowers:test-driven-development` | Profile setting (`worktree` or `file`) | No |
+| `codex` | External Codex harness | `codex exec` with spec | Profile setting (`worktree` or `file`) | No |
+| `/superpowers:test-driven-development + codex` | External Codex harness | `codex exec` with `$superpowers:test-driven-development` | Profile setting (`worktree` or `file`) | No |
 
 ---
 
@@ -474,12 +475,12 @@ Native skill prefix translation for external Codex:
 
 | Result | Action |
 |--------|--------|
-| Agent succeeded, implementer status DONE | Record worktree path + branch. Save implementer report. Run pre-checks and dispatch reviewer (see Phase 3 streaming). |
-| Agent succeeded, status DONE_WITH_CONCERNS | Record path. Save report including concerns. Run pre-checks and dispatch reviewer. |
-| Agent succeeded, status BLOCKED or NEEDS_CONTEXT | If `max_retries` > 0: re-dispatch with additional context. Else: mark FAILED. |
-| Agent errored/crashed | If `max_retries` > 0: re-dispatch fresh. Else: mark FAILED. |
+| Slot execution succeeded, implementer status DONE | Record worktree path or output file. Save implementer report. Run pre-checks and dispatch reviewer (see Phase 3 streaming). |
+| Slot execution succeeded, status DONE_WITH_CONCERNS | Record path. Save report including concerns. Run pre-checks and dispatch reviewer. |
+| Slot execution succeeded, status BLOCKED or NEEDS_CONTEXT | If `max_retries` > 0: retry with additional context using the same execution path type. Else: mark FAILED. |
+| Slot execution errored/crashed | If `max_retries` > 0: retry fresh using the same execution path type. Else: mark FAILED. |
 
-**Retry handling:** When retrying, keep the same execution path type and do it one slot at a time with additional context addressing the block. Group 1 native-host slots retry via a fresh native subagent. Group 2 external-harness slots retry via a fresh external CLI run in a fresh worktree/process. Don't try to continue the failed run in place.
+**Retry handling:** When retrying, keep the same execution path type and do it one slot at a time with additional context addressing the block. Group 1 native-host slots retry via a fresh native subagent. Group 2 external-harness slots retry via a fresh external CLI run in a fresh worktree or fresh `{RUN_DIR}` slot directory, matching the active profile isolation. Don't try to continue the failed run in place.
 
 **Report progress** using a top-level markdown table. For writing profiles, show word count. For coding profiles, show test count. Include a one-line summary of each slot's approach (from the hint influence):
 
