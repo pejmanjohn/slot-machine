@@ -77,6 +77,31 @@ for profile_dir in "$SKILL_DIR"/profiles/*/; do
 done
 
 echo ""
+echo "=== Skill Structure: Plugin Packaging ==="
+for file in \
+    .claude-plugin/plugin.json \
+    .claude-plugin/marketplace.json \
+    .codex-plugin/plugin.json \
+    skills/slot-machine/SKILL.md; do
+    if [ -e "$SKILL_DIR/$file" ]; then
+        echo "  [PASS] Packaging file '$file' exists"
+    else
+        echo "  [FAIL] Packaging file '$file' missing"
+        FAILED=$((FAILED + 1))
+    fi
+done
+
+echo ""
+echo "=== Skill Structure: Codex Skill Link ==="
+CODEX_SKILL_PATH="$SKILL_DIR/skills/slot-machine/SKILL.md"
+if [ -L "$CODEX_SKILL_PATH" ] && [ "$(readlink "$CODEX_SKILL_PATH")" = "../../SKILL.md" ]; then
+    echo "  [PASS] Codex skill symlink points at root SKILL.md"
+else
+    echo "  [FAIL] Codex skill symlink must point at ../../SKILL.md"
+    FAILED=$((FAILED + 1))
+fi
+
+echo ""
 echo "=== Skill Structure Tests Complete ==="
 echo "Failures: $FAILED"
 exit $FAILED
