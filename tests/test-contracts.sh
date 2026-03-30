@@ -330,6 +330,10 @@ assert_contains "$SKILL_CONTENT" "review-.*\.md\|scorecard.*save\|save.*review\|
     "SKILL.md describes saving reviewer output to run dir" || FAILED=$((FAILED + 1))
 assert_contains "$SKILL_CONTENT" "verdict.*\.md\|verdict.*save\|save.*verdict\|verdict.*run_dir\|verdict.*run dir" \
     "SKILL.md describes saving judge verdict to run dir" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "RUN_DIR_REL\|absolute path\|cwd-relative redirect" \
+    "SKILL.md makes run artifact paths absolute instead of relying on cwd" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" 'mkdir -p "\$RUN_DIR"' \
+    "SKILL.md recreates the run directory before artifact writes" || FAILED=$((FAILED + 1))
 
 echo ""
 echo "=== Contract 10: Model Inheritance ==="
@@ -422,6 +426,10 @@ assert_contains "$SKILL_CONTENT" "non-zero exit\|timeout.*codex\|codex.*fail" \
 # Must describe deterministic post-run inspection fallback
 assert_contains "$SKILL_CONTENT" "git status --short\|post-run inspection\|structured agent message" \
     "SKILL.md documents deterministic fallback when structured extraction fails" || FAILED=$((FAILED + 1))
+
+# Must forbid background Codex launches that bypass harvesting
+assert_contains "$SKILL_CONTENT" "Never launch Codex slots as background Bash jobs\|wait for `codex exec` to finish\|wrapper must return a normal implementer report before reviewers or the judge can run" \
+    "SKILL.md forbids background Codex launches that bypass harvesting" || FAILED=$((FAILED + 1))
 
 # Must describe harness availability check with fallback
 assert_contains "$SKILL_CONTENT" "which codex\|codex.*not found\|fall.*back.*Claude" \

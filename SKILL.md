@@ -258,10 +258,12 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
 
 4. **Create run directory.** Create the run storage directory and add `.slot-machine/` to `.gitignore` if not already present:
    ```bash
-   RUN_DIR=".slot-machine/runs/$(date +%Y-%m-%d)-{feature_slug}"
+   RUN_DIR_REL=".slot-machine/runs/$(date +%Y-%m-%d)-{feature_slug}"
+   RUN_DIR="$PWD/$RUN_DIR_REL"
    mkdir -p "$RUN_DIR"
    grep -q '.slot-machine/' .gitignore 2>/dev/null || echo '.slot-machine/' >> .gitignore
    ```
+   Persist `RUN_DIR` as the absolute path for this run. All review, verdict, and result artifacts must be written via that absolute path, not a cwd-relative redirect. Before every artifact write later in the run, re-run `mkdir -p "$RUN_DIR"` so artifact persistence never depends on shell state.
    All artifacts from this run will be saved to `{RUN_DIR}/`.
 
 5. **Prepare isolation.** Check the profile's `isolation` field:
@@ -308,6 +310,8 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
 **Dispatch all N slots in a SINGLE message** using N parallel Agent tool calls. This is critical — all calls must be in one message for true parallel execution.
 
 Dispatch is uniform: all slots dispatch via the Agent tool regardless of harness. For Codex slots, the subagent wraps `codex exec` internally and returns a standard implementer report. For mixed-harness runs, dispatch is transparent.
+
+Never launch Codex slots as background Bash jobs from the orchestrator. The Codex wrapper agent must wait for `codex exec` to finish, harvest the final report or synthesize one from post-run inspection, and only then return control to the review/judge pipeline.
 
 ---
 
@@ -380,6 +384,8 @@ Use `isolation: "worktree"` on the Agent call. Do NOT include an approach hint �
 **Path C — Codex slots (harness = `codex`, with or without skill):**
 
 Dispatch via Agent tool — same as Paths A and B. The subagent acts as a thin wrapper that runs `codex exec` and translates the output into a standard implementer report.
+
+This wrapper path is the supported Claude-host Codex execution path. Do not replace it with a raw background shell launch: the wrapper must return a normal implementer report before reviewers or the judge can run.
 
 Agent tool call:
 
@@ -553,7 +559,7 @@ The reviewer reads actual content in the worktree/output file — it does NOT ha
 
 **When multiple slots complete close together**, batch their reviewers into a single message for parallel dispatch — this is faster than dispatching one at a time. The key rule is: don't wait for stragglers. If 2 of 3 slots are done, dispatch their 2 reviewers now rather than waiting for the 3rd.
 
-**Collect reviews as they return.** Save each reviewer's full scorecard to `{RUN_DIR}/review-{i}.md` immediately when that reviewer finishes. Use Bash to persist the raw reviewer output verbatim. Do NOT postpone these writes until after the summary table, and do NOT replace the saved scorecard with only your orchestrator summary.
+**Collect reviews as they return.** Save each reviewer's full scorecard to `{RUN_DIR}/review-{i}.md` immediately when that reviewer finishes. Use the absolute path from `RUN_DIR` when persisting the file. If you use Bash, run `mkdir -p "$RUN_DIR"` immediately before the write; if you use a file-write tool, pass the same absolute path. Do NOT postpone these writes until after the summary table, and do NOT replace the saved scorecard with only your orchestrator summary. Never rely on the current shell directory for artifact redirects.
 
 **Before dispatching the judge, verify the review artifacts exist.** For every successful slot, confirm `{RUN_DIR}/review-{i}.md` exists and is non-empty. If any scorecard file is missing, write it before continuing. The judge phase is not allowed to start with missing review artifacts.
 
@@ -644,7 +650,7 @@ The judge returns one of three verdicts:
 - **SYNTHESIZE** — multiple slots have complementary strengths worth combining
 - **NONE_ADEQUATE** — all slots have critical issues
 
-Save the judge's full verdict and reasoning to `{RUN_DIR}/verdict.md` using Bash before composing the user-facing verdict block.
+Save the judge's full verdict and reasoning to `{RUN_DIR}/verdict.md` before composing the user-facing verdict block. Use the absolute `RUN_DIR` path, and if you use Bash run `mkdir -p "$RUN_DIR"` immediately before the write.
 
 **Before continuing to the final report, verify `{RUN_DIR}/verdict.md` exists and is non-empty.** If the file is missing, write it before proceeding. The inline verdict shown to the user is not a substitute for the persisted run artifact.
 
@@ -806,7 +812,8 @@ The final report has three parts: the H1 header, the output content, and the foo
 **Part 3: Result artifact** — always write a machine-readable JSON file to the run directory:
 
 ```bash
-cat > {RUN_DIR}/result.json << RESULT
+mkdir -p "{RUN_DIR}"
+cat > "{RUN_DIR}/result.json" << RESULT
 {
   "verdict": "{PICK|SYNTHESIZE|NONE_ADEQUATE}",
   "winning_slot": {N or null},
@@ -820,7 +827,7 @@ cat > {RUN_DIR}/result.json << RESULT
 RESULT
 
 # Create latest symlink for easy script access
-ln -sfn "$(basename {RUN_DIR})" "$(dirname {RUN_DIR})/latest"
+ln -sfn "$(basename "{RUN_DIR}")" "$(dirname "{RUN_DIR}")/latest"
 ```
 
 This is always written, every run. Humans ignore it. Autonomous loops and scripts parse it via `.slot-machine/runs/latest/result.json`.
