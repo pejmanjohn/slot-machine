@@ -372,7 +372,7 @@ Do NOT read the profile's `1-implementer.md`. Dispatch through the native-host i
 ```
 You are implementing a feature in an isolated workspace.
 
-IMPORTANT: You MUST invoke the {skill_name} skill using the Skill tool before beginning implementation. Follow its workflow exactly.
+IMPORTANT: You MUST invoke the normalized host-neutral skill reference `{skill_name}` using the active host's native skill mechanism before beginning implementation. On Claude, translate it to Claude skill syntax and invoke it through Claude's native skill flow. On Codex, translate it to Codex skill syntax and invoke it through the native Codex path. Follow its workflow exactly.
 
 Specification:
 {spec}
@@ -388,7 +388,7 @@ After implementation is complete, end with this report format:
 **Concerns (if any):** [issues]
 ```
 
-On Claude, this is an Agent tool call with `isolation: "worktree"` for `worktree` profiles, or with `isolation` omitted for `file` profiles and an explicit `{RUN_DIR}/slot-{i}.md` destination in the prompt. On Codex, use the same native-host slot workspace contract, following the active profile isolation. Do NOT include an approach hint — the skill is the diversity mechanism.
+On Claude, this is an Agent tool call with `isolation: "worktree"` for `worktree` profiles, or with `isolation` omitted for `file` profiles and an explicit `{RUN_DIR}/slot-{i}.md` destination in the prompt; translate `superpowers:test-driven-development` to `/superpowers:test-driven-development` and invoke it through Claude's native skill flow. On Codex, follow the same native-host slot workspace contract and active profile isolation; translate `superpowers:test-driven-development` to `$superpowers:test-driven-development` and invoke it through the native Codex path. Do NOT include an approach hint — the skill is the diversity mechanism.
 
 ---
 
@@ -475,7 +475,7 @@ Native skill prefix translation for external Codex:
 | Slot definition | Dispatch | Prompt | Isolation | Hint? |
 |----------------|----------|--------|-----------|-------|
 | `default` | Native host subagent path | Profile `1-implementer.md` + hint | Profile setting | Yes |
-| `/superpowers:test-driven-development` | Native host execution path | "Invoke {skill} via Skill tool" + spec | Profile setting (`worktree` or `file`) | No |
+| `/superpowers:test-driven-development` | Native host execution path | "Invoke normalized skill via host-native skill mechanism" + spec | Profile setting (`worktree` or `file`) | No |
 | `claude` | Native Claude path on Claude; external Claude harness on Codex | Native-host generic spec prompt or `claude -p` with spec | Profile setting (`worktree` or `file`) | No |
 | `/superpowers:test-driven-development + claude` | Native Claude path on Claude; external Claude harness on Codex | Native-host skill prompt or `claude -p` with `/superpowers:test-driven-development` | Profile setting (`worktree` or `file`) | No |
 | `codex` | Native Codex path on Codex; external Codex harness on Claude | `codex exec` with spec | Profile setting (`worktree` or `file`) | No |
