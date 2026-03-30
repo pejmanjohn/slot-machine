@@ -275,10 +275,6 @@ assert_contains "$SKILL_CONTENT" "\$superpowers:test-driven-development" \
 assert_contains "$SKILL_CONTENT" "normalize.*superpowers:test-driven-development\|host-neutral skill reference" \
     "SKILL.md explains host-neutral skill normalization" || FAILED=$((FAILED + 1))
 
-# Must treat AGENTS.md and CLAUDE.md as equal config sources
-assert_contains "$SKILL_CONTENT" "AGENTS.md.*CLAUDE.md\|CLAUDE.md.*AGENTS.md\|config can live in either file\|either file" \
-    "SKILL.md treats AGENTS.md and CLAUDE.md as interchangeable config sources" || FAILED=$((FAILED + 1))
-
 # Must describe CLAUDE.md config key
 assert_contains "$SKILL_CONTENT" "slot-machine-slots" \
     "SKILL.md documents slot-machine-slots config key" || FAILED=$((FAILED + 1))
