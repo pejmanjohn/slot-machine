@@ -306,7 +306,7 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
 
 ### Phase 2: Parallel Implementation
 
-**Dispatch all N slots in a SINGLE message** using N parallel Agent tool calls. This is critical — all calls must be in one message for true parallel execution.
+**Dispatch all N slots in a SINGLE parallel wave.** Group 1 native-host slots run through the host's native isolated subagent path. Group 2 external-harness slots launch one external CLI process per worktree. This is critical — start the full wave together for true parallel execution.
 
 Use this execution matrix to choose the path per slot:
 
@@ -414,7 +414,8 @@ When done, provide a summary of:
 ```
 
 Failure normalization for external Claude runs:
-- Missing CLI, timeout, non-zero exit, empty report, or unparsable `stream-json` output → normalize to `BLOCKED` with the failure details attached.
+- Missing CLI → warn and fall back to the native host path when possible, preserving the same normalized skill guidance if any.
+- Timeout, non-zero exit, empty report, or unparsable `stream-json` output → normalize to `BLOCKED` with the failure details attached.
 - Otherwise, translate the final Claude report to the standard implementer report format.
 
 Native skill prefix translation for external Claude:
@@ -448,7 +449,8 @@ When done, provide a summary of:
 ```
 
 Failure normalization for external Codex runs:
-- Missing CLI, timeout, non-zero exit, empty report, or unparsable `--json` output → normalize to `BLOCKED` with the failure details attached.
+- Missing CLI → warn and fall back to the native host path when possible, preserving the same normalized skill guidance if any.
+- Timeout, non-zero exit, empty report, or unparsable `--json` output → normalize to `BLOCKED` with the failure details attached.
 - Otherwise, parse the JSONL stream, extract the final agent report, and translate it to the standard implementer report format.
 
 Native skill prefix translation for external Codex:
@@ -468,7 +470,7 @@ Native skill prefix translation for external Codex:
 
 ---
 
-**After all agents return**, process each result:
+**After all slots return**, process each result:
 
 | Result | Action |
 |--------|--------|
@@ -477,7 +479,7 @@ Native skill prefix translation for external Codex:
 | Agent succeeded, status BLOCKED or NEEDS_CONTEXT | If `max_retries` > 0: re-dispatch with additional context. Else: mark FAILED. |
 | Agent errored/crashed | If `max_retries` > 0: re-dispatch fresh. Else: mark FAILED. |
 
-**Retry handling:** When retrying, dispatch a SINGLE Agent call (not parallel) with the same template but additional context addressing the block. Use a fresh subagent — don't try to continue the failed one.
+**Retry handling:** When retrying, keep the same execution path type and do it one slot at a time with additional context addressing the block. Group 1 native-host slots retry via a fresh native subagent. Group 2 external-harness slots retry via a fresh external CLI run in a fresh worktree/process. Don't try to continue the failed run in place.
 
 **Report progress** using a top-level markdown table. For writing profiles, show word count. For coding profiles, show test count. Include a one-line summary of each slot's approach (from the hint influence):
 
