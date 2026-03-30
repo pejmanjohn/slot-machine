@@ -49,6 +49,7 @@ When editing this repo, preserve these invariants:
 
 - Follow the existing repo style: Markdown and shell first, minimal ceremony.
 - Prefer focused edits. Avoid wholesale prompt rewrites unless the task requires a behavior change.
+- Use conventional branch type prefixes for repo work: `feat/`, `fix/`, `docs/`, `style/` with a short kebab-case suffix.
 - If you add a new built-in profile, include all five files:
   - `0-profile.md`
   - `1-implementer.md`

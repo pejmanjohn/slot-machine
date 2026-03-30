@@ -19,6 +19,7 @@ You are working on the slot-machine skill — a Claude Code skill for best-of-N 
 - SKILL.md description must ONLY describe when to trigger, never the workflow
 - All {{VARIABLES}} in profile prompts must be from the universal variable set in SKILL.md
 - Status/verdict values must match across SKILL.md and all profiles
+- Use conventional branch type prefixes for repo work: `feat/`, `fix/`, `docs/`, `style/` with a short kebab-case suffix
 - Run `./tests/run-tests.sh` before committing
 
 ## Testing

@@ -7,6 +7,21 @@
 3. Run `./tests/run-tests.sh` (must pass)
 4. Submit a PR
 
+## Branch Naming
+
+Use branch type prefixes so the purpose of a branch is obvious at a glance:
+
+- `feat/<short-kebab-name>` for new functionality
+- `fix/<short-kebab-name>` for bug fixes
+- `docs/<short-kebab-name>` for documentation-only changes
+- `style/<short-kebab-name>` for formatting or non-behavioral cleanup
+
+Examples:
+
+- `docs/readme-anthropic-footnote`
+- `fix/reviewer-scorecard-parser`
+- `feat/writing-profile-inheritance`
+
 ## Testing Requirements
 
 All PRs must pass the contract validation suite:
