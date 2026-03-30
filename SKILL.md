@@ -57,7 +57,7 @@ digraph when_to_use {
 
 ## Configuration
 
-Project config can live in `AGENTS.md`, `CLAUDE.md`, or both; treat them as equal first-class sources. Read whichever exists, or both if both exist. User can override inline (e.g., "slot-machine this with 3 slots").
+Project config can live in `AGENTS.md`, `CLAUDE.md`, or both; treat them as equal first-class sources. Read whichever exists, or both if both exist. When both exist, merge non-conflicting `slot-machine-*` settings from both files. If both files define the same `slot-machine-*` key, prefer the file for the active host: `AGENTS.md` in Codex, `CLAUDE.md` in Claude. User can override inline (e.g., "slot-machine this with 3 slots").
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -79,7 +79,7 @@ Profiles define the task-specific content for a slot-machine run: approach hints
 ### Profile Discovery (order of precedence)
 
 1. **Explicit:** user says `--profile X` or `profile: X`
-2. **Project default:** `AGENTS.md`, `CLAUDE.md`, or both set `slot-machine-profile: X`. Treat them as equal first-class sources and read whichever exists, or both if both exist.
+2. **Project default:** `AGENTS.md`, `CLAUDE.md`, or both set `slot-machine-profile: X`. Treat them as equal first-class sources and read whichever exists, or both if both exist. Merge non-conflicting `slot-machine-*` settings from both files; if both define the same key, prefer the active host file: `AGENTS.md` in Codex, `CLAUDE.md` in Claude.
 3. **Local:** `./profiles/` folders in the project
 4. **User:** `~/.slot-machine/profiles/` (community or personal profiles)
 5. **Skill:** `profiles/` in the slot-machine skill directory (the built-in profiles)
@@ -135,7 +135,7 @@ Slots can be configured per-slot instead of using the same profile implementer f
 ### Slot Definition Sources (precedence)
 
 1. **Inline:** Parsed from the user's command. Slash-prefixed or dollar-prefixed names are skills, bare names are harnesses. `+` composes them. `default` means profile implementer + approach hint.
-2. **AGENTS.md or CLAUDE.md config:** Project config can live in either file or both as equal first-class sources. Read `slot-machine-profile` and `slot-machine-slots` from whichever exists, or both if both exist:
+2. **AGENTS.md or CLAUDE.md config:** Project config can live in either file or both as equal first-class sources. Read `slot-machine-profile` and `slot-machine-slots` from whichever exists, or both if both exist. Merge non-conflicting `slot-machine-*` settings from both files; if both define the same key, prefer the active host file: `AGENTS.md` in Codex, `CLAUDE.md` in Claude:
    ```markdown
    slot-machine-profile: coding
    slot-machine-slots:
@@ -178,7 +178,7 @@ Approach hints only apply to `default` slots. Skill-based slots do NOT get appro
 
 ### Poor Slot Candidate Warning
 
-If a parsed skill name matches a known multi-agent orchestrator (`/superpowers:subagent-driven-development`, `/superpowers:executing-plans`), warn the user: "⚠ {skill} is a multi-agent orchestrator — running it inside a slot creates nested pipelines (slower, redundant review). Consider using a single-session skill like /superpowers:test-driven-development instead." Do not block — the user may have a reason.
+Apply this warning after normalizing the parsed skill name to its host-neutral form. If the normalized skill name matches a known multi-agent orchestrator (`superpowers:subagent-driven-development`, `superpowers:executing-plans`), warn the user: "⚠ {skill} is a multi-agent orchestrator — running it inside a slot creates nested pipelines (slower, redundant review). Consider using a single-session skill like /superpowers:test-driven-development instead." Do not block — the user may have a reason.
 
 ## Skill Discovery
 
@@ -203,7 +203,7 @@ Discovery ONLY fires on explicit "all my/implementation skills" language or `--d
 2. Filter by signals:
    - **Include:** "implement", "build", "execute plan", "write code", "development workflow"
    - **Exclude:** "review", "deploy", "ship", "test-only", "audit", "monitor", "debug"
-3. Filter out known poor candidates: `/superpowers:subagent-driven-development`, `/superpowers:executing-plans`
+3. Normalize candidate skill names to host-neutral form before filtering. Filter out known poor candidates by normalized name: `superpowers:subagent-driven-development`, `superpowers:executing-plans`
 4. Check for external harnesses: run `which codex`, `which gemini` via Bash
 5. Propose the filtered list to the user
 
@@ -238,7 +238,7 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
 
 0. **Load profile.** Follow the [Profile Loading](#profile-loading) section to find the active profile folder and read `profile.md` from it for config. Report to user: "Using profile: {profile_name}"
 
-1. **Parse slot definitions.** Check for slot definitions in precedence order: (1) inline in the user's command, (2) `slot-machine-slots` in `AGENTS.md`, `CLAUDE.md`, or both, treating them as equal first-class sources and reading whichever exists or both if both exist, (3) fall back to profile defaults. Record the slot list — each slot is `(normalized_skill, harness)` or `default`. Check harness availability (see below).
+1. **Parse slot definitions.** Check for slot definitions in precedence order: (1) inline in the user's command, (2) `slot-machine-slots` in `AGENTS.md`, `CLAUDE.md`, or both, treating them as equal first-class sources and reading whichever exists or both if both exist, merging non-conflicting `slot-machine-*` settings from both files and preferring the active host file if both define the same key, (3) fall back to profile defaults. Record the slot list — each slot is `(normalized_skill, harness)` or `default`. Check harness availability (see below).
 
    **Check harness availability and detect model.** For each slot that specifies a harness:
    - `codex`: Run `which codex` via Bash. If not found, warn: 'Codex CLI not found — slot {i} will fall back to Claude Code. Install: `npm install -g @openai/codex`'. Change the slot's harness to `null` (falls back to Claude Code with the same skill guidance if any). If found, read the Codex model version from `~/.codex/config.toml` (look for `model = "..."` line). Record this as the slot's model identifier (e.g., `gpt-5.4`).
@@ -487,7 +487,7 @@ Native skill prefix translation for external Codex:
 |------|--------|---------|-------|-------------|----------|
 | 1 | `DONE` | Claude | `claude-opus-4-6` | 13 tests | /superpowers:test-driven-development |
 | 2 | `DONE` | Codex | `gpt-5.4` | 15 tests | /superpowers:test-driven-development + codex |
-| 3 | `DONE` | Claude | `claude-opus-4-6` | 21 tests | /ce:work |
+| 3 | `DONE` | Claude | `claude-opus-4-6` | 21 tests | claude |
 | 4 | `DONE_WITH_CONCERNS` | Codex | `gpt-5.4` | 8 tests | codex |
 
 Model is the reported model identifier when available; otherwise use the configured model or `unknown`.
@@ -803,7 +803,7 @@ Implementer subagents report one of four statuses in their output:
 
 By default, all agents inherit the model from your current session. If you're running Opus, every slot gets Opus. If you're running Sonnet, every slot gets Sonnet. This means you always get the quality level you're paying for.
 
-To override, set model configs in your project's `AGENTS.md`, `CLAUDE.md`, or both. Treat them as equal first-class sources and read whichever exists, or both if both exist. Inline overrides still win. Only pass the `model` parameter to the Agent tool when the user has explicitly configured an override — otherwise omit it so the session model is inherited.
+To override, set model configs in your project's `AGENTS.md`, `CLAUDE.md`, or both. Treat them as equal first-class sources and read whichever exists, or both if both exist. Merge non-conflicting `slot-machine-*` settings from both files; if both define the same key, prefer the active host file: `AGENTS.md` in Codex, `CLAUDE.md` in Claude. Inline overrides still win. Only pass the `model` parameter to the Agent tool when the user has explicitly configured an override — otherwise omit it so the session model is inherited.
 
 | Role | Default | Configurable As | When to override |
 |------|---------|-----------------|------------------|
