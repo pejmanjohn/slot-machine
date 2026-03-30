@@ -283,6 +283,10 @@ assert_contains "$SKILL_CONTENT" "AGENTS.md.*CLAUDE.md\|CLAUDE.md.*AGENTS.md\|co
 assert_contains "$SKILL_CONTENT" "slot-machine-slots" \
     "SKILL.md documents slot-machine-slots config key" || FAILED=$((FAILED + 1))
 
+# Must treat AGENTS.md and CLAUDE.md as equal/either config sources
+assert_contains "$SKILL_CONTENT" '\(AGENTS\.md.*CLAUDE\.md.*equal.*sources\|CLAUDE\.md.*AGENTS\.md.*equal.*sources\|either.*AGENTS\.md.*CLAUDE\.md\|either.*CLAUDE\.md.*AGENTS\.md\)' \
+    "SKILL.md treats AGENTS.md and CLAUDE.md as equal/either config sources" || FAILED=$((FAILED + 1))
+
 # Must describe precedence
 assert_contains "$SKILL_CONTENT" "inline.*CLAUDE.md.*profile\|precedence" \
     "SKILL.md documents slot definition precedence" || FAILED=$((FAILED + 1))
