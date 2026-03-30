@@ -57,7 +57,7 @@ digraph when_to_use {
 
 ## Configuration
 
-Project config can live in either `AGENTS.md` or `CLAUDE.md`; treat them as equal first-class sources. User can override inline (e.g., "slot-machine this with 3 slots").
+Project config can live in `AGENTS.md`, `CLAUDE.md`, or both; treat them as equal first-class sources. Read whichever exists, or both if both exist. User can override inline (e.g., "slot-machine this with 3 slots").
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -79,7 +79,7 @@ Profiles define the task-specific content for a slot-machine run: approach hints
 ### Profile Discovery (order of precedence)
 
 1. **Explicit:** user says `--profile X` or `profile: X`
-2. **Project default:** `AGENTS.md` or `CLAUDE.md` sets `slot-machine-profile: X`
+2. **Project default:** `AGENTS.md`, `CLAUDE.md`, or both set `slot-machine-profile: X`. Treat them as equal first-class sources and read whichever exists, or both if both exist.
 3. **Local:** `./profiles/` folders in the project
 4. **User:** `~/.slot-machine/profiles/` (community or personal profiles)
 5. **Skill:** `profiles/` in the slot-machine skill directory (the built-in profiles)
@@ -135,7 +135,7 @@ Slots can be configured per-slot instead of using the same profile implementer f
 ### Slot Definition Sources (precedence)
 
 1. **Inline:** Parsed from the user's command. Slash-prefixed or dollar-prefixed names are skills, bare names are harnesses. `+` composes them. `default` means profile implementer + approach hint.
-2. **AGENTS.md or CLAUDE.md config:** Project config can live in either file as equal first-class sources. Read `slot-machine-profile` and `slot-machine-slots` if present:
+2. **AGENTS.md or CLAUDE.md config:** Project config can live in either file or both as equal first-class sources. Read `slot-machine-profile` and `slot-machine-slots` from whichever exists, or both if both exist:
    ```markdown
    slot-machine-profile: coding
    slot-machine-slots:
@@ -238,7 +238,7 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
 
 0. **Load profile.** Follow the [Profile Loading](#profile-loading) section to find the active profile folder and read `profile.md` from it for config. Report to user: "Using profile: {profile_name}"
 
-1. **Parse slot definitions.** Check for slot definitions in precedence order: (1) inline in the user's command, (2) `slot-machine-slots` in `AGENTS.md` or `CLAUDE.md`, (3) fall back to profile defaults. Record the slot list — each slot is `(normalized_skill, harness)` or `default`. Check harness availability (see below).
+1. **Parse slot definitions.** Check for slot definitions in precedence order: (1) inline in the user's command, (2) `slot-machine-slots` in `AGENTS.md`, `CLAUDE.md`, or both, treating them as equal first-class sources and reading whichever exists or both if both exist, (3) fall back to profile defaults. Record the slot list — each slot is `(normalized_skill, harness)` or `default`. Check harness availability (see below).
 
    **Check harness availability and detect model.** For each slot that specifies a harness:
    - `codex`: Run `which codex` via Bash. If not found, warn: 'Codex CLI not found — slot {i} will fall back to Claude Code. Install: `npm install -g @openai/codex`'. Change the slot's harness to `null` (falls back to Claude Code with the same skill guidance if any). If found, read the Codex model version from `~/.codex/config.toml` (look for `model = "..."` line). Record this as the slot's model identifier (e.g., `gpt-5.4`).
@@ -308,11 +308,22 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
 
 **Dispatch all N slots in a SINGLE message** using N parallel Agent tool calls. This is critical — all calls must be in one message for true parallel execution.
 
-Dispatch is uniform: all slots dispatch via the Agent tool regardless of harness. For Codex slots, the subagent wraps `codex exec` internally and returns a standard implementer report. For mixed-harness runs, dispatch is transparent.
+Use this execution matrix to choose the path per slot:
+
+| Active host | Slot harness | Execution path |
+|-------------|--------------|----------------|
+| Claude | Claude | Native Claude orchestration/subagent path |
+| Claude | Codex | Worktree + `codex exec` |
+| Codex | Codex | Worktree + `codex exec` |
+| Codex | Claude | Worktree + `claude -p` |
+
+Group 1 — Native-host slots: slots whose `harness_ref` is empty or matches the active host. Dispatch them through the host's native isolated subagent mechanism.
+
+Group 2 — External-harness slots: slots whose `harness_ref` names the other CLI. Create one worktree per slot, then launch one external CLI process per worktree.
 
 ---
 
-**Path A — Default slots (no skill, no harness):**
+**Path A — Native-host default slots (no skill, no harness):**
 
 Unchanged from Phase 1. Read `1-implementer.md` from the active profile, fill universal `{{VARIABLES}}`, include the assigned approach hint. Dispatch via Agent tool with `isolation: "worktree"` (or omit if `file` profile).
 
@@ -351,7 +362,7 @@ Then dispatch implementers WITHOUT `isolation: "worktree"`, pointing each to its
 
 ---
 
-**Path B — Skill-only slots (e.g., `/superpowers:test-driven-development`, no harness):**
+**Path B — Native-host skill-only slots (e.g., `/superpowers:test-driven-development`, no harness):**
 
 Do NOT read the profile's `1-implementer.md`. Dispatch via Agent tool with this prompt:
 
@@ -378,85 +389,82 @@ Use `isolation: "worktree"` on the Agent call. Do NOT include an approach hint �
 
 ---
 
-**Path C — Codex slots (harness = `codex`, with or without skill):**
+**Path C — External Claude harness slots (harness = `claude`, active host = Codex):**
 
-Dispatch via Agent tool — same as Paths A and B. The subagent acts as a thin wrapper that runs `codex exec` and translates the output into a standard implementer report.
+Create one worktree per slot, `cd` into that worktree, and launch `claude -p` directly. Do not wrap this in a native subagent.
 
-Agent tool call:
+External Claude command contract:
 
-| Parameter | Value |
-|-----------|-------|
-| `description` | `"Slot {i}: Implement {feature_name} (via Codex)"` |
-| `isolation` | `"worktree"` if profile isolation is `worktree`; omit if `file` |
-| `model` | Omit (the subagent is a wrapper — the actual model is Codex's) |
-| `prompt` | See Codex wrapper prompt below |
+```bash
+claude -p "{If skill specified: '/claude_skill_name\n\n'}Implement this specification. Write all files to the current directory.
+Do not ask questions or wait for confirmation — make your best judgment and proceed.
 
-**Codex wrapper prompt:**
+Specification:
+{spec}
 
-```
-You are a wrapper agent that dispatches implementation to Codex CLI and reports back.
+Project context:
+{project_context}
 
-1. Run `codex exec` in the current directory using the Bash tool. The `--json` flag emits JSONL output — pipe it through the Python parser to extract the final report:
-
-   ```bash
-   codex exec "{If skill specified: '$codex_skill_name\n\n'}Implement this specification. Write all files to the current directory.
-   Do not ask questions or wait for confirmation — make your best judgment and proceed.
-
-   Specification:
-   {spec}
-
-   Project context:
-   {project_context}
-
-   When done, provide a summary of:
-   - What you implemented (bullet list)
-   - Files created or modified
-   - Test results if you wrote tests
-   - Any concerns or issues encountered" \
-     -s workspace-write \
-     -c 'model_reasoning_effort="high"' \
-     --json 2>codex-stderr.txt | python3 -c "
-   import sys, json
-   for line in sys.stdin:
-       line = line.strip()
-       if not line: continue
-       try:
-           obj = json.loads(line)
-           t = obj.get('type', '')
-           if t == 'item.completed' and 'item' in obj:
-               item = obj['item']
-               if item.get('type') == 'agent_message' and item.get('text'):
-                   print(item['text'])
-               elif item.get('type') == 'command_execution':
-                   cmd = item.get('command', '')
-                   if cmd: print(f'[codex ran] {cmd}')
-       except: pass
-   " > codex-report.txt
-   ```
-
-2. After `codex exec` completes:
-   - If non-zero exit code, empty report, or timeout → report Status: BLOCKED with error details
-   - Otherwise → commit files: `git add -A && git commit -m "feat: {feature_name}"`
-
-3. Read `codex-report.txt` and translate to standard report format:
-
-   **Status:** DONE (or DONE_WITH_CONCERNS if Codex reported concerns, BLOCKED if codex failed)
-   **What I implemented:** [from Codex report]
-   **Files changed:** [list files in current directory]
-   **Test results:** [from Codex report]
-   **Concerns (if any):** [from Codex report]
+When done, provide a summary of:
+- What you implemented (bullet list)
+- Files created or modified
+- Test results if you wrote tests
+- Any concerns or issues encountered" \
+  --output-format stream-json 2>claude-stderr.txt > claude-stream.jsonl
 ```
 
-Do NOT include an approach hint — for bare `codex` slots, the prompt has no skill prefix. For `skill + codex` slots, the `$codex_skill_name` prefix triggers native skill loading in Codex.
+Failure normalization for external Claude runs:
+- Missing CLI, timeout, non-zero exit, empty report, or unparsable `stream-json` output → normalize to `BLOCKED` with the failure details attached.
+- Otherwise, translate the final Claude report to the standard implementer report format.
+
+Native skill prefix translation for external Claude:
+- Use no prefix for bare `claude` slots.
+- For `skill + claude` slots, translate the host-neutral skill reference to Claude syntax, for example `superpowers:test-driven-development` → `/superpowers:test-driven-development`.
+
+**Path D — External Codex harness slots (harness = `codex`, active host = Claude or Codex):**
+
+Create one worktree per slot, `cd` into that worktree, and launch `codex exec` directly. Do not route this through a wrapper subagent.
+
+External Codex command contract:
+
+```bash
+codex exec "{If skill specified: '$codex_skill_name\n\n'}Implement this specification. Write all files to the current directory.
+Do not ask questions or wait for confirmation — make your best judgment and proceed.
+
+Specification:
+{spec}
+
+Project context:
+{project_context}
+
+When done, provide a summary of:
+- What you implemented (bullet list)
+- Files created or modified
+- Test results if you wrote tests
+- Any concerns or issues encountered" \
+  -s workspace-write \
+  -c 'model_reasoning_effort="high"' \
+  --json 2>codex-stderr.txt > codex-stream.jsonl
+```
+
+Failure normalization for external Codex runs:
+- Missing CLI, timeout, non-zero exit, empty report, or unparsable `--json` output → normalize to `BLOCKED` with the failure details attached.
+- Otherwise, parse the JSONL stream, extract the final agent report, and translate it to the standard implementer report format.
+
+Native skill prefix translation for external Codex:
+- Use no prefix for bare `codex` slots.
+- For `skill + codex` slots, translate the host-neutral skill reference to Codex syntax, for example `superpowers:test-driven-development` → `$superpowers:test-driven-development`.
 
 ---
 
 | Slot definition | Dispatch | Prompt | Isolation | Hint? |
 |----------------|----------|--------|-----------|-------|
-| `default` | Agent tool | Profile `1-implementer.md` + hint | Profile setting | Yes |
-| `/superpowers:test-driven-development` | Agent tool | "Invoke {skill} via Skill tool" + spec | worktree | No |
-| `codex` | Agent tool (Codex wrapper) | Wrapper runs `codex exec` with spec | worktree | No |
-| `/superpowers:test-driven-development + codex` | Agent tool (Codex wrapper) | Wrapper runs `codex exec` with `$superpowers:test-driven-development` | worktree | No |
+| `default` | Native host subagent path | Profile `1-implementer.md` + hint | Profile setting | Yes |
+| `/superpowers:test-driven-development` | Native host subagent path | "Invoke {skill} via Skill tool" + spec | worktree | No |
+| `claude` | External Claude harness | `claude -p` with spec | worktree | No |
+| `/superpowers:test-driven-development + claude` | External Claude harness | `claude -p` with `/superpowers:test-driven-development` | worktree | No |
+| `codex` | External Codex harness | `codex exec` with spec | worktree | No |
+| `/superpowers:test-driven-development + codex` | External Codex harness | `codex exec` with `$superpowers:test-driven-development` | worktree | No |
 
 ---
 
@@ -475,12 +483,14 @@ Do NOT include an approach hint — for bare `codex` slots, the prompt has no sk
 
 **Phase 2:** Implementation — `done`
 
-| Slot | Status | Model | Words/Tests | Approach |
-|------|--------|-------|-------------|----------|
-| 1 | `DONE` | `claude-opus-4-6` | 13 tests | /superpowers:test-driven-development |
-| 2 | `DONE` | `gpt-5.4` | 15 tests | /superpowers:test-driven-development + codex |
-| 3 | `DONE` | `claude-opus-4-6` | 21 tests | /ce:work |
-| 4 | `DONE_WITH_CONCERNS` | `gpt-5.4` | 8 tests | codex |
+| Slot | Status | Harness | Model | Words/Tests | Approach |
+|------|--------|---------|-------|-------------|----------|
+| 1 | `DONE` | Claude | `claude-opus-4-6` | 13 tests | /superpowers:test-driven-development |
+| 2 | `DONE` | Codex | `gpt-5.4` | 15 tests | /superpowers:test-driven-development + codex |
+| 3 | `DONE` | Claude | `claude-opus-4-6` | 21 tests | /ce:work |
+| 4 | `DONE_WITH_CONCERNS` | Codex | `gpt-5.4` | 8 tests | codex |
+
+Model is the reported model identifier when available; otherwise use the configured model or `unknown`.
 
 Do NOT show full implementer reports, self-review findings, or file lists. The table summarizes the essential information. Agent internals are pipeline noise.
 
@@ -793,7 +803,7 @@ Implementer subagents report one of four statuses in their output:
 
 By default, all agents inherit the model from your current session. If you're running Opus, every slot gets Opus. If you're running Sonnet, every slot gets Sonnet. This means you always get the quality level you're paying for.
 
-To override, set model configs in your project's `AGENTS.md` or `CLAUDE.md`, or inline. Only pass the `model` parameter to the Agent tool when the user has explicitly configured an override — otherwise omit it so the session model is inherited.
+To override, set model configs in your project's `AGENTS.md`, `CLAUDE.md`, or both. Treat them as equal first-class sources and read whichever exists, or both if both exist. Inline overrides still win. Only pass the `model` parameter to the Agent tool when the user has explicitly configured an override — otherwise omit it so the session model is inherited.
 
 | Role | Default | Configurable As | When to override |
 |------|---------|-----------------|------------------|
