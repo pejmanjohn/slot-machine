@@ -267,6 +267,18 @@ assert_contains "$SKILL_CONTENT" "## Slot Definitions" \
 assert_contains "$SKILL_CONTENT" '+ codex' \
     "SKILL.md describes skill + harness composition with codex" || FAILED=$((FAILED + 1))
 
+# Must describe host-neutral skill references for TDD
+assert_contains "$SKILL_CONTENT" "/superpowers:test-driven-development" \
+    "SKILL.md documents /superpowers:test-driven-development" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "\$superpowers:test-driven-development" \
+    "SKILL.md documents \$superpowers:test-driven-development" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "normalize.*superpowers:test-driven-development\|host-neutral skill reference" \
+    "SKILL.md explains host-neutral skill normalization" || FAILED=$((FAILED + 1))
+
+# Must treat AGENTS.md and CLAUDE.md as equal config sources
+assert_contains "$SKILL_CONTENT" "AGENTS.md.*CLAUDE.md.*equal config sources\|CLAUDE.md.*AGENTS.md.*equal config sources\|same config sources" \
+    "SKILL.md treats AGENTS.md and CLAUDE.md as equal config sources" || FAILED=$((FAILED + 1))
+
 # Must describe CLAUDE.md config key
 assert_contains "$SKILL_CONTENT" "slot-machine-slots" \
     "SKILL.md documents slot-machine-slots config key" || FAILED=$((FAILED + 1))
@@ -284,33 +296,51 @@ assert_contains "$SKILL_CONTENT" "skill.*no.*hint\|hint.*only.*default\|default.
     "SKILL.md clarifies hints only apply to default slots" || FAILED=$((FAILED + 1))
 
 echo ""
-echo "=== Contract 12: Codex Dispatch ==="
-# SKILL.md must describe native codex exec dispatch
-assert_contains "$SKILL_CONTENT" "codex exec" \
-    "SKILL.md describes codex exec dispatch" || FAILED=$((FAILED + 1))
+echo "=== Contract 12: Host and Harness Execution ==="
+# SKILL.md must describe an execution matrix with host, harness, and path columns
+assert_contains "$SKILL_CONTENT" "Active host.*Slot harness.*Execution path" \
+    "SKILL.md has an execution matrix with host, harness, and path columns" || FAILED=$((FAILED + 1))
 
-# Must specify workspace-write mode
-assert_contains "$SKILL_CONTENT" "workspace-write" \
-    "SKILL.md specifies workspace-write sandbox mode" || FAILED=$((FAILED + 1))
+# Must describe all host/harness path combinations
+assert_contains "$SKILL_CONTENT" "Claude -> Claude" \
+    "SKILL.md includes Claude -> Claude execution path" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "Claude -> Codex" \
+    "SKILL.md includes Claude -> Codex execution path" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "Codex -> Codex" \
+    "SKILL.md includes Codex -> Codex execution path" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "Codex -> Claude" \
+    "SKILL.md includes Codex -> Claude execution path" || FAILED=$((FAILED + 1))
 
-# Must describe JSONL output parsing
-assert_contains "$SKILL_CONTENT" "JSONL\|jsonl" \
-    "SKILL.md describes JSONL output parsing" || FAILED=$((FAILED + 1))
-
-# Must describe Codex failure handling
-assert_contains "$SKILL_CONTENT" "non-zero exit\|timeout.*codex\|codex.*fail" \
-    "SKILL.md describes codex failure handling" || FAILED=$((FAILED + 1))
-
-# Must describe harness availability check with fallback
-assert_contains "$SKILL_CONTENT" "which codex\|codex.*not found\|fall.*back.*Claude" \
-    "SKILL.md describes codex availability check with fallback" || FAILED=$((FAILED + 1))
-
-# Must describe mixed-harness parallel dispatch
-assert_contains "$SKILL_CONTENT" "Claude Code slots.*parallel\|Codex slots.*background\|mixed.*harness\|dispatch.*group" \
-    "SKILL.md describes mixed-harness parallel dispatch strategy" || FAILED=$((FAILED + 1))
+# Must describe native-host and external-harness group language
+assert_contains "$SKILL_CONTENT" "Group 1.*native-host\|native-host.*Group 1" \
+    "SKILL.md uses Group 1 native-host language" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "Group 2.*external-harness\|external-harness.*Group 2" \
+    "SKILL.md uses Group 2 external-harness language" || FAILED=$((FAILED + 1))
 
 echo ""
-echo "=== Contract 13: Skill Discovery ==="
+echo "=== Contract 13: External Harness Commands ==="
+# SKILL.md must describe Claude and Codex external harness commands
+assert_contains "$SKILL_CONTENT" "claude -p" \
+    "SKILL.md documents claude -p" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "stream-json" \
+    "SKILL.md documents stream-json output mode" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "codex exec" \
+    "SKILL.md documents codex exec" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "--json\|JSONL\|jsonl" \
+    "SKILL.md documents JSON output formatting" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "workspace-write" \
+    "SKILL.md documents workspace-write harness mode" || FAILED=$((FAILED + 1))
+
+# Failure normalization terms should be present for external harness execution
+assert_contains "$SKILL_CONTENT" "missing CLI\|timeout\|unparsable\|non-zero exit" \
+    "SKILL.md normalizes external harness failure terms" || FAILED=$((FAILED + 1))
+
+# Progress tables should identify harness and model
+assert_contains "$SKILL_CONTENT" "| Harness | Model |" \
+    "SKILL.md progress tables include Harness and Model columns" || FAILED=$((FAILED + 1))
+
+echo ""
+echo "=== Contract 14: Skill Discovery ==="
 assert_contains "$SKILL_CONTENT" "Skill Discovery\|skill discovery" \
     "SKILL.md has Skill Discovery section" || FAILED=$((FAILED + 1))
 
@@ -319,45 +349,6 @@ assert_contains "$SKILL_CONTENT" "\-\-discover" \
 
 assert_contains "$SKILL_CONTENT" "all my skills\|all implementation skills" \
     "SKILL.md documents natural language discovery triggers" || FAILED=$((FAILED + 1))
-
-echo ""
-echo "=== Contract 14: Agent-Wrapped Codex Dispatch ==="
-# Codex slots must dispatch via Agent tool, not raw Bash
-assert_contains "$SKILL_CONTENT" "Agent tool.*codex\|wrapper.*agent.*codex\|subagent.*codex exec" \
-    "SKILL.md describes Codex dispatch via Agent wrapper" || FAILED=$((FAILED + 1))
-
-# Must NOT have Group 1 / Group 2 distinction
-GROUPS_FOUND=$(echo "$SKILL_CONTENT" | grep -c "Group 1\|Group 2" || true)
-if [ "$GROUPS_FOUND" -eq 0 ]; then
-    echo "  [PASS] No Group 1/Group 2 dispatch distinction"
-else
-    echo "  [FAIL] Still has Group 1/Group 2 distinction ($GROUPS_FOUND references)"
-    FAILED=$((FAILED + 1))
-fi
-
-# All slots should use Agent tool in dispatch table
-assert_contains "$SKILL_CONTENT" "Agent tool.*Agent tool.*Agent tool\|all.*slots.*Agent tool\|every.*slot.*Agent" \
-    "SKILL.md says all slots dispatch via Agent tool" || FAILED=$((FAILED + 1))
-
-echo ""
-echo "=== Contract 15: Model Version Display ==="
-# Must describe reading codex model from config
-assert_contains "$SKILL_CONTENT" "config.toml\|codex.*model.*version\|model.*codex.*config" \
-    "SKILL.md describes reading Codex model version from config" || FAILED=$((FAILED + 1))
-
-# Progress table must have Model column
-assert_contains "$SKILL_CONTENT" "| Model |\|| Model|" \
-    "SKILL.md progress table has Model column" || FAILED=$((FAILED + 1))
-
-# Must NOT have Via column (replaced by Model)
-PHASE2_TABLE=$(echo "$SKILL_CONTENT" | sed -n '/Phase 2.*Implementation/,/Phase 3/p')
-VIA_COUNT=$(echo "$PHASE2_TABLE" | grep -c "| Via |" || true)
-if [ "$VIA_COUNT" -eq 0 ]; then
-    echo "  [PASS] Phase 2 progress table has no Via column (replaced by Model)"
-else
-    echo "  [FAIL] Phase 2 progress table still has Via column ($VIA_COUNT found)"
-    FAILED=$((FAILED + 1))
-fi
 
 echo ""
 echo "=== Contract 16: Verdict Formatting ==="
