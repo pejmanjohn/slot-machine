@@ -57,7 +57,7 @@ digraph when_to_use {
 
 ## Configuration
 
-Check for config in project's `CLAUDE.md`, `AGENTS.md`, or equivalent. User can override inline (e.g., "slot-machine this with 3 slots").
+Check for config in the project's `CLAUDE.md` or `AGENTS.md` — treat them as equal sources. User can override inline (e.g., "slot-machine this with 3 slots").
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -135,7 +135,7 @@ Slots can be configured per-slot instead of using the same profile implementer f
 ### Slot Definition Sources (precedence)
 
 1. **Inline:** Parsed from the user's command. Slash-prefixed names are skills, bare names are harnesses. `+` composes them. `default` means profile implementer + approach hint.
-2. **CLAUDE.md config:** Read `slot-machine-slots` list if present:
+2. **`CLAUDE.md` or `AGENTS.md` config:** Read `slot-machine-slots` from either file if present — they are equal sources:
    ```markdown
    slot-machine-slots:
      - /superpowers:test-driven-development
@@ -231,7 +231,7 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
 
 0. **Load profile.** Follow the [Profile Loading](#profile-loading) section to find the active profile folder and read `profile.md` from it for config. Report to user: "Using profile: {profile_name}"
 
-1. **Parse slot definitions.** Check for slot definitions in precedence order: (1) inline in the user's command, (2) `slot-machine-slots` in CLAUDE.md, (3) fall back to profile defaults. Record the slot list — each slot is `(skill, harness)` or `default`. Check harness availability (see below).
+1. **Parse slot definitions.** Check for slot definitions in precedence order: (1) inline in the user's command, (2) `slot-machine-slots` in `CLAUDE.md` or `AGENTS.md` (equal sources), (3) fall back to profile defaults. Record the slot list — each slot is `(skill, harness)` or `default`. Check harness availability (see below).
 
    **Check harness availability and detect model.** For each slot that specifies a harness:
    - `codex`: Run `which codex` via Bash. If not found, warn: 'Codex CLI not found — slot {i} will fall back to Claude Code. Install: `npm install -g @openai/codex`'. Change the slot's harness to `null` (falls back to Claude Code with the same skill guidance if any). If found, read the Codex model version from `~/.codex/config.toml` (look for `model = "..."` line). Record this as the slot's model identifier (e.g., `gpt-5.4`).
@@ -389,7 +389,7 @@ Agent tool call:
 ```
 You are a wrapper agent that dispatches implementation to Codex CLI and reports back.
 
-1. Run `codex exec` in the current directory using the Bash tool. The `--json` flag emits JSONL output — pipe it through the Python parser to extract the final report:
+1. Run `codex exec` in the current directory using the Bash tool. Save the raw `--json` JSONL stream to `codex-events.jsonl`, then parse it. Do not assume a single event mix — current Codex runs may expose `item.completed`, `turn.completed`, or both.
 
    ```bash
    codex exec "{If skill specified: '$codex_skill_name\n\n'}Implement this specification. Write all files to the current directory.
@@ -408,36 +408,69 @@ You are a wrapper agent that dispatches implementation to Codex CLI and reports 
    - Any concerns or issues encountered" \
      -s workspace-write \
      -c 'model_reasoning_effort="high"' \
-     --json 2>codex-stderr.txt | python3 -c "
-   import sys, json
-   for line in sys.stdin:
+     --json > codex-events.jsonl 2>codex-stderr.txt
+   codex_rc=$?
+
+   python3 - <<'PY' > codex-report.txt
+   import json
+   import pathlib
+
+   messages = []
+   commands = []
+   saw_turn_completed = False
+
+   for line in pathlib.Path("codex-events.jsonl").read_text(encoding="utf-8").splitlines():
        line = line.strip()
-       if not line: continue
+       if not line:
+           continue
        try:
            obj = json.loads(line)
-           t = obj.get('type', '')
-           if t == 'item.completed' and 'item' in obj:
-               item = obj['item']
-               if item.get('type') == 'agent_message' and item.get('text'):
-                   print(item['text'])
-               elif item.get('type') == 'command_execution':
-                   cmd = item.get('command', '')
-                   if cmd: print(f'[codex ran] {cmd}')
-       except: pass
-   " > codex-report.txt
+       except json.JSONDecodeError:
+           continue
+
+       event_type = obj.get("type", "")
+       if event_type == "item.completed":
+           item = obj.get("item", {})
+           if item.get("type") == "agent_message" and item.get("text"):
+               messages.append(item["text"].strip())
+           elif item.get("type") == "command_execution" and item.get("command"):
+               commands.append(item["command"].strip())
+       elif event_type == "turn.completed":
+           saw_turn_completed = True
+
+   if messages:
+       print(messages[-1])
+   elif commands:
+       for command in commands:
+           print(f"[codex ran] {command}")
+   elif saw_turn_completed:
+       print("[codex completed successfully but did not expose a structured agent message]")
+   PY
    ```
 
 2. After `codex exec` completes:
-   - If non-zero exit code, empty report, or timeout → report Status: BLOCKED with error details
-   - Otherwise → commit files: `git add -A && git commit -m "feat: {feature_name}"`
+   - If non-zero exit code or timeout → report Status: BLOCKED with error details.
+   - Otherwise inspect meaningful workspace output deterministically:
+     - Prefer `git status --short --untracked-files=all` to build the changed-file list.
+     - If git is unavailable, fall back to listing files created or modified during the run by other deterministic shell means.
+   - If `codex-report.txt` contains a structured implementer message, translate it directly.
+   - If the JSON stream only shows `turn.completed` or otherwise lacks a structured agent message, but the run exited zero and files changed, synthesize the standard implementer report from post-run inspection:
+     - `Status: DONE` if the captured command executions include an obvious test command or result.
+     - `Status: DONE_WITH_CONCERNS` if files changed but no structured test summary was extractable.
+     - `What I implemented:` include a bullet noting that the wrapper synthesized the report from post-run inspection.
+     - `Files changed:` list the deterministic changed files.
+     - `Test results:` include observed test commands if available; otherwise say no structured test summary was extractable from the Codex JSON stream.
+     - `Concerns (if any):` note that Codex emitted `turn.completed` without a structured agent message report.
+   - If `codex exec` exits zero but there is no structured report and no meaningful workspace output, report Status: BLOCKED.
+   - Once the report is ready, commit files: `git add -A && git commit -m "feat: {feature_name}"`
 
 3. Read `codex-report.txt` and translate to standard report format:
 
-   **Status:** DONE (or DONE_WITH_CONCERNS if Codex reported concerns, BLOCKED if codex failed)
-   **What I implemented:** [from Codex report]
-   **Files changed:** [list files in current directory]
-   **Test results:** [from Codex report]
-   **Concerns (if any):** [from Codex report]
+   **Status:** DONE, DONE_WITH_CONCERNS, or BLOCKED
+   **What I implemented:** [from Codex report, or synthesized from post-run inspection]
+   **Files changed:** [deterministic changed-file list]
+   **Test results:** [from Codex report or observed test commands]
+   **Concerns (if any):** [from Codex report, or note the missing structured agent message]
 ```
 
 Do NOT include an approach hint — for bare `codex` slots, the prompt has no skill prefix. For `skill + codex` slots, the `$codex_skill_name` prefix triggers native skill loading in Codex.

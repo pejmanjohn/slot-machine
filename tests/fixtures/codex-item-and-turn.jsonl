@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"thread-test"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"command_execution","command":"npm test","aggregated_output":"1 passing","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"## Implementer Report\n\n**Status:** DONE\n\n**What I implemented:**\n- Added tolerant parser logic\n\n**Files changed:**\n- SKILL.md\n- tests/test-codex-wrapper-parser.sh\n\n**Test results:**\n- ./tests/run-tests.sh passes\n\n**Concerns (if any):**\n- None"}}
+{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":20}}
