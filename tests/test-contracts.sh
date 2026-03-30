@@ -271,6 +271,10 @@ assert_contains "$SKILL_CONTENT" '+ codex' \
 assert_contains "$SKILL_CONTENT" "slot-machine-slots" \
     "SKILL.md documents slot-machine-slots config key" || FAILED=$((FAILED + 1))
 
+# Must treat AGENTS.md and CLAUDE.md as equal/either config sources
+assert_contains "$SKILL_CONTENT" '\(AGENTS\.md.*CLAUDE\.md.*equal.*sources\|CLAUDE\.md.*AGENTS\.md.*equal.*sources\|either.*AGENTS\.md.*CLAUDE\.md\|either.*CLAUDE\.md.*AGENTS\.md\)' \
+    "SKILL.md treats AGENTS.md and CLAUDE.md as equal/either config sources" || FAILED=$((FAILED + 1))
+
 # Must describe precedence
 assert_contains "$SKILL_CONTENT" "inline.*CLAUDE.md.*profile\|precedence" \
     "SKILL.md documents slot definition precedence" || FAILED=$((FAILED + 1))
@@ -297,9 +301,17 @@ assert_contains "$SKILL_CONTENT" "workspace-write" \
 assert_contains "$SKILL_CONTENT" "JSONL\|jsonl" \
     "SKILL.md describes JSONL output parsing" || FAILED=$((FAILED + 1))
 
+# Must describe multiple Codex event variants
+assert_contains "$SKILL_CONTENT" "turn.completed\|item.completed" \
+    "SKILL.md documents multiple Codex JSON event variants" || FAILED=$((FAILED + 1))
+
 # Must describe Codex failure handling
 assert_contains "$SKILL_CONTENT" "non-zero exit\|timeout.*codex\|codex.*fail" \
     "SKILL.md describes codex failure handling" || FAILED=$((FAILED + 1))
+
+# Must describe deterministic post-run inspection fallback
+assert_contains "$SKILL_CONTENT" "git status --short\|post-run inspection\|structured agent message" \
+    "SKILL.md documents deterministic fallback when structured extraction fails" || FAILED=$((FAILED + 1))
 
 # Must describe harness availability check with fallback
 assert_contains "$SKILL_CONTENT" "which codex\|codex.*not found\|fall.*back.*Claude" \
