@@ -112,6 +112,8 @@ assert_contains "$HELPERS_CONTENT" 'run_host_to_file claude "\$@"' \
     "run_claude_to_file remains a compatibility wrapper" || FAILED=$((FAILED + 1))
 assert_contains "$HELPERS_CONTENT" 'local host="\$1"' \
     "extract_result_text accepts a host argument" || FAILED=$((FAILED + 1))
+assert_contains "$HELPERS_CONTENT" 'local output_file="$1"' \
+    "extract_result_text keeps the one-argument compatibility path" || FAILED=$((FAILED + 1))
 
 LARGE_OUTPUT=$(python3 - <<'PY'
 print("TARGET_START")
@@ -168,6 +170,7 @@ PY
 if [ "$HELPER_STATUS" -eq 0 ] &&
    grep -q '"type":"result"' "$RESULT_STREAM" &&
    [ "$(extract_result_text claude "$RESULT_STREAM")" = "synthetic success" ] &&
+   [ "$(extract_result_text "$RESULT_STREAM")" = "synthetic success" ] &&
    python3 - <<'PY' "$HELPER_ELAPSED"
 import sys
 sys.exit(0 if float(sys.argv[1]) < 3 else 1)

@@ -231,10 +231,19 @@ run_claude() {
 }
 
 # Extract the final text result from a host transcript file.
+# Usage: extract_result_text path/to/output.jsonl
 # Usage: extract_result_text host path/to/output.jsonl
 extract_result_text() {
-    local host="$1"
-    local output_file="$2"
+    local host
+    local output_file
+
+    if [ "$#" -eq 1 ]; then
+        host="claude"
+        output_file="$1"
+    else
+        host="$1"
+        output_file="$2"
+    fi
 
     python3 - "$host" "$output_file" <<'PY'
 import json
