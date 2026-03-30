@@ -50,7 +50,7 @@ When editing this repo, preserve these invariants:
 5. Preserve the run artifact contract under `.slot-machine/runs/`, including `.slot-machine/runs/latest/result.json` if you change result generation.
 6. Do not add workflow details to the `SKILL.md` frontmatter description.
 7. Project config can live in `AGENTS.md` or `CLAUDE.md`; docs should treat both as first-class sources.
-8. Describe harness routing host-relatively: native path on the active host, shell-out only for the other harness.
+8. Describe harness routing host-relatively: native path on the active host, with Codex slots using `codex exec` in their slot workspace and Claude-as-other-harness using `claude -p`.
 
 ## Editing Guidance
 

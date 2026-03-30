@@ -90,7 +90,7 @@ Claude Code: /slot-machine with 3 slots — Implement the payment webhook handle
 Codex: $slot-machine with 3 slots — Implement the payment webhook handler from PLAN.md
 ```
 
-Host routing stays relative to where you start it: on Claude, Claude-targeted slots stay on the native Claude path; on Codex, Codex-targeted slots stay on the native Codex path. Slot-machine only shells out to `claude -p` or `codex exec` when a slot targets the other harness.
+Host routing stays relative to where you start it: on Claude, Claude-targeted slots stay on the native Claude path and Codex-targeted slots use the Codex harness path with `codex exec`; on Codex, Codex-targeted slots use the native Codex slot path with `codex exec`, and only Claude-targeted slots use `claude -p`.
 
 To update later:
 
@@ -243,7 +243,7 @@ Three slots: Claude Code with CE patterns, Codex with CE patterns, and bare Code
 
 Slot definitions accept both `/skill` and `$skill`. Slot-machine normalizes that to a host-neutral skill reference, then dispatches the harness-native form when it runs the slot.
 
-Execution stays host-relative. If you start on Claude, Claude-targeted slots stay native and only Codex-targeted slots use `codex exec`. If you start on Codex, Codex-targeted slots stay native and only Claude-targeted slots use `claude -p`.
+Execution stays host-relative. If you start on Claude, Claude-targeted slots stay native and Codex-targeted slots run in isolated slot workspaces with `codex exec`. If you start on Codex, Codex-targeted slots use the native Codex slot path with `codex exec`, and only Claude-targeted slots use `claude -p`.
 
 Or set project defaults in `AGENTS.md` or `CLAUDE.md`:
 
@@ -354,7 +354,7 @@ Does this problem have a design space worth exploring? If yes, pull the lever.
 
 Slot-machine runs inside [Ralph Loop](https://ghuntley.com/loop/) and custom agent loops. No special setup — add config to `AGENTS.md`, `CLAUDE.md`, or both, and the loop's AI instances pick it up automatically.
 
-Slot-machine self-regulates: it evaluates each task and only engages when the task has meaningful design choices. Mechanical tasks (add a field, rename a function) get single-shot implementation. You can blanket-enable slot-machine and trust it to only spend compute when competition adds value.
+Slot-machine is a good fit for loops when the task is worth the extra compute. Use it for tasks with real design space, and skip it for mechanical work where best-of-N comparison does not add value.
 
 **Setup (add to `AGENTS.md` or `CLAUDE.md`):**
 
@@ -374,12 +374,11 @@ Every run writes a machine-readable result to `.slot-machine/runs/latest/result.
   "verdict": "PICK",
   "winning_slot": 2,
   "confidence": "HIGH",
-  "slot_details": [
-    {"slot": 1, "harness": "Claude Code", "model": "claude-opus-4-6", "skill": "/ce:work"},
-    {"slot": 2, "harness": "Codex", "model": "gpt-5.4", "skill": null}
-  ],
+  "slots": 3,
+  "slots_succeeded": 3,
   "files_changed": ["src/api.py", "tests/test_api.py"],
-  "tests_passing": 45
+  "tests_passing": 45,
+  "run_dir": ".slot-machine/runs/2026-03-29-payment-webhook"
 }
 ```
 
