@@ -236,7 +236,7 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
 
 ### Phase 1: Setup
 
-0. **Load profile.** Follow the [Profile Loading](#profile-loading) section to find the active profile folder and read `profile.md` from it for config. Report to user: "Using profile: {profile_name}"
+0. **Load profile.** Follow the [Profile Loading](#profile-loading) section to find the active profile folder and read `0-profile.md` from it for config. Report to user: "Using profile: {profile_name}"
 
 1. **Parse slot definitions.** Check for slot definitions in precedence order: (1) inline in the user's command, (2) `slot-machine-slots` in `AGENTS.md`, `CLAUDE.md`, or both, treating them as equal first-class sources and reading whichever exists or both if both exist, merging non-conflicting `slot-machine-*` settings from both files and preferring the active host file if both define the same key, (3) fall back to profile defaults. Record the slot list — each slot is `(normalized_skill, harness)` or `default`. Check harness availability (see below).
 
@@ -279,11 +279,11 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
      Without this, `isolation: "worktree"` on Agent calls will fail and agents will not get isolated workspaces.
    - If `file`: No git repo required. Each slot will write its output to `{RUN_DIR}/slot-{i}.md`.
 
-6. **Run pre-checks (if configured).** Read the active profile's `profile.md` frontmatter for the `pre_checks` field.
+6. **Run pre-checks (if configured).** Read the active profile's `0-profile.md` frontmatter for the `pre_checks` field.
    - If `null` → skip this step.
    - If set → run the pre-check commands, substituting `{test_command}` with the detected test command. These establish the baseline. If baseline checks fail, stop and fix first.
 
-7. **Assign approach hints.** If `approach_hints` is enabled, read hints from the active profile's `profile.md`. Randomly assign one hint per slot (without replacement). Each hint steers toward a different approach — the profile defines what diversity means for this task type.
+7. **Assign approach hints.** If `approach_hints` is enabled, read hints from the active profile's `0-profile.md`. Randomly assign one hint per slot (without replacement). Each hint steers toward a different approach — the profile defines what diversity means for this task type.
 
 8. **Report setup to user** using this format (top-level markdown, not inside a code block):
 
@@ -307,7 +307,7 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
 
 ### Phase 2: Parallel Implementation
 
-**Dispatch all N slots in a SINGLE parallel wave from a SINGLE message.** Group 1 native-host slots run through the host's native isolated subagent path. Group 2 external-harness slots launch external CLI processes in parallel using the active profile isolation. This is critical — start the full wave together for true parallel execution.
+**Dispatch all N slots in a SINGLE parallel wave from a SINGLE message.** Group 1 native-host slots run through the host's native execution path in the assigned isolated slot workspace. Group 2 external-harness slots launch external CLI processes in parallel using the active profile isolation. This is critical — start the full wave together for true parallel execution.
 
 Use this execution matrix to choose the path per slot:
 
@@ -318,7 +318,7 @@ Use this execution matrix to choose the path per slot:
 | Codex | Codex | Native Codex slot workspace + `codex exec` |
 | Codex | Claude | Profile-isolated slot workspace + `claude -p` |
 
-Group 1 — Native-host slots: slots whose `harness_ref` is empty or matches the active host. Dispatch them through the host's native isolated subagent mechanism.
+Group 1 — Native-host slots: slots whose `harness_ref` is empty or matches the active host. Dispatch them through the host's native execution path in the assigned isolated slot workspace.
 
 Group 2 — External-harness slots: slots whose `harness_ref` names the other CLI. If profile isolation is `worktree`, create one worktree per slot and launch one external CLI process per worktree. If profile isolation is `file`, create one per-slot run directory/output target under `{RUN_DIR}` and launch one external CLI process there, telling it where to write the output file.
 
@@ -388,7 +388,7 @@ After implementation is complete, end with this report format:
 **Concerns (if any):** [issues]
 ```
 
-On Claude, this is an Agent tool call with `isolation: "worktree"`. On Codex, use the same native-host slot workspace contract. Do NOT include an approach hint — the skill is the diversity mechanism.
+On Claude, this is an Agent tool call with `isolation: "worktree"` for `worktree` profiles, or with `isolation` omitted for `file` profiles and an explicit `{RUN_DIR}/slot-{i}.md` destination in the prompt. On Codex, use the same native-host slot workspace contract, following the active profile isolation. Do NOT include an approach hint — the skill is the diversity mechanism.
 
 ---
 
@@ -475,7 +475,7 @@ Native skill prefix translation for external Codex:
 | Slot definition | Dispatch | Prompt | Isolation | Hint? |
 |----------------|----------|--------|-----------|-------|
 | `default` | Native host subagent path | Profile `1-implementer.md` + hint | Profile setting | Yes |
-| `/superpowers:test-driven-development` | Native host subagent path | "Invoke {skill} via Skill tool" + spec | worktree | No |
+| `/superpowers:test-driven-development` | Native host execution path | "Invoke {skill} via Skill tool" + spec | Profile setting (`worktree` or `file`) | No |
 | `claude` | Native Claude path on Claude; external Claude harness on Codex | Native-host generic spec prompt or `claude -p` with spec | Profile setting (`worktree` or `file`) | No |
 | `/superpowers:test-driven-development + claude` | Native Claude path on Claude; external Claude harness on Codex | Native-host skill prompt or `claude -p` with `/superpowers:test-driven-development` | Profile setting (`worktree` or `file`) | No |
 | `codex` | Native Codex path on Codex; external Codex harness on Claude | `codex exec` with spec | Profile setting (`worktree` or `file`) | No |
@@ -775,7 +775,7 @@ This is always written, every run. Humans ignore it. Autonomous loops and script
 
 **Complete** — `{word_count} words` | `{N} slots` | `{verdict}`
 
-**Quiet mode:** If `quiet: true` is set, suppress all Phase 2-3 progress tables and standout elements. Only output the Phase 4 verdict blockquote, the Final Output section, and the footer. The run directory still has everything for post-hoc inspection.
+**Quiet mode:** If `quiet: true` is set, suppress all Phase 2-3 progress tables and standout elements. Only output the Phase 4 verdict block, the Final Output section, and the footer. The run directory still has everything for post-hoc inspection.
 
 #### Metrics (optional)
 
@@ -829,7 +829,7 @@ To override, set model configs in your project's `AGENTS.md`, `CLAUDE.md`, or bo
 
 ## Approach Hints
 
-Approach hints are defined in the active profile's `profile.md`. See `profiles/coding/0-profile.md` for the coding defaults and `profiles/writing/0-profile.md` for writing defaults.
+Approach hints are defined in the active profile's `0-profile.md`. See `profiles/coding/0-profile.md` for the coding defaults and `profiles/writing/0-profile.md` for writing defaults.
 
 When `approach_hints` is enabled (default: true), each slot gets a different hint to encourage genuinely divergent attempts. Assign randomly without replacement. The profile defines what "diversity" means for its task type — architectural diversity for coding, voice/structure diversity for writing.
 
