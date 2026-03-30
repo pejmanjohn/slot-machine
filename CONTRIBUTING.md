@@ -7,6 +7,8 @@
 3. Run `./tests/run-tests.sh` (must pass)
 4. Submit a PR
 
+PRs should be opened as ready for review by default. Use draft only when there is an explicit reason or the user asks for it.
+
 ## Branch Naming
 
 Use branch type prefixes so the purpose of a branch is obvious at a glance:

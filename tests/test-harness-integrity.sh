@@ -60,6 +60,18 @@ assert_contains "$RUNNER_CONTENT" "test-e2e-manual-handoff.sh" \
     "Tier 3 includes manual handoff integration coverage" || FAILED=$((FAILED + 1))
 
 echo ""
+echo "=== Harness Integrity: Repo Guidance ==="
+CLAUDE_CONTENT=$(cat "$SKILL_DIR/CLAUDE.md")
+AGENTS_CONTENT=$(cat "$SKILL_DIR/AGENTS.md")
+CONTRIBUTING_CONTENT=$(cat "$SKILL_DIR/CONTRIBUTING.md")
+assert_contains "$CLAUDE_CONTENT" "ready for review by default" \
+    "CLAUDE.md documents ready-for-review PRs by default" || FAILED=$((FAILED + 1))
+assert_contains "$AGENTS_CONTENT" "ready for review by default" \
+    "AGENTS.md documents ready-for-review PRs by default" || FAILED=$((FAILED + 1))
+assert_contains "$CONTRIBUTING_CONTENT" "ready for review by default" \
+    "CONTRIBUTING.md documents ready-for-review PRs by default" || FAILED=$((FAILED + 1))
+
+echo ""
 echo "=== Harness Integrity: Placeholder Tests ==="
 IMPLEMENTER_SMOKE_CONTENT=$(cat "$SKILL_DIR/tests/test-implementer-smoke.sh")
 REVIEWER_SMOKE_CONTENT=$(cat "$SKILL_DIR/tests/test-reviewer-smoke.sh")

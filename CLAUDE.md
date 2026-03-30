@@ -20,6 +20,7 @@ You are working on the slot-machine skill — a Claude Code skill for best-of-N 
 - All {{VARIABLES}} in profile prompts must be from the universal variable set in SKILL.md
 - Status/verdict values must match across SKILL.md and all profiles
 - Use conventional branch type prefixes for repo work: `feat/`, `fix/`, `docs/`, `style/` with a short kebab-case suffix
+- Open PRs as ready for review by default. Use draft only when there is an explicit reason or the user asks for it.
 - Run `./tests/run-tests.sh` before committing
 
 ## Testing
