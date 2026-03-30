@@ -14,6 +14,12 @@ Run N independent implementations of the same feature in parallel. Each gets rev
 ```
 Three agents implement the same spec independently, each steered toward a different emphasis such as simplicity, robustness, or functional style. Independent reviewers hunt for bugs in each. A judge picks the winner — or synthesizes the best parts of several.
 
+**Run the same workflow from Codex with the native skill invocation:**
+```
+$slot-machine with 3 slots — Implement the payment webhook handler from PLAN.md
+```
+Same orchestration, same artifacts, same review pipeline. The active host just changes how the skill is invoked and how native slots are dispatched.
+
 **Assign a different skill to each slot:**
 ```
 /slot-machine with /superpowers:test-driven-development and /ce:work — Build the rate limiter
@@ -41,7 +47,7 @@ slot-machine-slots:
   - codex
   - default
 ```
-Every `/slot-machine` invocation in this project uses these slots automatically.
+Every slot-machine invocation in this project uses these slots automatically.
 
 ## How It Works
 
@@ -80,8 +86,11 @@ git clone https://github.com/pejmanjohn/slot-machine.git ~/.claude/skills/slot-m
 Then invoke it from Claude Code or Codex once that checkout is available to your host's local skill/plugin discovery:
 
 ```text
-/slot-machine with 3 slots — Implement the payment webhook handler from PLAN.md
+Claude Code: /slot-machine with 3 slots — Implement the payment webhook handler from PLAN.md
+Codex: $slot-machine with 3 slots — Implement the payment webhook handler from PLAN.md
 ```
+
+Host routing stays relative to where you start it: on Claude, Claude-targeted slots stay on the native Claude path; on Codex, Codex-targeted slots stay on the native Codex path. Slot-machine only shells out to `claude -p` or `codex exec` when a slot targets the other harness.
 
 To update later:
 
@@ -186,6 +195,14 @@ The synthesizer agent starts with one slot as the base, ports specific elements 
 Spec: Implement the payment webhook handler from PLAN.md
 ```
 
+Or from Codex:
+
+```
+$slot-machine
+
+Spec: Implement the payment webhook handler from PLAN.md
+```
+
 Or inline with options:
 
 ```
@@ -206,13 +223,13 @@ Run the same spec across different agent harnesses and pick the best result:
 Spec: Implement the TaskScheduler class from PLAN.md
 ```
 
-Three slots: Claude Code with CE patterns, Codex with CE patterns, and bare Codex. Each implements independently, all reviewed by the same evaluation pipeline. The progress table shows which model ran each slot:
+Three slots: Claude Code with CE patterns, Codex with CE patterns, and bare Codex. Each implements independently, all reviewed by the same evaluation pipeline. The progress table tracks both harness and model:
 
-| Slot | Status | Model | Tests | Approach |
-|------|--------|-------|-------|----------|
-| 1 | `DONE` | `claude-opus-4-6` | 17 tests | /ce:work |
-| 2 | `DONE_WITH_CONCERNS` | `gpt-5.4` | 5 tests | /ce:work + codex |
-| 3 | `DONE_WITH_CONCERNS` | `gpt-5.4` | 5 tests | codex |
+| Slot | Status | Harness | Model | Tests | Approach |
+|------|--------|---------|-------|-------|----------|
+| 1 | `DONE` | `Claude Code` | `claude-opus-4-6` | 17 tests | /ce:work |
+| 2 | `DONE_WITH_CONCERNS` | `Codex` | `gpt-5.4` | 5 tests | /ce:work + codex |
+| 3 | `DONE_WITH_CONCERNS` | `Codex` | `gpt-5.4` | 5 tests | codex |
 
 **Skills** guide methodology (TDD, CE patterns). **Harnesses** choose the AI system (`claude`, `codex`). Compose them with `+`:
 
@@ -225,6 +242,8 @@ Three slots: Claude Code with CE patterns, Codex with CE patterns, and bare Code
 ```
 
 Slot definitions accept both `/skill` and `$skill`. Slot-machine normalizes that to a host-neutral skill reference, then dispatches the harness-native form when it runs the slot.
+
+Execution stays host-relative. If you start on Claude, Claude-targeted slots stay native and only Codex-targeted slots use `codex exec`. If you start on Codex, Codex-targeted slots stay native and only Claude-targeted slots use `claude -p`.
 
 Or set project defaults in `AGENTS.md` or `CLAUDE.md`:
 

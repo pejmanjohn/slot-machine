@@ -23,6 +23,7 @@ You are working on the slot-machine skill/plugin repo for best-of-N parallel imp
 - Status/verdict values must match across SKILL.md and all profiles
 - Treat Claude and Codex packaging as first-class; if discovery changes, update both packaging docs/metadata paths together
 - Project config may live in `AGENTS.md` or `CLAUDE.md`
+- Describe harness routing host-relatively: native path on the active host, shell-out only for the other harness
 - Run `./tests/run-tests.sh` before committing
 
 ## Testing
