@@ -276,8 +276,8 @@ assert_contains "$SKILL_CONTENT" "normalize.*superpowers:test-driven-development
     "SKILL.md explains host-neutral skill normalization" || FAILED=$((FAILED + 1))
 
 # Must treat AGENTS.md and CLAUDE.md as equal config sources
-assert_contains "$SKILL_CONTENT" "AGENTS.md.*CLAUDE.md.*equal config sources\|CLAUDE.md.*AGENTS.md.*equal config sources\|same config sources" \
-    "SKILL.md treats AGENTS.md and CLAUDE.md as equal config sources" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "AGENTS.md.*CLAUDE.md\|CLAUDE.md.*AGENTS.md\|config can live in either file\|either file" \
+    "SKILL.md treats AGENTS.md and CLAUDE.md as interchangeable config sources" || FAILED=$((FAILED + 1))
 
 # Must describe CLAUDE.md config key
 assert_contains "$SKILL_CONTENT" "slot-machine-slots" \
@@ -302,20 +302,20 @@ assert_contains "$SKILL_CONTENT" "Active host.*Slot harness.*Execution path" \
     "SKILL.md has an execution matrix with host, harness, and path columns" || FAILED=$((FAILED + 1))
 
 # Must describe all host/harness path combinations
-assert_contains "$SKILL_CONTENT" "Claude -> Claude" \
-    "SKILL.md includes Claude -> Claude execution path" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" "Claude -> Codex" \
-    "SKILL.md includes Claude -> Codex execution path" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" "Codex -> Codex" \
-    "SKILL.md includes Codex -> Codex execution path" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" "Codex -> Claude" \
-    "SKILL.md includes Codex -> Claude execution path" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "Claude.*Claude.*Native" \
+    "SKILL.md includes Claude -> Claude native execution row" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "Claude.*Codex.*codex exec" \
+    "SKILL.md includes Claude -> Codex execution row" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "Codex.*Codex.*codex exec" \
+    "SKILL.md includes Codex -> Codex execution row" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "Codex.*Claude.*claude -p" \
+    "SKILL.md includes Codex -> Claude execution row" || FAILED=$((FAILED + 1))
 
 # Must describe native-host and external-harness group language
-assert_contains "$SKILL_CONTENT" "Group 1.*native-host\|native-host.*Group 1" \
-    "SKILL.md uses Group 1 native-host language" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" "Group 2.*external-harness\|external-harness.*Group 2" \
-    "SKILL.md uses Group 2 external-harness language" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "Group 1.*Native-host slots\|Native-host slots.*Group 1" \
+    "SKILL.md uses Group 1 Native-host slots language" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "Group 2.*External-harness slots\|External-harness slots.*Group 2" \
+    "SKILL.md uses Group 2 External-harness slots language" || FAILED=$((FAILED + 1))
 
 echo ""
 echo "=== Contract 13: External Harness Commands ==="
