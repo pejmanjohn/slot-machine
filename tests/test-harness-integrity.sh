@@ -56,6 +56,8 @@ assert_contains "$RUNNER_CONTENT" "quality_tests=(test-reviewer-accuracy.sh)" \
     "Quality tier points at the reviewer accuracy test" || FAILED=$((FAILED + 1))
 assert_contains "$RUNNER_CONTENT" "test-harness-integrity.sh" \
     "Tier 1 includes harness integrity checks" || FAILED=$((FAILED + 1))
+assert_contains "$RUNNER_CONTENT" "test-e2e-manual-handoff.sh" \
+    "Tier 3 includes manual handoff integration coverage" || FAILED=$((FAILED + 1))
 
 echo ""
 echo "=== Harness Integrity: Placeholder Tests ==="
@@ -63,6 +65,7 @@ IMPLEMENTER_SMOKE_CONTENT=$(cat "$SKILL_DIR/tests/test-implementer-smoke.sh")
 REVIEWER_SMOKE_CONTENT=$(cat "$SKILL_DIR/tests/test-reviewer-smoke.sh")
 JUDGE_SMOKE_CONTENT=$(cat "$SKILL_DIR/tests/test-judge-smoke.sh")
 E2E_HAPPY_CONTENT=$(cat "$SKILL_DIR/tests/test-e2e-happy-path.sh")
+MANUAL_E2E_CONTENT=$(cat "$SKILL_DIR/tests/test-e2e-manual-handoff.sh" 2>/dev/null || echo "")
 assert_not_contains "$IMPLEMENTER_SMOKE_CONTENT" "Placeholder until headless claude -p execution is wired to real assertions" \
     "test-implementer-smoke.sh is no longer a placeholder" || FAILED=$((FAILED + 1))
 assert_contains "$IMPLEMENTER_SMOKE_CONTENT" "run_claude_to_file" \
@@ -90,6 +93,13 @@ assert_contains "$E2E_HAPPY_CONTENT" "run_claude_to_file" \
     "test-e2e-happy-path.sh invokes Claude headlessly" || FAILED=$((FAILED + 1))
 assert_contains "$E2E_HAPPY_CONTENT" "result.json" \
     "test-e2e-happy-path.sh checks run artifacts" || FAILED=$((FAILED + 1))
+
+assert_contains "$MANUAL_E2E_CONTENT" "handoff.md" \
+    "test-e2e-manual-handoff.sh checks handoff artifact output" || FAILED=$((FAILED + 1))
+assert_contains "$MANUAL_E2E_CONTENT" "resolution_mode" \
+    "test-e2e-manual-handoff.sh checks manual result.json discriminator" || FAILED=$((FAILED + 1))
+assert_contains "$MANUAL_E2E_CONTENT" "Judge Slot Machine results" \
+    "test-e2e-manual-handoff.sh asserts judge dispatch is absent" || FAILED=$((FAILED + 1))
 
 for file in \
     "$SKILL_DIR/tests/test-e2e-edge-cases.sh" \

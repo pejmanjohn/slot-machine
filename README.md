@@ -294,6 +294,7 @@ That's what goes into your codebase. Not the first thing, not the prettiest — 
 | `approach_hints` | true | Different architectural direction per slot |
 | `auto_synthesize` | true | Allow combining best elements from multiple slots |
 | `max_retries` | 1 | Re-run failed slots (0 = no retry) |
+| `manual_handoff` | false | Stop after per-slot review, keep successful slot worktrees, restore your original checkout, and let you choose/merge manually |
 | `cleanup` | true | Delete worktrees after completion |
 | `quiet` | false | Suppress progress tables (for autonomous loops) |
 | `implementer_model` | inherit | Model for implementers (inherits from session) |
