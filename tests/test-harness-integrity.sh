@@ -65,24 +65,32 @@ JUDGE_SMOKE_CONTENT=$(cat "$SKILL_DIR/tests/test-judge-smoke.sh")
 E2E_HAPPY_CONTENT=$(cat "$SKILL_DIR/tests/test-e2e-happy-path.sh")
 assert_not_contains "$IMPLEMENTER_SMOKE_CONTENT" "Placeholder until headless claude -p execution is wired to real assertions" \
     "test-implementer-smoke.sh is no longer a placeholder" || FAILED=$((FAILED + 1))
-assert_contains "$IMPLEMENTER_SMOKE_CONTENT" "run_claude_to_file" \
-    "test-implementer-smoke.sh invokes Claude headlessly" || FAILED=$((FAILED + 1))
+assert_contains "$IMPLEMENTER_SMOKE_CONTENT" 'run_host_to_file "\$host" "\$OUTPUT_FILE" "\$HOST_PROMPT" "\$HOST_TIMEOUT" 50 "\$HOST_TMPDIR"' \
+    "test-implementer-smoke.sh invokes hosts via the shared runner" || FAILED=$((FAILED + 1))
 assert_contains "$IMPLEMENTER_SMOKE_CONTENT" "extract_result_text" \
-    "test-implementer-smoke.sh parses the Claude result payload" || FAILED=$((FAILED + 1))
+    "test-implementer-smoke.sh parses host result payloads" || FAILED=$((FAILED + 1))
 
 assert_not_contains "$REVIEWER_SMOKE_CONTENT" "Placeholder until headless claude -p execution is wired to real assertions" \
     "test-reviewer-smoke.sh is no longer a placeholder" || FAILED=$((FAILED + 1))
-assert_contains "$REVIEWER_SMOKE_CONTENT" "run_claude_to_file" \
-    "test-reviewer-smoke.sh invokes Claude headlessly" || FAILED=$((FAILED + 1))
+assert_contains "$REVIEWER_SMOKE_CONTENT" 'run_host_to_file "\$host" "\$OUTPUT_FILE" "\$HOST_PROMPT" "\$HOST_TIMEOUT" 50 "\$HOST_TMPDIR"' \
+    "test-reviewer-smoke.sh invokes hosts via the shared runner" || FAILED=$((FAILED + 1))
 assert_contains "$REVIEWER_SMOKE_CONTENT" "extract_result_text" \
-    "test-reviewer-smoke.sh parses the Claude result payload" || FAILED=$((FAILED + 1))
+    "test-reviewer-smoke.sh parses host result payloads" || FAILED=$((FAILED + 1))
+assert_contains "$REVIEWER_SMOKE_CONTENT" 'HOST_TMPDIR=$(mktemp -d)' \
+    "test-reviewer-smoke.sh creates a fresh temp repo per host" || FAILED=$((FAILED + 1))
+assert_count "$REVIEWER_SMOKE_CONTENT" 'run_host_to_file "\$host" "\$OUTPUT_FILE" "\$HOST_PROMPT" "\$HOST_TIMEOUT" 50 "\$HOST_TMPDIR"' 1 \
+    "test-reviewer-smoke.sh runs each host against its own temp repo" || FAILED=$((FAILED + 1))
 
 assert_not_contains "$JUDGE_SMOKE_CONTENT" "Placeholder until headless claude -p execution is wired to real assertions" \
     "test-judge-smoke.sh is no longer a placeholder" || FAILED=$((FAILED + 1))
-assert_contains "$JUDGE_SMOKE_CONTENT" "run_claude_to_file" \
-    "test-judge-smoke.sh invokes Claude headlessly" || FAILED=$((FAILED + 1))
+assert_contains "$JUDGE_SMOKE_CONTENT" 'run_host_to_file "\$host" "\$OUTPUT_FILE" "\$HOST_PROMPT" "\$HOST_TIMEOUT" 50 "\$HOST_TMP_ROOT"' \
+    "test-judge-smoke.sh invokes hosts via the shared runner" || FAILED=$((FAILED + 1))
 assert_contains "$JUDGE_SMOKE_CONTENT" "extract_result_text" \
-    "test-judge-smoke.sh parses the Claude result payload" || FAILED=$((FAILED + 1))
+    "test-judge-smoke.sh parses host result payloads" || FAILED=$((FAILED + 1))
+assert_contains "$JUDGE_SMOKE_CONTENT" 'HOST_TMP_ROOT=$(mktemp -d)' \
+    "test-judge-smoke.sh creates fresh slot worktrees per host" || FAILED=$((FAILED + 1))
+assert_count "$JUDGE_SMOKE_CONTENT" 'run_host_to_file "\$host" "\$OUTPUT_FILE" "\$HOST_PROMPT" "\$HOST_TIMEOUT" 50 "\$HOST_TMP_ROOT"' 1 \
+    "test-judge-smoke.sh runs each host against its own slot worktrees" || FAILED=$((FAILED + 1))
 
 assert_not_contains "$E2E_HAPPY_CONTENT" "Placeholder until the full headless claude -p E2E assertions are implemented" \
     "test-e2e-happy-path.sh is no longer a placeholder" || FAILED=$((FAILED + 1))
