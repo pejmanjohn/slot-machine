@@ -11,6 +11,50 @@ host_available() {
     esac
 }
 
+codex_can_host_claude_slots() {
+    if ! host_available codex || ! host_available claude; then
+        return 1
+    fi
+
+    local tmpdir
+    local output_file
+    local prompt
+    local rc
+    local result
+
+    tmpdir=$(mktemp -d)
+    output_file=$(mktemp)
+    prompt=$(cat <<'EOF'
+Use Bash only.
+
+Run this exact command in the current directory:
+
+claude -p "Reply with OK and nothing else." --output-format stream-json --verbose --max-turns 1
+
+Return exactly one line:
+SUCCESS
+
+only if the command exits 0 and the final Claude result text is exactly:
+OK
+
+Otherwise return exactly one line beginning with:
+FAILURE:
+EOF
+)
+
+    if run_host_to_file codex "$output_file" "$prompt" 90 6 "$tmpdir" >/dev/null 2>&1; then
+        rc=0
+    else
+        rc=$?
+    fi
+    result=$(extract_result_text codex "$output_file")
+
+    rm -rf "$tmpdir"
+    rm -f "$output_file"
+
+    [ "$rc" -eq 0 ] && [ "$result" = "SUCCESS" ]
+}
+
 run_host_to_file() {
     local host="$1"
     local output_file="$2"
@@ -170,9 +214,13 @@ _run_codex_to_file() {
     fi
 
     python3 - "$cwd" "$output_file" "$timeout_seconds" "$max_turns" "$prompt" <<'PY'
+import json
 import pathlib
+import queue
 import subprocess
 import sys
+import threading
+import time
 
 cwd = sys.argv[1]
 output_file = sys.argv[2]
@@ -193,23 +241,77 @@ cmd = [
     prompt,
 ]
 
-with open(output_file, "w", encoding="utf-8") as out:
-    proc = subprocess.Popen(
-        cmd,
-        cwd=cwd,
-        stdout=out,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-    try:
-        proc.wait(timeout=timeout_seconds)
-    except subprocess.TimeoutExpired:
+try:
+    with open(output_file, "w", encoding="utf-8") as out:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        lines = queue.Queue()
+
+        def reader() -> None:
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                lines.put(line)
+            lines.put(None)
+
+        reader_thread = threading.Thread(target=reader, daemon=True)
+        reader_thread.start()
+
+        deadline = time.monotonic() + timeout_seconds
+        saw_turn_completed = False
+
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(cmd=cmd, timeout=timeout_seconds)
+
+            try:
+                line = lines.get(timeout=min(0.2, remaining))
+            except queue.Empty:
+                if proc.poll() is not None:
+                    break
+                continue
+
+            if line is None:
+                break
+
+            out.write(line)
+            out.flush()
+
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            if payload.get("type") == "turn.completed":
+                saw_turn_completed = True
+                proc.terminate()
+                try:
+                    proc.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait(timeout=2)
+                break
+
+        if proc.poll() is None:
+            proc.wait(timeout=2)
+
+        if saw_turn_completed:
+            sys.exit(0)
+
+        sys.exit(proc.returncode or 0)
+except subprocess.TimeoutExpired:
+    if 'proc' in locals() and proc.poll() is None:
         proc.kill()
         proc.wait(timeout=2)
+    with open(output_file, "a", encoding="utf-8") as out:
         out.write('\n{"type":"local_test_event","status":"timeout"}\n')
-        sys.exit(124)
-
-sys.exit(proc.returncode or 0)
+    sys.exit(124)
 PY
 }
 
@@ -272,6 +374,38 @@ with open(path, encoding="utf-8") as f:
 
 print(result)
 PY
+}
+
+# Count host dispatches in a transcript file.
+# Usage: count_dispatch_events path/to/output.jsonl
+# Usage: count_dispatch_events host path/to/output.jsonl
+count_dispatch_events() {
+    local host
+    local output_file
+
+    if [ "$#" -eq 1 ]; then
+        host="claude"
+        output_file="$1"
+    else
+        host="$1"
+        output_file="$2"
+    fi
+
+    case "$host" in
+        claude) grep -c '"name":"Agent"' "$output_file" 2>/dev/null || echo "0" ;;
+        codex) grep -c '"type":"item.started"' "$output_file" 2>/dev/null || echo "0" ;;
+        *) echo "0" ;;
+    esac
+}
+
+# Backward-compatible alias for earlier host-neutral naming.
+count_host_dispatches() {
+    count_dispatch_events "$@"
+}
+
+# Backward-compatible Claude-only dispatch counter.
+count_agent_calls() {
+    count_dispatch_events claude "$@"
 }
 
 # Assert output contains pattern
@@ -356,12 +490,6 @@ assert_order() {
         echo "  But found A at line $line_a, B at line $line_b"
         return 1
     fi
-}
-
-# Count Agent tool dispatches in NDJSON
-count_agent_calls() {
-    local file="$1"
-    grep -c '"name":"Agent"' "$file" 2>/dev/null || echo "0"
 }
 
 # Check if Agent calls used worktree isolation

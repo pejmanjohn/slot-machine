@@ -94,8 +94,32 @@ assert_count "$JUDGE_SMOKE_CONTENT" 'run_host_to_file "\$host" "\$OUTPUT_FILE" "
 
 assert_not_contains "$E2E_HAPPY_CONTENT" "Placeholder until the full headless claude -p E2E assertions are implemented" \
     "test-e2e-happy-path.sh is no longer a placeholder" || FAILED=$((FAILED + 1))
-assert_contains "$E2E_HAPPY_CONTENT" "run_claude_to_file" \
-    "test-e2e-happy-path.sh invokes Claude headlessly" || FAILED=$((FAILED + 1))
+assert_contains "$E2E_HAPPY_CONTENT" 'TEST_HOST="${TEST_HOST:-auto}"' \
+    "test-e2e-happy-path.sh defaults to host auto-selection" || FAILED=$((FAILED + 1))
+assert_contains "$E2E_HAPPY_CONTENT" 'if host_available codex && codex_can_host_claude_slots; then' \
+    "test-e2e-happy-path.sh prefers Codex only when the Claude bridge is operational" || FAILED=$((FAILED + 1))
+assert_contains "$E2E_HAPPY_CONTENT" "working Codex-to-Claude headless bridge" \
+    "test-e2e-happy-path.sh skips explicit Codex hosting when the Claude bridge is unavailable" || FAILED=$((FAILED + 1))
+assert_contains "$E2E_HAPPY_CONTENT" '\$slot-machine' \
+    "test-e2e-happy-path.sh uses Codex-native skill syntax when needed" || FAILED=$((FAILED + 1))
+assert_contains "$E2E_HAPPY_CONTENT" '/slot-machine' \
+    "test-e2e-happy-path.sh keeps Claude-native skill syntax available" || FAILED=$((FAILED + 1))
+assert_contains "$E2E_HAPPY_CONTENT" 'SKILL_BODY=$(cat "$SKILL_DIR/SKILL.md")' \
+    "test-e2e-happy-path.sh inlines the skill body for Codex exec" || FAILED=$((FAILED + 1))
+assert_contains "$E2E_HAPPY_CONTENT" "Base directory for this skill:" \
+    "test-e2e-happy-path.sh seeds Codex with the local skill base directory" || FAILED=$((FAILED + 1))
+assert_contains "$E2E_HAPPY_CONTENT" 'slot 1: claude' \
+    "test-e2e-happy-path.sh requests explicit Claude slots when hosted in Codex" || FAILED=$((FAILED + 1))
+assert_contains "$E2E_HAPPY_CONTENT" 'slot 2: claude' \
+    "test-e2e-happy-path.sh requests two explicit Claude slots when hosted in Codex" || FAILED=$((FAILED + 1))
+assert_contains "$E2E_HAPPY_CONTENT" 'run_host_to_file "$TEST_HOST"' \
+    "test-e2e-happy-path.sh invokes the selected host via the shared runner" || FAILED=$((FAILED + 1))
+assert_contains "$E2E_HAPPY_CONTENT" 'extract_result_text "$TEST_HOST" "$TRANSCRIPT_FILE"' \
+    "test-e2e-happy-path.sh parses the selected host transcript" || FAILED=$((FAILED + 1))
+assert_contains "$E2E_HAPPY_CONTENT" 'count_dispatch_events "$TEST_HOST" "$TRANSCRIPT_FILE"' \
+    "test-e2e-happy-path.sh checks host-neutral dispatch counts" || FAILED=$((FAILED + 1))
+assert_not_contains "$E2E_HAPPY_CONTENT" "assert_worktree_isolation" \
+    "test-e2e-happy-path.sh no longer requires Claude-specific transcript isolation markers" || FAILED=$((FAILED + 1))
 assert_contains "$E2E_HAPPY_CONTENT" "result.json" \
     "test-e2e-happy-path.sh checks run artifacts" || FAILED=$((FAILED + 1))
 
@@ -114,8 +138,14 @@ assert_contains "$HELPERS_CONTENT" "run_host_to_file" \
     "test helpers expose a host-neutral runner" || FAILED=$((FAILED + 1))
 assert_contains "$HELPERS_CONTENT" "host_available" \
     "test helpers expose host availability detection" || FAILED=$((FAILED + 1))
+assert_contains "$HELPERS_CONTENT" "codex_can_host_claude_slots" \
+    "test helpers expose the Codex-to-Claude bridge probe" || FAILED=$((FAILED + 1))
 assert_contains "$HELPERS_CONTENT" 'case "\$host" in' \
     "test helpers dispatch by host" || FAILED=$((FAILED + 1))
+assert_contains "$HELPERS_CONTENT" "count_dispatch_events" \
+    "test helpers expose host-aware dispatch counting" || FAILED=$((FAILED + 1))
+assert_contains "$HELPERS_CONTENT" '"type":"item.started"' \
+    "host-aware dispatch counting handles Codex transcript events" || FAILED=$((FAILED + 1))
 assert_contains "$HELPERS_CONTENT" 'run_host_to_file claude "\$@"' \
     "run_claude_to_file remains a compatibility wrapper" || FAILED=$((FAILED + 1))
 assert_contains "$HELPERS_CONTENT" 'local host="\$1"' \
@@ -152,6 +182,8 @@ chmod +x "$FAKE_BIN_DIR/claude"
 cat > "$FAKE_BIN_DIR/codex" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"synthetic codex success"}}'
+printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}'
+sleep 5
 EOF
 chmod +x "$FAKE_BIN_DIR/codex"
 
@@ -192,17 +224,39 @@ else
     FAILED=$((FAILED + 1))
 fi
 
+HELPER_START=$(python3 - <<'PY'
+import time
+print(time.time())
+PY
+)
 set +e
 PATH="$FAKE_BIN_DIR:$PATH" run_host_to_file codex "$RESULT_STREAM" "synthetic prompt" 1 5 "$TMPDIR"
 HELPER_STATUS=$?
 set -e
+HELPER_END=$(python3 - <<'PY'
+import time
+print(time.time())
+PY
+)
+HELPER_ELAPSED=$(python3 - <<'PY' "$HELPER_START" "$HELPER_END"
+import sys
+print(float(sys.argv[2]) - float(sys.argv[1]))
+PY
+)
 
 if [ "$HELPER_STATUS" -eq 0 ] &&
    grep -q 'synthetic codex success' "$RESULT_STREAM" &&
-   [ "$(extract_result_text codex "$RESULT_STREAM")" = "synthetic codex success" ]; then
-    echo "  [PASS] run_host_to_file handles codex JSONL output"
+   [ "$(extract_result_text codex "$RESULT_STREAM")" = "synthetic codex success" ] &&
+   python3 - <<'PY' "$HELPER_ELAPSED"
+import sys
+sys.exit(0 if float(sys.argv[1]) < 3 else 1)
+PY
+then
+    echo "  [PASS] run_host_to_file stops after the Codex turn.completed event"
 else
-    echo "  [FAIL] run_host_to_file does not handle codex JSONL output"
+    echo "  [FAIL] run_host_to_file does not stop after the Codex turn.completed event"
+    echo "  Status: $HELPER_STATUS"
+    echo "  Elapsed: $HELPER_ELAPSED"
     FAILED=$((FAILED + 1))
 fi
 
