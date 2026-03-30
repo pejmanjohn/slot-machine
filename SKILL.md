@@ -57,7 +57,7 @@ digraph when_to_use {
 
 ## Configuration
 
-Check for config in project's `CLAUDE.md`, `AGENTS.md`, or equivalent. User can override inline (e.g., "slot-machine this with 3 slots").
+Project config can live in either `AGENTS.md` or `CLAUDE.md`; treat them as equal first-class sources. User can override inline (e.g., "slot-machine this with 3 slots").
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -79,7 +79,7 @@ Profiles define the task-specific content for a slot-machine run: approach hints
 ### Profile Discovery (order of precedence)
 
 1. **Explicit:** user says `--profile X` or `profile: X`
-2. **Project default:** `CLAUDE.md` sets `slot-machine-profile: X`
+2. **Project default:** `AGENTS.md` or `CLAUDE.md` sets `slot-machine-profile: X`
 3. **Local:** `./profiles/` folders in the project
 4. **User:** `~/.slot-machine/profiles/` (community or personal profiles)
 5. **Skill:** `profiles/` in the slot-machine skill directory (the built-in profiles)
@@ -110,7 +110,7 @@ SKILL.md injects these variables into ALL profile prompts. If a variable isn't r
 |----------|-------------|
 | `{{SPEC}}` | Full text of the spec/brief |
 | `{{APPROACH_HINT}}` | The hint assigned to this slot |
-| `{{PROJECT_CONTEXT}}` | README, architecture notes, CLAUDE.md conventions, reference materials |
+| `{{PROJECT_CONTEXT}}` | README, architecture notes, AGENTS.md / CLAUDE.md conventions, reference materials |
 | `{{SLOT_NUMBER}}` | This slot's number |
 | `{{PRE_CHECK_RESULTS}}` | Output from pre-check commands (empty string if `pre_checks` is null) |
 | `{{IMPLEMENTER_REPORT}}` | The implementer's status report |
@@ -129,19 +129,20 @@ When filling `{{TEST_COMMAND}}` for Python repos, prefer `python3 -m pytest ...`
 
 Slots can be configured per-slot instead of using the same profile implementer for all. Two axes compose with `+`:
 
-- **Skills** (`/superpowers:test-driven-development`, `/ce:work`) — methodology guidance, slash-prefixed. Injected into the prompt of whatever harness runs the slot.
-- **Harnesses** (`codex`, `gemini`) — which AI system executes. No slash prefix. Determines the dispatch mechanism.
+- **Skills** (`/superpowers:test-driven-development`, `$superpowers:test-driven-development`, `/ce:work`) — methodology guidance. Accept both Claude-style `/` and Codex-style `$` prefixes at parse time. Injected into the prompt of whatever harness runs the slot.
+- **Harnesses** (`claude`, `codex`, `gemini`) — which AI system executes. No skill prefix. Determines the dispatch mechanism.
 
 ### Slot Definition Sources (precedence)
 
-1. **Inline:** Parsed from the user's command. Slash-prefixed names are skills, bare names are harnesses. `+` composes them. `default` means profile implementer + approach hint.
-2. **CLAUDE.md config:** Read `slot-machine-slots` list if present:
+1. **Inline:** Parsed from the user's command. Slash-prefixed or dollar-prefixed names are skills, bare names are harnesses. `+` composes them. `default` means profile implementer + approach hint.
+2. **AGENTS.md or CLAUDE.md config:** Project config can live in either file as equal first-class sources. Read `slot-machine-profile` and `slot-machine-slots` if present:
    ```markdown
+   slot-machine-profile: coding
    slot-machine-slots:
      - /superpowers:test-driven-development
-     - /ce:work
+     - $superpowers:test-driven-development + codex
+     - claude
      - codex
-     - /superpowers:test-driven-development + codex
      - default
    ```
 3. **Profile defaults:** If no slot definitions found, all slots use the profile's implementer prompt with randomly assigned approach hints. This is the Phase 1 behavior — unchanged.
@@ -150,20 +151,26 @@ Slots can be configured per-slot instead of using the same profile implementer f
 
 - If the user specifies slot definitions AND a slot count higher than the number of definitions, remaining slots get profile defaults with approach hints
 - If the user specifies only slot definitions (no count), the slot count equals the number of definitions
-- Each slot definition is a tuple: `(skill, harness)`:
+- Each slot definition is a tuple: `(normalized_skill, harness)`:
   - `default` → `(null, null)` — profile implementer + hint
-  - `/superpowers:test-driven-development` → `("/superpowers:test-driven-development", null)` — Claude Code with skill
-  - `codex` → `(null, "codex")` — Codex with generic prompt
-  - `/superpowers:test-driven-development + codex` → `("/superpowers:test-driven-development", "codex")` — Codex with skill
+  - `/superpowers:test-driven-development` → `("superpowers:test-driven-development", null)` — skill-only slot
+  - `$superpowers:test-driven-development` → `("superpowers:test-driven-development", null)` — same normalized skill-only slot
+  - `claude` → `(null, "claude")` — Claude harness with generic prompt
+  - `codex` → `(null, "codex")` — Codex harness with generic prompt
+  - `/superpowers:test-driven-development + codex` → `("superpowers:test-driven-development", "codex")` — Codex with skill
+  - `$superpowers:test-driven-development + codex` → `("superpowers:test-driven-development", "codex")` — same normalized Codex-with-skill slot
 
-### Skill Name Translation for External Harnesses
+### Skill Syntax Normalization
 
-Slot definitions use Claude Code's `/` prefix for skills. External harnesses use different syntax. When dispatching a skill to a non-Claude harness, translate the prefix:
+Slot definitions accept both Claude-style `/skill-name` and Codex-style `$skill-name` syntax. Normalize each parsed skill internally to a host-neutral skill reference with no leading sigil, such as `superpowers:test-driven-development`.
 
-- **Codex:** `/superpowers:test-driven-development` → `$superpowers:test-driven-development` (replace `/` with `$`)
-- **Future harnesses:** follow their native skill invocation syntax
+When dispatching that host-neutral skill reference to a harness, translate it into the harness-native syntax:
 
-The skill is invoked natively by the target harness — Codex loads its own copy of the skill, not a text summary. The user is responsible for ensuring the skill is installed on the target harness.
+- **Claude harness:** `superpowers:test-driven-development` → `/superpowers:test-driven-development`
+- **Codex harness:** `superpowers:test-driven-development` → `$superpowers:test-driven-development`
+- **Future harnesses:** translate the same host-neutral skill reference into their native syntax
+
+The skill is invoked natively by the target harness — Claude and Codex load their own copy of the skill, not a text summary. The user is responsible for ensuring the skill is installed on the target harness.
 
 ### Approach Hints and Skill Slots
 
@@ -231,7 +238,7 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
 
 0. **Load profile.** Follow the [Profile Loading](#profile-loading) section to find the active profile folder and read `profile.md` from it for config. Report to user: "Using profile: {profile_name}"
 
-1. **Parse slot definitions.** Check for slot definitions in precedence order: (1) inline in the user's command, (2) `slot-machine-slots` in CLAUDE.md, (3) fall back to profile defaults. Record the slot list — each slot is `(skill, harness)` or `default`. Check harness availability (see below).
+1. **Parse slot definitions.** Check for slot definitions in precedence order: (1) inline in the user's command, (2) `slot-machine-slots` in `AGENTS.md` or `CLAUDE.md`, (3) fall back to profile defaults. Record the slot list — each slot is `(normalized_skill, harness)` or `default`. Check harness availability (see below).
 
    **Check harness availability and detect model.** For each slot that specifies a harness:
    - `codex`: Run `which codex` via Bash. If not found, warn: 'Codex CLI not found — slot {i} will fall back to Claude Code. Install: `npm install -g @openai/codex`'. Change the slot's harness to `null` (falls back to Claude Code with the same skill guidance if any). If found, read the Codex model version from `~/.codex/config.toml` (look for `model = "..."` line). Record this as the slot's model identifier (e.g., `gpt-5.4`).
@@ -250,7 +257,7 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
    - README or architecture docs (if they exist)
    - Key file descriptions relevant to the task
    - Test patterns and how to run tests (if applicable)
-   - Any CLAUDE.md conventions
+   - Any AGENTS.md or CLAUDE.md conventions
    - Reference materials, style guides, or source material (for writing tasks)
 
    Keep context focused — don't dump everything. Implementers should get just enough to orient themselves.
@@ -324,7 +331,7 @@ The universal variables to fill in the implementer prompt:
 |----------|--------|
 | `{{SPEC}}` | Full text of the spec — paste it, don't make the subagent read a file |
 | `{{APPROACH_HINT}}` | The hint assigned to this slot (or omit section if hints disabled) |
-| `{{PROJECT_CONTEXT}}` | README, architecture notes, CLAUDE.md conventions, reference materials gathered in Phase 1. Include any user-specified skill guidance. |
+| `{{PROJECT_CONTEXT}}` | README, architecture notes, AGENTS.md / CLAUDE.md conventions, reference materials gathered in Phase 1. Include any user-specified skill guidance. |
 | `{{TEST_COMMAND}}` | How to run the test suite (empty string if not applicable) |
 
 For Python projects, prefer `python3 -m pytest ...` unless the repo already provides an explicit test command. Do not invent `python -m pytest` on systems that only guarantee `python3`.
@@ -786,7 +793,7 @@ Implementer subagents report one of four statuses in their output:
 
 By default, all agents inherit the model from your current session. If you're running Opus, every slot gets Opus. If you're running Sonnet, every slot gets Sonnet. This means you always get the quality level you're paying for.
 
-To override, set model configs in your project's `CLAUDE.md` or inline. Only pass the `model` parameter to the Agent tool when the user has explicitly configured an override — otherwise omit it so the session model is inherited.
+To override, set model configs in your project's `AGENTS.md` or `CLAUDE.md`, or inline. Only pass the `model` parameter to the Agent tool when the user has explicitly configured an override — otherwise omit it so the session model is inherited.
 
 | Role | Default | Configurable As | When to override |
 |------|---------|-----------------|------------------|
