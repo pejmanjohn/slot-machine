@@ -337,7 +337,7 @@ For each slot i (1 to N), use this native-host dispatch contract:
 | `description` | `"Slot {i}: Implement {feature_name}"` |
 | `isolation` | `"worktree"` if profile isolation is `worktree`; omit if `file` |
 | `model` | Omit unless user configured `implementer_model` — inherits from session by default |
-| `prompt` | Read `implementer.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
+| `prompt` | Read `1-implementer.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
 
 The universal variables to fill in the implementer prompt:
 
@@ -521,15 +521,15 @@ Do NOT show full implementer reports, self-review findings, or file lists. The t
 
 **For each slot, as it returns successfully:**
 
-1. **Run pre-checks** for that slot. If `pre_checks` is `null`, skip and pass an empty string for `{{PRE_CHECK_RESULTS}}`. If set, `cd` into the slot's worktree first, then run the commands. Every pre-check Bash command must start with `cd {worktree_path} &&` — do not assume the shell is already in the right directory.
+1. **Run pre-checks** for that slot. If `pre_checks` is `null`, skip and pass an empty string for `{{PRE_CHECK_RESULTS}}`. If set, run them from the slot's execution location: for `worktree` isolation, `cd` into the slot worktree first; for `file` isolation, `cd` into the parent slot directory such as `dirname {output_file}` first. Every pre-check Bash command must start with the appropriate `cd ... &&` prefix for that slot's isolation mode — do not assume the shell is already in the right directory.
 
-2. **Dispatch its reviewer immediately** — do not wait for other slots. Use the native-host review path. On Claude, this is an Agent tool call. On Codex, use the native-host review execution path with the same prompt contract:
+2. **Dispatch its reviewer immediately** — do not wait for other slots. Use the native-host review path. On Claude, this is an Agent tool call. On Codex, use `codex exec` in the assigned review context for that slot's worktree or output-file directory, with the same prompt contract:
 
 | Parameter | Value |
 |-----------|-------|
 | `description` | `"Review Slot {i} implementation"` |
 | `model` | Omit unless user configured `reviewer_model` — inherits from session by default |
-| `prompt` | Read `reviewer.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
+| `prompt` | Read `2-reviewer.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
 
 The universal variables to fill in the reviewer prompt:
 
@@ -570,13 +570,13 @@ Extract standout elements from each reviewer's "Strengths" section. Pick the sin
 
 As soon as all reviews are collected, dispatch the judge — do not pause for orchestrator reporting. The review report table above can be shown *after* the judge is already running, or combined with the verdict output. The goal is to eliminate idle time between the last review returning and the judge starting.
 
-Make a SINGLE native-host judge dispatch. On Claude, this is an Agent tool call. On Codex, use the native-host judge execution path. **The judge MUST use the most capable model** — this is where architectural judgment matters most:
+Make a SINGLE native-host judge dispatch. On Claude, this is an Agent tool call. On Codex, use `codex exec` in the judge's assigned execution context with the same prompt contract. **The judge MUST use the most capable model** — this is where architectural judgment matters most:
 
 | Parameter | Value |
 |-----------|-------|
 | `description` | `"Judge Slot Machine results for {feature_name}"` |
 | `model` | Omit unless user configured `judge_model` — inherits from session by default. The judge benefits from the most capable model available. |
-| `prompt` | Read `judge.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
+| `prompt` | Read `3-judge.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
 
 The universal variables to fill in the judge prompt:
 
@@ -647,14 +647,14 @@ Zero critical issues, strongest test coverage (45 tests), correct lock granulari
 
 1. The judge produced a concrete synthesis plan (which base slot, what to port from where).
 
-2. Dispatch the synthesizer as a SINGLE native-host synthesis dispatch. On Claude, this is an Agent tool call. On Codex, use the native-host synthesizer execution path:
+2. Dispatch the synthesizer as a SINGLE native-host synthesis dispatch. On Claude, this is an Agent tool call. On Codex, use `codex exec` in the synthesizer's assigned worktree or output-file directory with the same prompt contract:
 
    | Parameter | Value |
    |-----------|-------|
    | `description` | `"Synthesize best elements for {feature_name}"` |
    | `isolation` | `"worktree"` if profile isolation is `worktree`; omit if `file` |
    | `model` | Omit unless user configured `synthesizer_model` — inherits from session by default |
-   | `prompt` | Read `synthesizer.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
+   | `prompt` | Read `4-synthesizer.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
 
    The universal variables to fill in the synthesizer prompt:
 
@@ -673,7 +673,7 @@ Zero critical issues, strongest test coverage (45 tests), correct lock granulari
    |-----------|-------|
    | `description` | `"Review synthesis for {feature_name}"` |
    | `model` | Omit unless user configured `reviewer_model` — inherits from session by default |
-   | `prompt` | Read `reviewer.md` from the active profile's folder and fill in `{{VARIABLES}}` using the synthesis worktree/output |
+   | `prompt` | Read `2-reviewer.md` from the active profile's folder and fill in `{{VARIABLES}}` using the synthesis worktree/output |
 
    The reviewer checks:
    - Coherence: does it read like one person wrote it?
