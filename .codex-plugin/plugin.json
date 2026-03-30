@@ -1,0 +1,23 @@
+{
+  "name": "slot-machine",
+  "version": "0.1.0",
+  "description": "Best-of-N parallel implementation skill for Claude Code and Codex",
+  "author": {
+    "name": "Pejman",
+    "url": "https://github.com/pejmanjohn"
+  },
+  "homepage": "https://github.com/pejmanjohn/slot-machine",
+  "repository": "https://github.com/pejmanjohn/slot-machine",
+  "license": "MIT",
+  "keywords": ["best-of-n", "parallel", "worktree", "code-quality", "multi-agent"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Slot Machine",
+    "shortDescription": "Run best-of-N implementations and judge the winner",
+    "longDescription": "Execute the same spec in parallel, review every attempt, then pick or synthesize the strongest result.",
+    "developerName": "Pejman",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Write"],
+    "websiteURL": "https://github.com/pejmanjohn/slot-machine"
+  }
+}
