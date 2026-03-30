@@ -92,6 +92,8 @@ Codex: $slot-machine with 3 slots — Implement the payment webhook handler from
 
 Host routing stays relative to where you start it: on Claude, Claude-targeted slots stay on the native Claude path and Codex-targeted slots use the Codex harness path with `codex exec`; on Codex, Codex-targeted slots use the native Codex slot path with `codex exec`, and only Claude-targeted slots use `claude -p`.
 
+Explicit `claude` harness slots require an operational Claude headless runtime, not just `which claude`. Slot-machine now treats runtime readiness as a real contract: if Claude cannot satisfy the required headless probe, explicitly requested Claude slots become `BLOCKED` instead of silently falling back to another harness.
+
 To update later:
 
 ```bash
@@ -461,12 +463,12 @@ Slot Machine gives the **same task** to N agents and compares their **full imple
 
 ```bash
 ./tests/run-tests.sh                  # Tier 1: contracts, skill structure, harness integrity
-./tests/run-tests.sh --smoke          # + Real implementer/reviewer/judge smoke tests via headless `claude -p`
-./tests/run-tests.sh --integration    # + Current happy-path E2E via headless `claude -p`; edge-case E2E still skips
+./tests/run-tests.sh --smoke          # + Real implementer/reviewer/judge smoke tests on each available host
+./tests/run-tests.sh --integration    # + Happy-path E2E on the selected viable host; edge-case E2E still skips
 ./tests/run-tests.sh --all            # Everything the runner knows about, including explicit skips
 ```
 
-The fast suite is the current host-agnostic validation layer: it checks prompt contracts, skill structure, and harness integrity. Higher tiers currently exercise the Claude harness path; this repo does not claim separate dual-host smoke or integration coverage for Codex yet. `test-e2e-edge-cases.sh` and `test-reviewer-accuracy.sh` still report explicit skips instead of passing silently.
+The fast suite is the host-agnostic validation layer: it checks prompt contracts, skill structure, and harness integrity. The smoke tier runs on each available host, and the happy-path integration test uses the selected viable host path. When Codex is present but the Codex-to-Claude bridge is not operational, integration falls back to the viable host path instead of hanging. `test-e2e-edge-cases.sh` and `test-reviewer-accuracy.sh` still report explicit skips instead of passing silently.
 
 ## License
 

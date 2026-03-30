@@ -340,6 +340,28 @@ assert_contains "$SKILL_CONTENT" "| Harness | Model |" \
     "SKILL.md progress tables include Harness and Model columns" || FAILED=$((FAILED + 1))
 
 echo ""
+echo "=== Contract 13A: Claude Runtime Readiness ==="
+assert_contains "$SKILL_CONTENT" "Claude runtime readiness\|runtime-readiness\|runtime readiness" \
+    "SKILL.md documents Claude runtime readiness" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "checked once per run\|once per run" \
+    "SKILL.md checks Claude readiness once per run" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "Reply with exactly OK\|exactly OK" \
+    "SKILL.md documents a minimal Claude headless probe" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "Not logged in\|/login\|authentication" \
+    "SKILL.md documents Claude authentication failures" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "bootstrap\|session-env\|permission" \
+    "SKILL.md documents Claude bootstrap/runtime failures" || FAILED=$((FAILED + 1))
+
+echo ""
+echo "=== Contract 13B: Explicit Claude Slot Failure Behavior ==="
+assert_contains "$SKILL_CONTENT" "explicit Claude slot\|explicit \`claude\` slot\|explicit claude slots" \
+    "SKILL.md distinguishes explicit Claude slots" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "do not silently fall back\|must not silently fall back\|no silent fallback" \
+    "SKILL.md forbids silent fallback for explicit Claude slots" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "BLOCKED" \
+    "SKILL.md documents BLOCKED normalization for unready Claude runtime" || FAILED=$((FAILED + 1))
+
+echo ""
 echo "=== Contract 14: Skill Discovery ==="
 assert_contains "$SKILL_CONTENT" "Skill Discovery\|skill discovery" \
     "SKILL.md has Skill Discovery section" || FAILED=$((FAILED + 1))

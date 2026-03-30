@@ -24,11 +24,12 @@ You are working on the slot-machine skill/plugin repo for best-of-N parallel imp
 - Treat Claude and Codex packaging as first-class; if discovery changes, update both packaging docs/metadata paths together
 - Project config may live in `AGENTS.md` or `CLAUDE.md`
 - Describe harness routing host-relatively: native path on the active host, with Codex slots using `codex exec` in their slot workspace and Claude-as-other-harness using `claude -p`
+- Explicit `claude` harness slots require Claude runtime readiness, not just `which claude`; if the headless runtime contract is not operational, those slots should become `BLOCKED` instead of silently falling back
 - Run `./tests/run-tests.sh` before committing
 
 ## Testing
 - `./tests/run-tests.sh` — Fast suite: contracts, skill structure, harness integrity
-- `./tests/run-tests.sh --smoke` — Current real implementer/reviewer/judge smoke tests via headless `claude -p`
-- `./tests/run-tests.sh --integration` — Adds the current real happy-path E2E via headless `claude -p`
+- `./tests/run-tests.sh --smoke` — Real implementer/reviewer/judge smoke tests on each available host
+- `./tests/run-tests.sh --integration` — Real happy-path E2E on the selected viable host path
 - `./tests/run-tests.sh --benchmark` — Speed benchmarks
 - `./tests/run-tests.sh --all` — Full suite, with edge-case E2E and reviewer-accuracy still skipping explicitly
