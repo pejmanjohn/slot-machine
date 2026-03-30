@@ -1,6 +1,6 @@
 # 🎰 Slot Machine
 
-**An open-source agent skill for Claude Code.**
+**An open-source best-of-N agent skill for Claude Code and Codex.**
 
 AI agents are probabilistic. The same spec produces different code every time — different designs, different bugs, different quality. A single attempt is a coin flip. Slot Machine gives you N coins and keeps the best one — or combines the best parts of each.
 
@@ -20,11 +20,11 @@ Three agents implement the same spec independently, each steered toward a differ
 ```
 Slot 1 follows TDD (tests first). Slot 2 follows CE patterns (codebase-aware). Same spec, different methodologies, best result wins.
 
-**Or even run some slots on Codex:**
+**Use Claude-style `/skill` or Codex-style `$skill`, and target external harnesses when you want:**
 ```
-/slot-machine with /superpowers:test-driven-development, /ce:work, and codex — Implement the API
+/slot-machine with /superpowers:test-driven-development, $ce:work + codex, and codex — Implement the API
 ```
-Three slots: Claude with TDD, Claude with CE patterns, and OpenAI Codex. Different models find different bugs — the evaluation pipeline reviews all of them the same way.
+Three slots: Claude with TDD, Codex with CE patterns, and bare Codex. Slot definitions accept both `/skill` and `$skill`; slot-machine normalizes them and dispatches the right host-native form to each harness.
 
 **It works for writing too:**
 ```
@@ -34,7 +34,7 @@ Each slot drafts with a different voice and structure. The judge picks the stron
 
 **Set it once in your project and forget:**
 ```markdown
-## Slot Machine Settings (add to CLAUDE.md)
+## Slot Machine Settings (add to `AGENTS.md` or `CLAUDE.md`)
 slot-machine-slots:
   - /superpowers:test-driven-development
   - /ce:work
@@ -59,17 +59,25 @@ The key insight: the agent that implements never evaluates. The agent that revie
 
 ## Install
 
-This repo is currently distributed as a standalone Claude Code skill, not a plugin.
+This repo ships first-class packaging for both Claude Code and Codex:
 
-Install it into your Claude Code user skills directory:
+- `.claude-plugin/` contains Claude packaging and marketplace metadata
+- `.codex-plugin/` contains Codex plugin metadata
+- `skills/slot-machine/SKILL.md` is a symlink to the repo-root `SKILL.md` for Codex skill discovery
+
+A portable local install is just a clone that preserves that layout:
+
+```bash
+git clone https://github.com/pejmanjohn/slot-machine.git ~/src/slot-machine
+```
+
+If you already use Claude's user skill directory, cloning there still works:
 
 ```bash
 git clone https://github.com/pejmanjohn/slot-machine.git ~/.claude/skills/slot-machine
 ```
 
-If `~/.claude/skills` does not exist yet, create it first.
-
-Then invoke it from any Claude Code session:
+Then invoke it from Claude Code or Codex once that checkout is available to your host's local skill/plugin discovery:
 
 ```text
 /slot-machine with 3 slots — Implement the payment webhook handler from PLAN.md
@@ -78,7 +86,7 @@ Then invoke it from any Claude Code session:
 To update later:
 
 ```bash
-git -C ~/.claude/skills/slot-machine pull
+git -C ~/src/slot-machine pull
 ```
 
 ## See It Work
@@ -206,7 +214,7 @@ Three slots: Claude Code with CE patterns, Codex with CE patterns, and bare Code
 | 2 | `DONE_WITH_CONCERNS` | `gpt-5.4` | 5 tests | /ce:work + codex |
 | 3 | `DONE_WITH_CONCERNS` | `gpt-5.4` | 5 tests | codex |
 
-**Skills** guide methodology (TDD, CE patterns). **Harnesses** choose the AI system (Claude, Codex). Compose them with `+`:
+**Skills** guide methodology (TDD, CE patterns). **Harnesses** choose the AI system (`claude`, `codex`). Compose them with `+`:
 
 ```
 /slot-machine with 4 slots:
@@ -216,9 +224,9 @@ Three slots: Claude Code with CE patterns, Codex with CE patterns, and bare Code
   slot 4: codex
 ```
 
-Skills are invoked natively by each harness — Claude uses the Skill tool, Codex uses `$` prefix. Each loads the full skill document in its own way.
+Slot definitions accept both `/skill` and `$skill`. Slot-machine normalizes that to a host-neutral skill reference, then dispatches the harness-native form when it runs the slot.
 
-Or set project defaults in `CLAUDE.md`:
+Or set project defaults in `AGENTS.md` or `CLAUDE.md`:
 
 ```markdown
 ## Slot Machine Settings
@@ -249,9 +257,9 @@ Force a profile with `profile: writing` or `profile: coding`, or let auto-detect
 
 ## Works With Your Other Skills
 
-Each implementer slot is a full Claude Code session with access to all your installed skills. You can assign a specific skill per slot — or let implementers pick up skills automatically from your environment.
+Each implementer slot runs in the selected harness with access to that host's installed skills. You can assign a specific skill per slot — or let implementers pick up skills automatically from your environment.
 
-Works with [superpowers](https://github.com/obra/superpowers), [compound-engineering](https://github.com/EveryInc/compound-engineering-plugin), [gstack](https://github.com/garrytan/gstack), or any other implementation skill. The orchestrator passes your `CLAUDE.md` conventions as project context to each implementer, so project-specific rules apply to every slot automatically.
+Works with [superpowers](https://github.com/obra/superpowers), [compound-engineering](https://github.com/EveryInc/compound-engineering-plugin), [gstack](https://github.com/garrytan/gstack), or any other implementation skill. The orchestrator passes your `AGENTS.md` and/or `CLAUDE.md` conventions as project context to each implementer, so project-specific rules apply to every slot automatically.
 
 ## What the Reviewer Actually Finds
 
@@ -301,7 +309,7 @@ That's what goes into your codebase. Not the first thing, not the prettiest — 
 | `judge_model` | inherit | Model for judge (inherits from session) |
 | `synthesizer_model` | inherit | Model for synthesizer (inherits from session) |
 
-Set in your project's `CLAUDE.md` or override inline: `/slot-machine with 3 slots`
+Set project defaults in `AGENTS.md`, `CLAUDE.md`, or both. When both exist, non-conflicting `slot-machine-*` settings merge; conflicting keys prefer the active host file. You can still override inline with `/slot-machine with 3 slots`.
 
 ## When to Use
 
@@ -325,17 +333,19 @@ Does this problem have a design space worth exploring? If yes, pull the lever.
 
 ## Works in Autonomous Loops
 
-Slot-machine runs inside [Ralph Loop](https://ghuntley.com/loop/) and custom agent loops. No special setup — add config to your `CLAUDE.md` and the loop's AI instances pick it up automatically.
+Slot-machine runs inside [Ralph Loop](https://ghuntley.com/loop/) and custom agent loops. No special setup — add config to `AGENTS.md`, `CLAUDE.md`, or both, and the loop's AI instances pick it up automatically.
 
 Slot-machine self-regulates: it evaluates each task and only engages when the task has meaningful design choices. Mechanical tasks (add a field, rename a function) get single-shot implementation. You can blanket-enable slot-machine and trust it to only spend compute when competition adds value.
 
-**Setup (add to CLAUDE.md):**
+**Setup (add to `AGENTS.md` or `CLAUDE.md`):**
 
 ```markdown
 ## Slot Machine Settings
 slot-machine-profile: coding
-slots: 3
-quiet: true
+slot-machine-slots:
+  - /ce:work
+  - $superpowers:test-driven-development + codex
+  - default
 ```
 
 Every run writes a machine-readable result to `.slot-machine/runs/latest/result.json` that scripts can parse:
@@ -397,7 +407,7 @@ pre_checks: |
 
 Use it: `/slot-machine with profile: my-profile`
 
-Or set as project default in `CLAUDE.md`:
+Or set as project default in `AGENTS.md` or `CLAUDE.md`:
 
 ```markdown
 slot-machine-profile: my-profile
@@ -432,13 +442,13 @@ Slot Machine gives the **same task** to N agents and compares their **full imple
 ## Running Tests
 
 ```bash
-./tests/run-tests.sh                  # Contract validation (instant)
-./tests/run-tests.sh --smoke          # + Real implementer/reviewer/judge smoke tests
-./tests/run-tests.sh --integration    # + Smoke tier + real happy-path E2E + skipped edge-case E2E
-./tests/run-tests.sh --all            # Everything, with unavailable headless tiers skipped
+./tests/run-tests.sh                  # Tier 1: contracts, skill structure, harness integrity
+./tests/run-tests.sh --smoke          # + Real implementer/reviewer/judge smoke tests via headless `claude -p`
+./tests/run-tests.sh --integration    # + Current happy-path E2E via headless `claude -p`; edge-case E2E still skips
+./tests/run-tests.sh --all            # Everything the runner knows about, including explicit skips
 ```
 
-The fast suite verifies prompt contracts, repo structure, and harness integrity. The implementer, reviewer, and judge smoke tests plus the happy-path E2E test now run for real via headless `claude -p`; the edge-case E2E and reviewer-accuracy scripts still report explicit skips instead of passing silently.
+The fast suite is the current host-agnostic validation layer: it checks prompt contracts, skill structure, and harness integrity. Higher tiers currently exercise the Claude harness path; this repo does not claim separate dual-host smoke or integration coverage for Codex yet. `test-e2e-edge-cases.sh` and `test-reviewer-accuracy.sh` still report explicit skips instead of passing silently.
 
 ## License
 
