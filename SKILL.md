@@ -65,6 +65,7 @@ Check for config in the project's `CLAUDE.md` or `AGENTS.md` — treat them as e
 | `approach_hints` | true | Give each slot a different architectural direction |
 | `auto_synthesize` | true | Allow judge to combine elements from multiple slots |
 | `max_retries` | 1 | Re-run failed slots (0 = no retry) |
+| `manual_handoff` | false | Stop after per-slot review and hand reviewed candidates back to the user for manual selection and merge |
 | `cleanup` | true | Delete worktrees after completion |
 | `quiet` | false | Suppress progress tables — only show final verdict + output path. For autonomous loops. |
 | `implementer_model` | inherit | Model for implementer subagents (inherits from session if not set) |
@@ -229,7 +230,7 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
 
 ### Phase 1: Setup
 
-0. **Load profile.** Follow the [Profile Loading](#profile-loading) section to find the active profile folder and read `profile.md` from it for config. Report to user: "Using profile: {profile_name}"
+0. **Load profile.** Follow the [Profile Loading](#profile-loading) section to find the active profile folder and read `0-profile.md` from it for config. Report to user: "Using profile: {profile_name}"
 
 1. **Parse slot definitions.** Check for slot definitions in precedence order: (1) inline in the user's command, (2) `slot-machine-slots` in `CLAUDE.md` or `AGENTS.md` (equal sources), (3) fall back to profile defaults. Record the slot list — each slot is `(skill, harness)` or `default`. Check harness availability (see below).
 
@@ -269,13 +270,18 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
      git init && git add -A && git commit -m "initial commit"
      ```
      Without this, `isolation: "worktree"` on Agent calls will fail and agents will not get isolated workspaces.
+     Record the original checkout before dispatching any slots so Phase 4 can restore it if needed:
+     ```bash
+     ORIGINAL_HEAD=$(git rev-parse HEAD)
+     ORIGINAL_BRANCH=$(git symbolic-ref --short -q HEAD || true)
+     ```
    - If `file`: No git repo required. Each slot will write its output to `{RUN_DIR}/slot-{i}.md`.
 
-6. **Run pre-checks (if configured).** Read the active profile's `profile.md` frontmatter for the `pre_checks` field.
+6. **Run pre-checks (if configured).** Read the active profile's `0-profile.md` frontmatter for the `pre_checks` field.
    - If `null` → skip this step.
    - If set → run the pre-check commands, substituting `{test_command}` with the detected test command. These establish the baseline. If baseline checks fail, stop and fix first.
 
-7. **Assign approach hints.** If `approach_hints` is enabled, read hints from the active profile's `profile.md`. Randomly assign one hint per slot (without replacement). Each hint steers toward a different approach — the profile defines what diversity means for this task type.
+7. **Assign approach hints.** If `approach_hints` is enabled, read hints from the active profile's `0-profile.md`. Randomly assign one hint per slot (without replacement). Each hint steers toward a different approach — the profile defines what diversity means for this task type.
 
 8. **Report setup to user** using this format (top-level markdown, not inside a code block):
 
@@ -316,7 +322,7 @@ For each slot i (1 to N), make an Agent tool call with:
 | `description` | `"Slot {i}: Implement {feature_name}"` |
 | `isolation` | `"worktree"` if profile isolation is `worktree`; omit if `file` |
 | `model` | Omit unless user configured `implementer_model` — inherits from session by default |
-| `prompt` | Read `implementer.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
+| `prompt` | Read `1-implementer.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
 
 The universal variables to fill in the implementer prompt:
 
@@ -530,7 +536,7 @@ Do NOT show full implementer reports, self-review findings, or file lists. The t
 |-----------|-------|
 | `description` | `"Review Slot {i} implementation"` |
 | `model` | Omit unless user configured `reviewer_model` — inherits from session by default |
-| `prompt` | Read `reviewer.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
+| `prompt` | Read `2-reviewer.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
 
 The universal variables to fill in the reviewer prompt:
 
@@ -567,7 +573,52 @@ The reviewer reads actual content in the worktree/output file — it does NOT ha
 
 Extract standout elements from each reviewer's "Strengths" section. Pick the single most notable strength per slot — the one the judge is most likely to care about.
 
+#### Manual Handoff
+
+If `manual_handoff` is true:
+
+This is the terminal path for the run. Skip the judge/verdict/merge finalization path below and use the manual handoff report instead.
+
+- Do NOT dispatch the judge
+- Do NOT dispatch the synthesizer
+- Do NOT auto-merge or copy a winning result
+- For `worktree` isolation, preserve all successful slot worktrees
+- For `file` isolation, preserve slot output files and reviews
+- For `worktree` isolation, restore the user's original checkout before the final report. Manual mode must not leave the main worktree on a slot branch, detached at a slot commit, or merged to a winner.
+- Write `{RUN_DIR}/handoff.md`
+- Write `{RUN_DIR}/slot-manifest.json`
+- Write manual-mode `{RUN_DIR}/result.json`
+- Refresh `.slot-machine/runs/latest` before finalizing manual-mode `result.json`
+- Compose the user-facing final section headed `# Manual Handoff`
+- Report the reviewed candidates and next steps to the user
+- STOP. Do not read or follow any judged-run verdict/final-report instructions below this block when `manual_handoff` is true.
+
+Manual handoff output for coding/worktree runs must include at minimum:
+
+- The exact H1 heading `# Manual Handoff`
+- A slot summary table with each successful slot's status and reviewer counts or verdict summary
+- Artifact paths for the slot diff, worktree path, branch name, head SHA, review markdown, `handoff.md`, `slot-manifest.json`, and manual-mode `result.json`
+- Next-step guidance for manual selection, merge, and any follow-up verification
+
+Before emitting the final manual handoff report for `worktree` isolation, restore the main checkout recorded in Phase 1:
+
+```bash
+if [ -n "${ORIGINAL_BRANCH:-}" ]; then
+    git switch "$ORIGINAL_BRANCH"
+else
+    git checkout --detach "$ORIGINAL_HEAD"
+fi
+```
+
+If the restore fails, report `BLOCKED` instead of silently leaving the user on the wrong checkout. Manual handoff is only complete when the main worktree is back on the original branch/HEAD and the reviewed slot worktrees remain available for inspection.
+
+Persist the per-slot diff, branch, path, SHA, review, file-change, and test metadata in `{RUN_DIR}/result.json` under `slot_details`. For manual handoff, `slot_details` is the source of truth for per-slot file/test data and artifact metadata in both `worktree` and `file` isolation.
+In manual mode, write the top-level `handoff_path` and `run_dir` fields as the canonical absolute `.slot-machine/runs/latest/...` paths so scripts can follow a stable location without resolving the dated run directory themselves.
+`{RUN_DIR}/slot-manifest.json` mirrors the same per-slot metadata as the human-readable handoff summary so manual selection can happen without reading `result.json`.
+
 #### Dispatch the judge immediately
+
+If `manual_handoff` is false:
 
 As soon as all reviews are collected, dispatch the judge — do not pause for orchestrator reporting. The review report table above can be shown *after* the judge is already running, or combined with the verdict output. The goal is to eliminate idle time between the last review returning and the judge starting.
 
@@ -577,7 +628,7 @@ Make a SINGLE Agent tool call. **The judge MUST use the most capable model** —
 |-----------|-------|
 | `description` | `"Judge Slot Machine results for {feature_name}"` |
 | `model` | Omit unless user configured `judge_model` — inherits from session by default. The judge benefits from the most capable model available. |
-| `prompt` | Read `judge.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
+| `prompt` | Read `3-judge.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
 
 The universal variables to fill in the judge prompt:
 
@@ -655,7 +706,7 @@ Zero critical issues, strongest test coverage (45 tests), correct lock granulari
    | `description` | `"Synthesize best elements for {feature_name}"` |
    | `isolation` | `"worktree"` if profile isolation is `worktree`; omit if `file` |
    | `model` | Omit unless user configured `synthesizer_model` — inherits from session by default |
-   | `prompt` | Read `synthesizer.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
+   | `prompt` | Read `4-synthesizer.md` from the active profile's folder and fill in all universal `{{VARIABLES}}` |
 
    The universal variables to fill in the synthesizer prompt:
 
@@ -674,7 +725,7 @@ Zero critical issues, strongest test coverage (45 tests), correct lock granulari
    |-----------|-------|
    | `description` | `"Review synthesis for {feature_name}"` |
    | `model` | Omit unless user configured `reviewer_model` — inherits from session by default |
-   | `prompt` | Read `reviewer.md` from the active profile's folder and fill in `{{VARIABLES}}` using the synthesis worktree/output |
+   | `prompt` | Read `2-reviewer.md` from the active profile's folder and fill in `{{VARIABLES}}` using the synthesis worktree/output |
 
    The reviewer checks:
    - Coherence: does it read like one person wrote it?
@@ -720,9 +771,13 @@ Slot diffs are preserved in `{RUN_DIR}/`.
 
 **For `file` isolation:** Run artifacts are kept permanently — no cleanup needed. All slot outputs, reviews, and the verdict remain in `{RUN_DIR}/`.
 
+If `manual_handoff` is true for `worktree` isolation, ignore `cleanup: true` and keep successful worktrees so the user can inspect and merge manually. In manual mode, do NOT write `verdict.md`; write `handoff.md` instead, and do not use the judged-run finalization path below. For each successful coding slot, persist `{RUN_DIR}/slot-{i}.diff`, branch name, head SHA, worktree path, and review artifact path in the manual handoff result metadata.
+
 If `cleanup` is false, report worktree/output locations so the user can inspect them.
 
 #### Final Report
+
+Judged runs only. Manual handoff already terminates with `# Manual Handoff`, `handoff.md`, `slot-manifest.json`, and manual-mode `result.json`; do not use this section when `manual_handoff` is true.
 
 The final report has three parts: the H1 header, the output content, and the footer line.
 
@@ -769,6 +824,44 @@ ln -sfn "$(basename {RUN_DIR})" "$(dirname {RUN_DIR})/latest"
 ```
 
 This is always written, every run. Humans ignore it. Autonomous loops and scripts parse it via `.slot-machine/runs/latest/result.json`.
+
+Manual handoff writes the same run artifact path with unresolved result state:
+
+In manual mode, the top-level `files_changed` and `tests_passing` fields are `null`; per-slot file/test data lives under `slot_details`.
+After refreshing `.slot-machine/runs/latest`, set the top-level `handoff_path` and `run_dir` fields to the absolute `latest` paths rather than the dated `{RUN_DIR}` path.
+For `file` isolation, each `slot_details` item uses `output_path` instead of `worktree_path`, and the worktree-only fields (`diff_path`, `branch`, `head_sha`) are omitted or `null`.
+Each file-isolation `slot_details` item still carries the slot output path, review path, files_changed, and tests_passing.
+
+```bash
+cat > {RUN_DIR}/result.json << RESULT
+{
+  "resolution_mode": "manual",
+  "verdict": null,
+  "winning_slot": null,
+  "confidence": null,
+  "slots": {total},
+  "slots_succeeded": {succeeded},
+  "handoff_path": "/abs/path/.slot-machine/runs/latest/handoff.md",
+  "files_changed": null,
+  "tests_passing": null,
+  "slot_details": [
+    {
+      "slot": 1,
+      "status": "DONE",
+      "diff_path": "{RUN_DIR}/slot-1.diff",
+      "worktree_path": ".slot-machine/worktrees/slot-1",
+      "branch": "slot-machine/{feature_name}/slot-1",
+      "head_sha": "abc123",
+      "review_path": "{RUN_DIR}/review-1.md",
+      "review_summary": { "critical": 0, "important": 1, "minor": 2 },
+      "files_changed": ["src/example.py"],
+      "tests_passing": 12
+    }
+  ],
+  "run_dir": "/abs/path/.slot-machine/runs/latest"
+}
+RESULT
+```
 
 **Part 4: Footer** — a horizontal rule followed by a one-line summary:
 
@@ -830,7 +923,7 @@ To override, set model configs in your project's `CLAUDE.md` or inline. Only pas
 
 ## Approach Hints
 
-Approach hints are defined in the active profile's `profile.md`. See `profiles/coding/0-profile.md` for the coding defaults and `profiles/writing/0-profile.md` for writing defaults.
+Approach hints are defined in the active profile's `0-profile.md`. See `profiles/coding/0-profile.md` for the coding defaults and `profiles/writing/0-profile.md` for writing defaults.
 
 When `approach_hints` is enabled (default: true), each slot gets a different hint to encourage genuinely divergent attempts. Assign randomly without replacement. The profile defines what "diversity" means for its task type — architectural diversity for coding, voice/structure diversity for writing.
 
