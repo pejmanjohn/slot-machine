@@ -91,6 +91,7 @@ Default development policy:
   - Reviewer prompt, seeded-bug expectations, or review formatting changes: `./tests/run-tests.sh --test test-reviewer-smoke.sh`
   - Judge prompt, ranking/verdict parsing, or scorecard aggregation changes: `./tests/run-tests.sh --test test-judge-smoke.sh`
   - Claude-host plus Codex-slot bridge changes: `./tests/run-tests.sh --test test-claude-host-codex-smoke.sh`
+  - Profile loading, inherited-profile resolution, or symlinked installed-skill layouts: `./tests/run-tests.sh --test test-claude-profile-inheritance-smoke.sh`
   - Happy-path orchestration, merge/finalization, or run-artifact changes: `./tests/run-tests.sh --test test-e2e-happy-path.sh`
   - `manual_handoff`, preserved-worktree behavior, or handoff artifact changes: `./tests/run-tests.sh --test test-e2e-manual-handoff.sh`
 - Reserve full smoke and integration sweeps for release prep, cross-host harness work, or broad orchestration refactors.
@@ -110,7 +111,7 @@ Recommended release bar:
 - Run `./tests/run-tests.sh --smoke` for host/harness changes or broad prompt-flow changes.
 - Run `./tests/run-tests.sh --integration` when the release touches end-to-end orchestration, artifact generation, merge/finalization, or manual handoff behavior.
 
-Important: today, higher-tier coverage is mixed and expensive. `test-implementer-smoke.sh`, `test-reviewer-smoke.sh`, and `test-judge-smoke.sh` run once per available host, while `test-e2e-happy-path.sh`, `test-e2e-manual-handoff.sh`, and `test-claude-host-codex-smoke.sh` each perform real headless orchestration runs. `test-e2e-edge-cases.sh` and `test-reviewer-accuracy.sh` still report explicit skips until their headless assertions are wired in. Read the output instead of assuming `--smoke`, `--integration`, or `--all` gives uniform coverage.
+Important: today, higher-tier coverage is mixed and expensive. `test-implementer-smoke.sh`, `test-reviewer-smoke.sh`, and `test-judge-smoke.sh` run once per available host, while `test-claude-host-codex-smoke.sh`, `test-claude-profile-inheritance-smoke.sh`, `test-e2e-happy-path.sh`, and `test-e2e-manual-handoff.sh` each perform real headless orchestration runs. `test-e2e-edge-cases.sh` and `test-reviewer-accuracy.sh` still report explicit skips until their headless assertions are wired in. Read the output instead of assuming `--smoke`, `--integration`, or `--all` gives uniform coverage.
 
 ## Practical Review Checklist
 
