@@ -185,6 +185,11 @@ select_changed_tests() {
                 ;;
             profiles/*/0-profile.md|profiles/*/4-synthesizer.md|SKILL.md|skills/slot-machine/SKILL.md|tests/test-e2e-happy-path.sh)
                 add_selected_test test-e2e-happy-path.sh
+                case "$changed_path" in
+                    profiles/*/0-profile.md)
+                        add_selected_test test-claude-profile-inheritance-smoke.sh
+                        ;;
+                esac
                 ;;
             tests/test-e2e-manual-handoff.sh)
                 add_selected_test test-e2e-manual-handoff.sh
@@ -192,12 +197,19 @@ select_changed_tests() {
             tests/test-claude-host-codex-smoke.sh)
                 add_selected_test test-claude-host-codex-smoke.sh
                 ;;
+            tests/test-claude-profile-inheritance-smoke.sh)
+                add_selected_test test-claude-profile-inheritance-smoke.sh
+                ;;
         esac
     done
 
     if changed_diff_matches "$CHANGED_BASE" '(^|[^[:alnum:]_])(manual_handoff|handoff\.md|slot-manifest\.json|resolution_mode|winning_slot)([^[:alnum:]_]|$)'; then
         add_selected_test test-e2e-happy-path.sh
         add_selected_test test-e2e-manual-handoff.sh
+    fi
+
+    if changed_diff_matches "$CHANGED_BASE" '(^|[^[:alnum:]_])(profile_loading|blocked_stage|blocked_reason|extends:|pwd -P|find -L)([^[:alnum:]_]|$)'; then
+        add_selected_test test-claude-profile-inheritance-smoke.sh
     fi
 
     tests=("${selected_tests[@]}")
@@ -367,7 +379,7 @@ export SLOT_MACHINE_TEST_HOST_FILTER="$HOST_FILTER"
 
 # Test lists
 tier1_tests=(test-contracts.sh test-skill-structure.sh test-codex-standalone-install.sh test-harness-integrity.sh test-codex-wrapper-parser.sh)
-tier2_tests=(test-implementer-smoke.sh test-reviewer-smoke.sh test-judge-smoke.sh test-claude-host-codex-smoke.sh)
+tier2_tests=(test-implementer-smoke.sh test-reviewer-smoke.sh test-judge-smoke.sh test-claude-host-codex-smoke.sh test-claude-profile-inheritance-smoke.sh)
 tier3_tests=(test-e2e-happy-path.sh test-e2e-manual-handoff.sh test-e2e-edge-cases.sh)
 quality_tests=(test-reviewer-accuracy.sh)
 

@@ -59,6 +59,7 @@ If your change touches profiles (`profiles/*/`), SKILL.md workflow logic, or end
 ```
 
 Today, the implementer, reviewer, and judge smoke tests execute on each allowed host via the shared runner, and the happy-path E2E runs on the selected viable host path. Use `--host` when you want only one host locally, and use `--changed` when you want the runner to keep Tier 1 and add only the matching heavier checks. Explicit `claude` harness slots should execute through `claude -p` directly and fail per slot if the external Claude runtime is unavailable. `test-e2e-edge-cases.sh` and `test-reviewer-accuracy.sh` still skip explicitly.
+For profile-loading regressions, especially inherited profiles that rely on built-in prompts through a symlinked install layout, use `./tests/run-tests.sh --test test-claude-profile-inheritance-smoke.sh`.
 
 ## What the Tests Check
 
@@ -66,6 +67,7 @@ Today, the implementer, reviewer, and judge smoke tests execute on each allowed 
 - **Structure** — Required packaging files exist, including the Codex skill mirror plus the Codex build/install/update scripts
 - **Harness integrity** — The runner and placeholder/skip behavior match the documented contract
 - **Smoke** — Real implementer/reviewer/judge checks on each available host
+- **Claude profile inheritance smoke** — Real Claude-host coverage for local `extends:` profiles through a symlinked installed skill path, plus blocked setup artifacts when inheritance cannot resolve
 - **Benchmark** — Speed tests comparing slot-machine vs baseline single-agent runs
 - **E2E** — Real happy-path host-neutral coverage plus explicit skips for the still-unwired edge-case path
 

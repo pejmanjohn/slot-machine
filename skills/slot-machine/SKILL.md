@@ -94,14 +94,44 @@ Profiles define the task-specific content for a slot-machine run: approach hints
   - **Writing signals:** write, draft, compose, describe; references to audience, tone, structure
 - If not confident → ask one question: "This spec could be a coding task or a writing task. Which profile should I use?"
 
+### Deterministic Resolution Procedure
+
+Resolve profile names against exact roots. Do not rely on open-ended recursive globs as the primary lookup path.
+
+1. Build these roots at the start of profile resolution:
+   - `PROJECT_PROFILE_ROOT="$PWD/profiles"`
+   - `USER_PROFILE_ROOT="$HOME/.slot-machine/profiles"`
+   - `SKILL_PROFILE_ROOT="profiles/"` under the physical slot-machine skill directory
+2. Resolve the skill directory to a physical path before reading built-in profiles or resolving inherited bases. If the host provides a skill base directory, canonicalize it first:
+   ```bash
+   REAL_SKILL_DIR=$(cd "{skill_dir}" 2>/dev/null && pwd -P)
+   ```
+   On Claude-hosted runs, when you need the installed skill directory and only have the installed path, canonicalize that installed path the same way before using `Glob` or `Read`. Built-in profile discovery must work whether the installed skill directory is a real directory or a symlink.
+3. When selecting a named profile `X`, check exact directories in precedence order: `PROJECT_PROFILE_ROOT/X`, then `USER_PROFILE_ROOT/X`, then `REAL_SKILL_DIR/profiles/X`.
+4. When `extends: X` appears, rerun the same named-profile lookup for `X`. Do not assume the base profile lives beside the extending profile.
+5. Prefer `Read` on exact numbered files once you know the resolved directory. If you need to enumerate built-in files inside the canonicalized skill directory, scope the lookup to the physical path, for example:
+   ```bash
+   find -L "$REAL_SKILL_DIR/profiles/$PROFILE_NAME" -maxdepth 1 -type f -name '*.md' | sort
+   ```
+   A scoped `Glob` inside `REAL_SKILL_DIR/profiles/$PROFILE_NAME` is also acceptable after canonicalization.
+6. If the selected profile or any inherited base still cannot be resolved after checking those exact roots, stop. Do not broaden the search with recursive `**/profiles/...` fallbacks.
+
 ### Profile Inheritance Resolution
 
-- If profile has `extends: X`, read base profile X first
+- If profile has `extends: X`, resolve base profile `X` using the deterministic procedure above, then read base profile `X` first
 - Overlay the extending profile's files on top
 - Files present in extending profile's folder replace base files entirely
 - Missing files are inherited from the base folder
 - Frontmatter fields override individually
 - Max one level of inheritance
+
+### Profile Resolution Failure
+
+If the selected profile or any inherited base cannot be resolved:
+
+- Write a blocked-mode `{RUN_DIR}/result.json` (see [Result artifact](#part-3-result-artifact--always-write-a-machine-readable-json-file-to-the-run-directory))
+- Refresh `.slot-machine/runs/latest` to that run directory
+- Report `BLOCKED` with the missing profile/base and stop before slot parsing or dispatch
 
 ### Universal Variables
 
@@ -237,34 +267,7 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
 
 ### Phase 1: Setup
 
-0. **Load profile.** Follow the [Profile Loading](#profile-loading) section to find the active profile folder and read `0-profile.md` from it for config. Report to user: "Using profile: {profile_name}"
-
-1. **Parse slot definitions.** Check for slot definitions in precedence order: (1) inline in the user's command, (2) `slot-machine-slots` in `AGENTS.md`, `CLAUDE.md`, or both, treating them as equal first-class sources and reading whichever exists or both if both exist, merging non-conflicting `slot-machine-*` settings from both files and preferring the active host file if both define the same key, (3) fall back to profile defaults. Record the slot list — each slot is `(normalized_skill, harness)` or `default`. Check harness availability (see below).
-
-   **Check harness availability and detect model.** For each slot that specifies a harness:
-   - `codex`: Run `which codex` via Bash. If not found, warn: 'Codex CLI not found — slot {i} will fall back to the native host path. Install: `npm install -g @openai/codex`'. Change the slot's harness to `null` (falls back to the native host with the same skill guidance if any). If found, read the Codex model version from `~/.codex/config.toml` (look for `model = "..."` line). Record this as the slot's model identifier (e.g., `gpt-5.4`).
-   - `claude`: Run `which claude` via Bash and record the reported or configured Claude model identifier if available; otherwise record `unknown`. For native Claude host rows in the execution matrix, that is enough because the slot stays on the host-native path. For explicit Claude slots that use the external Claude harness path, do not silently fall back — dispatch the slot through `claude -p` and normalize the actual command outcome per slot.
-   - **Claude Code slots:** The model is the session model (e.g., `claude-opus-4-6`) or the configured `implementer_model` override.
-   - Future harnesses: same pattern — check binary, read model from config, warn and fall back if missing.
-
-2. **Validate the spec.** The spec (plan, requirements doc, or inline description) must be concrete enough for independent attempts. If ambiguous — stop and ask for clarification before spending compute.
-
-   Red flags that mean "not ready":
-   - "Something like..." or "maybe we could..."
-   - Missing acceptance criteria
-   - References to external context not provided
-   - Contradictory requirements
-
-3. **Gather project context.** Collect what implementers need:
-   - README or architecture docs (if they exist)
-   - Key file descriptions relevant to the task
-   - Test patterns and how to run tests (if applicable)
-   - Any AGENTS.md or CLAUDE.md conventions
-   - Reference materials, style guides, or source material (for writing tasks)
-
-   Keep context focused — don't dump everything. Implementers should get just enough to orient themselves.
-
-4. **Create run directory.** Create the run storage directory and add `.slot-machine/` to `.gitignore` if not already present:
+0. **Create run directory.** Create the run storage directory and add `.slot-machine/` to `.gitignore` if not already present:
    ```bash
    RUN_DIR_REL=".slot-machine/runs/$(date +%Y-%m-%d)-{feature_slug}"
    RUN_DIR="$PWD/$RUN_DIR_REL"
@@ -273,6 +276,33 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
    ```
    Persist `RUN_DIR` as the absolute path for this run. All review, verdict, and result artifacts must be written via that absolute path, not a cwd-relative redirect. Before every artifact write later in the run, re-run `mkdir -p "$RUN_DIR"` so artifact persistence never depends on shell state.
    All artifacts from this run will be saved to `{RUN_DIR}/`.
+
+1. **Load profile.** Follow the [Profile Loading](#profile-loading) section to find the active profile folder and read `0-profile.md` from it for config. Report to user: "Using profile: {profile_name}". If profile resolution fails, write the blocked-mode `{RUN_DIR}/result.json`, refresh `.slot-machine/runs/latest`, report `BLOCKED`, and stop before slot dispatch.
+
+2. **Parse slot definitions.** Check for slot definitions in precedence order: (1) inline in the user's command, (2) `slot-machine-slots` in `AGENTS.md`, `CLAUDE.md`, or both, treating them as equal first-class sources and reading whichever exists or both if both exist, merging non-conflicting `slot-machine-*` settings from both files and preferring the active host file if both define the same key, (3) fall back to profile defaults. Record the slot list — each slot is `(normalized_skill, harness)` or `default`. Check harness availability (see below).
+
+   **Check harness availability and detect model.** For each slot that specifies a harness:
+   - `codex`: Run `which codex` via Bash. If not found, warn: 'Codex CLI not found — slot {i} will fall back to the native host path. Install: `npm install -g @openai/codex`'. Change the slot's harness to `null` (falls back to the native host with the same skill guidance if any). If found, read the Codex model version from `~/.codex/config.toml` (look for `model = "..."` line). Record this as the slot's model identifier (e.g., `gpt-5.4`).
+   - `claude`: Run `which claude` via Bash and record the reported or configured Claude model identifier if available; otherwise record `unknown`. For native Claude host rows in the execution matrix, that is enough because the slot stays on the host-native path. For explicit Claude slots that use the external Claude harness path, do not silently fall back — dispatch the slot through `claude -p` and normalize the actual command outcome per slot.
+   - **Claude Code slots:** The model is the session model (e.g., `claude-opus-4-6`) or the configured `implementer_model` override.
+   - Future harnesses: same pattern — check binary, read model from config, warn and fall back if missing.
+
+3. **Validate the spec.** The spec (plan, requirements doc, or inline description) must be concrete enough for independent attempts. If ambiguous — stop and ask for clarification before spending compute.
+
+   Red flags that mean "not ready":
+   - "Something like..." or "maybe we could..."
+   - Missing acceptance criteria
+   - References to external context not provided
+   - Contradictory requirements
+
+4. **Gather project context.** Collect what implementers need:
+   - README or architecture docs (if they exist)
+   - Key file descriptions relevant to the task
+   - Test patterns and how to run tests (if applicable)
+   - Any AGENTS.md or CLAUDE.md conventions
+   - Reference materials, style guides, or source material (for writing tasks)
+
+   Keep context focused — don't dump everything. Implementers should get just enough to orient themselves.
 
 5. **Prepare isolation.** Check the profile's `isolation` field:
    - If `worktree`: The project MUST be a git repository with at least one commit before Phase 2 can create worktrees. If the directory is not a git repo or has no commits:
@@ -877,6 +907,28 @@ cat > {RUN_DIR}/result.json << RESULT
       "tests_passing": 12
     }
   ],
+  "run_dir": "/abs/path/.slot-machine/runs/latest"
+}
+RESULT
+```
+
+Profile-loading failures and other setup-time hard stops must still write the same run artifact path before exiting, then refresh `.slot-machine/runs/latest` to that run:
+
+For profile-loading failures, set `blocked_stage` to `profile_loading` and describe the unresolved profile or base in `blocked_reason`.
+
+```bash
+cat > "{RUN_DIR}/result.json" << RESULT
+{
+  "resolution_mode": "blocked",
+  "verdict": null,
+  "winning_slot": null,
+  "confidence": null,
+  "slots": 0,
+  "slots_succeeded": 0,
+  "blocked_stage": "profile_loading",
+  "blocked_reason": "Base profile 'coding' could not be resolved for profile 'blog-post-exp4'",
+  "files_changed": null,
+  "tests_passing": null,
   "run_dir": "/abs/path/.slot-machine/runs/latest"
 }
 RESULT
