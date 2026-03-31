@@ -9,7 +9,19 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/test-helpers.sh"
 
 TEST_HOST="${TEST_HOST:-auto}"
+HOST_FILTER="${SLOT_MACHINE_TEST_HOST_FILTER:-all}"
 CODEX_CLAUDE_BRIDGE_READY=0
+if [ "$TEST_HOST" = "auto" ]; then
+    case "$HOST_FILTER" in
+        ""|all) ;;
+        claude|codex) TEST_HOST="$HOST_FILTER" ;;
+        *)
+            echo "[SKIP] unsupported SLOT_MACHINE_TEST_HOST_FILTER: $HOST_FILTER"
+            exit 2
+            ;;
+    esac
+fi
+
 if [ "$TEST_HOST" = "auto" ]; then
     if host_available codex && codex_can_host_claude_slots; then
         TEST_HOST="codex"
@@ -21,6 +33,10 @@ if [ "$TEST_HOST" = "auto" ]; then
         exit 2
     fi
 elif [ "$TEST_HOST" = "codex" ]; then
+    if ! host_available codex; then
+        echo "[SKIP] codex CLI not installed"
+        exit 2
+    fi
     if ! host_available claude; then
         echo "[SKIP] codex-hosted E2E requires claude CLI for explicit external slots"
         exit 2
@@ -60,6 +76,7 @@ echo "  5. Assert final merged project contains implementation and tests"
 echo "  6. Assert generated pytest suite passes"
 echo "  7. Assert worktrees are cleaned up"
 echo ""
+echo "Host filter: $HOST_FILTER"
 
 SPEC_FILE="$SCRIPT_DIR/fixtures/tiny-spec.md"
 SLOT_COUNT=2

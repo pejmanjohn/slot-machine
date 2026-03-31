@@ -26,15 +26,12 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/test-helpers.sh"
 
 HOSTS=()
-if host_available claude; then
-    HOSTS+=(claude)
-fi
-if host_available codex; then
-    HOSTS+=(codex)
-fi
+while IFS= read -r host; do
+    [ -n "$host" ] && HOSTS+=("$host")
+done < <(resolve_test_hosts)
 
 if [ "${#HOSTS[@]}" -eq 0 ]; then
-    echo "[SKIP] neither claude nor codex CLI is installed"
+    echo "[SKIP] no matching host runner is available for SLOT_MACHINE_TEST_HOST_FILTER=${SLOT_MACHINE_TEST_HOST_FILTER:-all}"
     exit 2
 fi
 

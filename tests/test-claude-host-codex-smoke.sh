@@ -6,6 +6,19 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/test-helpers.sh"
 
+HOST_FILTER="${SLOT_MACHINE_TEST_HOST_FILTER:-all}"
+case "$HOST_FILTER" in
+    ""|all|claude) ;;
+    codex)
+        echo "[SKIP] test-claude-host-codex-smoke.sh requires claude as the primary host"
+        exit 2
+        ;;
+    *)
+        echo "[SKIP] unsupported SLOT_MACHINE_TEST_HOST_FILTER: $HOST_FILTER"
+        exit 2
+        ;;
+esac
+
 if ! command -v claude >/dev/null 2>&1; then
     echo "[SKIP] claude CLI not installed"
     exit 2
@@ -31,6 +44,7 @@ fi
 
 echo "=== Claude Host + Codex Smoke Test ==="
 echo "Skill dir: $SKILL_DIR"
+echo "Host filter: $HOST_FILTER"
 
 SPEC_FILE="$SCRIPT_DIR/fixtures/tiny-spec.md"
 TMPDIR=$(mktemp -d)

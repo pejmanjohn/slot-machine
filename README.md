@@ -456,12 +456,15 @@ Slot Machine gives the **same task** to N agents and compares their **full imple
 
 ```bash
 ./tests/run-tests.sh                  # Tier 1: contracts, skill structure, harness integrity
+./tests/run-tests.sh --changed        # Tier 1 + the smallest heavier checks matched to local changes
+./tests/run-tests.sh --host claude    # Restrict headless tests to one host
+./tests/run-tests.sh --jobs auto      # Parallelize independent tests
 ./tests/run-tests.sh --smoke          # + Real implementer/reviewer/judge smoke tests on each available host
-./tests/run-tests.sh --integration    # + Happy-path E2E on the selected viable host; edge-case E2E still skips
+./tests/run-tests.sh --integration    # + Heavier E2E coverage on the selected host path
 ./tests/run-tests.sh --all            # Everything the runner knows about, including explicit skips
 ```
 
-The fast suite is the host-agnostic validation layer: it checks prompt contracts, skill structure, and harness integrity. The smoke tier runs on each available host, and the happy-path integration test uses the selected viable host path. When Codex is present but the Codex-to-Claude bridge is not operational, integration falls back to the viable host path instead of hanging. `test-e2e-edge-cases.sh` and `test-reviewer-accuracy.sh` still report explicit skips instead of passing silently.
+The fast suite is the host-agnostic validation layer: it checks prompt contracts, skill structure, and harness integrity. `--changed` keeps Tier 1 and adds only the heavier checks that match the files you actually changed. `--host` trims smoke/E2E tests to one host when you do not need the full matrix, and `--jobs` parallelizes independent shell tests. The smoke tier still runs phase checks on each allowed host, and the happy-path integration test uses the selected viable host path. When Codex is present but the Codex-to-Claude bridge is not operational, integration falls back to the viable host path instead of hanging. `test-e2e-edge-cases.sh` and `test-reviewer-accuracy.sh` still report explicit skips instead of passing silently.
 
 [^anthropic-harness]: Anthropic, [Harness design for long-running application development](https://www.anthropic.com/engineering/harness-design-long-running-apps) (Mar. 24, 2026). Useful external support for three claims reflected here: LLM self-evaluation is lenient, explicit grading criteria matter, and external evaluation is most worth the cost when the task is beyond what the current model handles reliably solo.
 

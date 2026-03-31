@@ -12,6 +12,37 @@ host_available() {
     esac
 }
 
+normalize_test_host_filter() {
+    case "${1:-all}" in
+        ""|all) echo "all" ;;
+        claude|codex) echo "$1" ;;
+        *) return 1 ;;
+    esac
+}
+
+resolve_test_hosts() {
+    local filter
+    filter="$(normalize_test_host_filter "${1:-${SLOT_MACHINE_TEST_HOST_FILTER:-all}}")" || return 1
+
+    case "$filter" in
+        all)
+            host_available claude && echo "claude"
+            host_available codex && echo "codex"
+            ;;
+        claude|codex)
+            host_available "$filter" && echo "$filter"
+            ;;
+    esac
+}
+
+host_filter_allows() {
+    local requested_host="$1"
+    local filter
+    filter="$(normalize_test_host_filter "${SLOT_MACHINE_TEST_HOST_FILTER:-all}")" || return 1
+
+    [ "$filter" = "all" ] || [ "$filter" = "$requested_host" ]
+}
+
 codex_can_host_claude_slots() {
     if ! host_available codex || ! host_available claude; then
         return 1
