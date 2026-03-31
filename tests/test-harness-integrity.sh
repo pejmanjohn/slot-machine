@@ -20,6 +20,7 @@ all_runner_tests=(
     test-reviewer-smoke.sh
     test-judge-smoke.sh
     test-claude-host-codex-smoke.sh
+    test-claude-host-profile-inheritance-smoke.sh
     test-e2e-happy-path.sh
     test-e2e-manual-handoff.sh
     test-e2e-edge-cases.sh
@@ -239,6 +240,8 @@ assert_contains "$RUNNER_CONTENT" "test-e2e-manual-handoff.sh" \
     "Tier 3 includes manual handoff integration coverage" || FAILED=$((FAILED + 1))
 assert_contains "$RUNNER_CONTENT" "test-claude-host-codex-smoke.sh" \
     "Smoke tier includes the Claude-host + Codex regression test" || FAILED=$((FAILED + 1))
+assert_contains "$RUNNER_CONTENT" "test-claude-host-profile-inheritance-smoke.sh" \
+    "Smoke tier includes the Claude-host profile-inheritance regression test" || FAILED=$((FAILED + 1))
 assert_contains "$RUNNER_CONTENT" "--host" \
     "Runner exposes a host-selection option" || FAILED=$((FAILED + 1))
 assert_contains "$RUNNER_CONTENT" "--jobs" \

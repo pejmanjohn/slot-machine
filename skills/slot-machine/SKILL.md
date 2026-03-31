@@ -57,7 +57,7 @@ digraph when_to_use {
 
 ## Configuration
 
-Project config can live in `AGENTS.md`, `CLAUDE.md`, or both; treat them as equal first-class sources. Read whichever exists, or both if both exist. When both exist, merge non-conflicting `slot-machine-*` settings from both files. If both files define the same `slot-machine-*` key, prefer the file for the active host: `AGENTS.md` in Codex, `CLAUDE.md` in Claude. User can override inline (e.g., "slot-machine this with 3 slots").
+Project config can live in `AGENTS.md`, `CLAUDE.md`, or both; treat them as equal first-class sources. Read whichever exists, or both if both exist. When both exist, merge non-conflicting slot-machine config from both files. The prefixed project keys are `slot-machine-profile` and `slot-machine-slots`; the remaining settings from the table below use their bare names (`slots`, `quiet`, `cleanup`, `manual_handoff`, `auto_synthesize`, `max_retries`, `approach_hints`, and the `*_model` overrides). If both files define the same key, prefer the file for the active host: `AGENTS.md` in Codex, `CLAUDE.md` in Claude. User can override inline (e.g., "slot-machine this with 3 slots").
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -80,7 +80,7 @@ Profiles define the task-specific content for a slot-machine run: approach hints
 ### Profile Discovery (order of precedence)
 
 1. **Explicit:** user says `--profile X` or `profile: X`
-2. **Project default:** `AGENTS.md`, `CLAUDE.md`, or both set `slot-machine-profile: X`. Treat them as equal first-class sources and read whichever exists, or both if both exist. Merge non-conflicting `slot-machine-*` settings from both files; if both define the same key, prefer the active host file: `AGENTS.md` in Codex, `CLAUDE.md` in Claude.
+2. **Project default:** `AGENTS.md`, `CLAUDE.md`, or both set `slot-machine-profile: X`. Treat them as equal first-class sources and read whichever exists, or both if both exist. Merge non-conflicting slot-machine config from both files; if both define the same key, prefer the active host file: `AGENTS.md` in Codex, `CLAUDE.md` in Claude.
 3. **Local:** `./profiles/` folders in the project
 4. **User:** `~/.slot-machine/profiles/` (community or personal profiles)
 5. **Skill:** `profiles/` in the slot-machine skill directory (the built-in profiles)
@@ -102,6 +102,13 @@ Profiles define the task-specific content for a slot-machine run: approach hints
 - Missing files are inherited from the base folder
 - Frontmatter fields override individually
 - Max one level of inheritance
+
+### Resolution Guardrails
+
+- Resolve the active profile name once. As soon as a named profile is found at one discovery layer, stop scanning lower-precedence layers for that same profile name.
+- If the active profile has `extends: X`, resolve `X` immediately using the same precedence order. Built-in `coding` and `writing` profiles at the skill layer are valid base fallbacks.
+- Build the effective profile file set before continuing: `0-profile.md`, `1-implementer.md`, `2-reviewer.md`, `3-judge.md`, and `4-synthesizer.md`. For each file, use the extending profile's copy if present; otherwise use the resolved base profile's file.
+- If the active profile or its base cannot be resolved after one pass through the discovery order, stop with `BLOCKED` and explain the missing profile or file. Do not continue setup-time discovery loops, repeated directory scans, or repeated config reads.
 
 ### Universal Variables
 
@@ -136,7 +143,7 @@ Slots can be configured per-slot instead of using the same profile implementer f
 ### Slot Definition Sources (precedence)
 
 1. **Inline:** Parsed from the user's command. Slash-prefixed or dollar-prefixed names are skills, bare names are harnesses. `+` composes them. `default` means profile implementer + approach hint.
-2. **AGENTS.md or CLAUDE.md config:** Project config can live in either file or both as equal first-class sources. Read `slot-machine-profile` and `slot-machine-slots` from whichever exists, or both if both exist. Merge non-conflicting `slot-machine-*` settings from both files; if both define the same key, prefer the active host file: `AGENTS.md` in Codex, `CLAUDE.md` in Claude:
+2. **AGENTS.md or CLAUDE.md config:** Project config can live in either file or both as equal first-class sources. Read `slot-machine-profile` and `slot-machine-slots` from whichever exists, or both if both exist. Merge non-conflicting slot-machine config from both files; if both define the same key, prefer the active host file: `AGENTS.md` in Codex, `CLAUDE.md` in Claude:
    ```markdown
    slot-machine-profile: coding
    slot-machine-slots:
@@ -237,9 +244,9 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
 
 ### Phase 1: Setup
 
-0. **Load profile.** Follow the [Profile Loading](#profile-loading) section to find the active profile folder and read `0-profile.md` from it for config. Report to user: "Using profile: {profile_name}"
+0. **Load profile.** Follow the [Profile Loading](#profile-loading) section to determine the active profile name, resolve its directory once, and read `0-profile.md` for config. If the active profile has `extends: X`, resolve the base profile immediately and build the effective file set (`0-profile.md` through `4-synthesizer.md`) before moving on. Do not keep scanning profile directories or re-reading config once those effective files are known. If resolution fails at any point, emit `BLOCKED` with the exact missing profile or file and stop. Report to user: "Using profile: {profile_name}" and, if applicable, "inherits: {base_profile_name}".
 
-1. **Parse slot definitions.** Check for slot definitions in precedence order: (1) inline in the user's command, (2) `slot-machine-slots` in `AGENTS.md`, `CLAUDE.md`, or both, treating them as equal first-class sources and reading whichever exists or both if both exist, merging non-conflicting `slot-machine-*` settings from both files and preferring the active host file if both define the same key, (3) fall back to profile defaults. Record the slot list — each slot is `(normalized_skill, harness)` or `default`. Check harness availability (see below).
+1. **Parse slot definitions.** Check for slot definitions in precedence order: (1) inline in the user's command, (2) `slot-machine-slots` in `AGENTS.md`, `CLAUDE.md`, or both, treating them as equal first-class sources and reading whichever exists or both if both exist, merging non-conflicting slot-machine config from both files and preferring the active host file if both define the same key, (3) fall back to profile defaults. Record the slot list — each slot is `(normalized_skill, harness)` or `default`. Check harness availability (see below).
 
    **Check harness availability and detect model.** For each slot that specifies a harness:
    - `codex`: Run `which codex` via Bash. If not found, warn: 'Codex CLI not found — slot {i} will fall back to the native host path. Install: `npm install -g @openai/codex`'. Change the slot's harness to `null` (falls back to the native host with the same skill guidance if any). If found, read the Codex model version from `~/.codex/config.toml` (look for `model = "..."` line). Record this as the slot's model identifier (e.g., `gpt-5.4`).
@@ -273,6 +280,7 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
    ```
    Persist `RUN_DIR` as the absolute path for this run. All review, verdict, and result artifacts must be written via that absolute path, not a cwd-relative redirect. Before every artifact write later in the run, re-run `mkdir -p "$RUN_DIR"` so artifact persistence never depends on shell state.
    All artifacts from this run will be saved to `{RUN_DIR}/`.
+   This is the setup completion checkpoint. After steps 0-3, create `RUN_DIR` before any further exploratory reads, repeated profile scans, or slot-introspection loops. If you cannot reach this step because setup information is still missing, emit `BLOCKED` with the missing prerequisite instead of continuing setup-time introspection.
 
 5. **Prepare isolation.** Check the profile's `isolation` field:
    - If `worktree`: The project MUST be a git repository with at least one commit before Phase 2 can create worktrees. If the directory is not a git repo or has no commits:
@@ -931,7 +939,7 @@ Implementer subagents report one of four statuses in their output:
 
 By default, all agents inherit the model from your current session. If you're running Opus, every slot gets Opus. If you're running Sonnet, every slot gets Sonnet. This means you always get the quality level you're paying for.
 
-To override, set model configs in your project's `AGENTS.md`, `CLAUDE.md`, or both. Treat them as equal first-class sources and read whichever exists, or both if both exist. Merge non-conflicting `slot-machine-*` settings from both files; if both define the same key, prefer the active host file: `AGENTS.md` in Codex, `CLAUDE.md` in Claude. Inline overrides still win. Only pass a model override to the native-host dispatch mechanism when the user has explicitly configured one — otherwise omit it so the session model is inherited.
+To override, set model configs in your project's `AGENTS.md`, `CLAUDE.md`, or both. Treat them as equal first-class sources and read whichever exists, or both if both exist. Merge non-conflicting slot-machine config from both files; if both define the same key, prefer the active host file: `AGENTS.md` in Codex, `CLAUDE.md` in Claude. Inline overrides still win. Only pass a model override to the native-host dispatch mechanism when the user has explicitly configured one — otherwise omit it so the session model is inherited.
 
 | Role | Default | Configurable As | When to override |
 |------|---------|-----------------|------------------|

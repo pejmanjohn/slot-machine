@@ -323,7 +323,7 @@ That's what goes into your codebase. Not the first thing, not the prettiest — 
 | `judge_model` | inherit | Model for judge (inherits from session) |
 | `synthesizer_model` | inherit | Model for synthesizer (inherits from session) |
 
-Set project defaults in `AGENTS.md`, `CLAUDE.md`, or both. When both exist, non-conflicting `slot-machine-*` settings merge; conflicting keys prefer the active host file. You can still override inline with `/slot-machine with 3 slots`.
+Set project defaults in `AGENTS.md`, `CLAUDE.md`, or both. When both exist, non-conflicting slot-machine config merges; conflicting keys prefer the active host file. The prefixed keys are `slot-machine-profile` and `slot-machine-slots`; the remaining settings use their bare names (`slots`, `quiet`, `cleanup`, `manual_handoff`, `auto_synthesize`, `max_retries`, `approach_hints`, and the `*_model` overrides). You can still override inline with `/slot-machine with 3 slots`.
 
 ## When to Use
 
@@ -412,7 +412,7 @@ pre_checks: |
 3. "Design for backward compatibility — existing clients must not break."
 ```
 
-**Inheritance:** Set `extends: coding` to inherit all prompts from the coding profile and override only what you change. Files present in your profile replace the base; missing files are inherited. One level of inheritance max.
+**Inheritance:** Set `extends: coding` to inherit all prompts from the coding profile and override only what you change. Files present in your profile replace the base; missing files are inherited. Resolution is deterministic: once slot-machine finds your named profile at one layer (project-local, personal, or built-in), it stops searching lower-precedence layers for that same profile, then resolves the base profile and fills any missing prompt files from that base. One level of inheritance max.
 
 **Install locations:**
 - **Project-local:** `./profiles/my-profile/` (checked into your repo)
