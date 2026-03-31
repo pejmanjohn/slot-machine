@@ -557,9 +557,9 @@ TRACE_SECTION_COMPACT=$(printf '%s' "$TRACE_SECTION" | tr '\n' ' ')
 
 assert_contains "$TRACE_SECTION" "## Orchestrator Trace" \
     "SKILL.md has Orchestrator Trace section" || FAILED=$((FAILED + 1))
-assert_contains "$TRACE_SECTION" "events.jsonl" \
+assert_contains "$TRACE_SECTION_COMPACT" '"events_path".*events\.jsonl' \
     "SKILL.md documents orchestrator trace events.jsonl path" || FAILED=$((FAILED + 1))
-assert_contains "$TRACE_SECTION" "state.json" \
+assert_contains "$TRACE_SECTION_COMPACT" '"state_path".*state\.json' \
     "SKILL.md documents orchestrator trace state.json path" || FAILED=$((FAILED + 1))
 assert_contains "$TRACE_SECTION" "\\.slot-machine/history/active\\.json" \
     "SKILL.md documents .slot-machine/history/active.json" || FAILED=$((FAILED + 1))
@@ -576,19 +576,19 @@ assert_contains "$TRACE_SECTION" '"status": "idle"' \
 
 echo ""
 echo "=== Contract 15A: Orchestrator Trace Events ==="
-assert_contains "$SKILL_CONTENT" "phase_entered" \
+assert_contains "$TRACE_SECTION" "phase_entered" \
     "SKILL.md documents phase_entered events" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" "artifact_written" \
+assert_contains "$TRACE_SECTION" "artifact_written" \
     "SKILL.md documents artifact_written events" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" "slot_retry_scheduled" \
+assert_contains "$TRACE_SECTION" "slot_retry_scheduled" \
     "SKILL.md documents slot_retry_scheduled events" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" "run_finished" \
+assert_contains "$TRACE_SECTION" "run_finished" \
     "SKILL.md documents run_finished events" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" "run_failed" \
+assert_contains "$TRACE_SECTION" "run_failed" \
     "SKILL.md documents run_failed events" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" '"current_phase"' \
+assert_contains "$TRACE_SECTION" '"current_phase"' \
     "SKILL.md documents current_phase state" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" '"last_event_seq"' \
+assert_contains "$TRACE_SECTION" '"last_event_seq"' \
     "SKILL.md documents last_event_seq state" || FAILED=$((FAILED + 1))
 assert_contains "$TRACE_SECTION_COMPACT" "Any change that adds a new orchestration phase.*update" \
     "SKILL.md includes maintenance rule for new orchestration phases" || FAILED=$((FAILED + 1))
