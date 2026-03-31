@@ -16,8 +16,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILL_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+source "$SCRIPT_DIR/../test-helpers.sh"
+
 SPEC_FILE="$SCRIPT_DIR/specs/task-scheduler.md"
 RESULTS_DIR="$SCRIPT_DIR/results"
+BENCHMARK_HOST="${BENCHMARK_HOST:-claude}"
 
 SLOTS=10
 
@@ -35,8 +38,8 @@ STUDY_DIR=$(mktemp -d)
 MATRIX_DIR="$STUDY_DIR/matrix"
 mkdir -p "$MATRIX_DIR"
 
-if ! command -v claude >/dev/null 2>&1; then
-    echo "[SKIP] claude CLI is required for the variability study"
+if ! host_available "$BENCHMARK_HOST"; then
+    echo "[SKIP] $BENCHMARK_HOST CLI is required for the variability study"
     exit 2
 fi
 if ! command -v npm >/dev/null 2>&1; then
@@ -55,7 +58,8 @@ echo " Slot Machine Variability Study"
 echo "========================================"
 echo ""
 echo "Spec: task-scheduler (TypeScript)"
-echo "Slots: $SLOTS (all Claude Opus 4.6, identical settings)"
+echo "Host: $BENCHMARK_HOST"
+echo "Slots: $SLOTS (identical settings)"
 echo "Git SHA: $GIT_SHA"
 echo ""
 echo "Pre-registered metrics:"
@@ -112,8 +116,11 @@ for i in $(seq 1 "$SLOTS"); do
     cp -r "$BASE_DIR" "$SLOT_DIR"
 
     (
-        cd "$SLOT_DIR"
-        claude -p "Implement this in the working directory. Commit your work with git add -A && git commit. $SPEC Test command: npx vitest run" --allowedTools 'Bash,Read,Write,Edit,Glob,Grep' --permission-mode bypassPermissions --verbose --output-format stream-json --max-turns 15 > "$SLOT_DIR/.transcript.jsonl" 2>&1
+        run_host_to_file "$BENCHMARK_HOST" "$SLOT_DIR/.transcript.jsonl" \
+            "Implement this in the working directory. Commit your work with git add -A && git commit. $SPEC Test command: npx vitest run" \
+            1800 \
+            15 \
+            "$SLOT_DIR"
     ) &
     PIDS="$PIDS $!"
     echo "  Slot $i dispatched"
@@ -340,7 +347,8 @@ cat > "$RESULT_FILE" << RESULTEOF
   "timestamp": "$TIMESTAMP",
   "git_sha": "$GIT_SHA",
   "spec": "task-scheduler",
-  "model": "claude-opus-4-6",
+  "host": "$BENCHMARK_HOST",
+  "model": "${BENCHMARK_HOST}-default",
   "slots": $SLOTS,
   "implementation_time_seconds": $IMPL_TIME,
   "test_counts": [$(echo $TEST_COUNTS | tr ' ' ',')],
@@ -359,7 +367,7 @@ cat > "$RESULT_FILE" << RESULTEOF
     "failure_rate_pct": $CROSS_FAIL_PCT,
     "slots_with_at_least_one_failure": $SLOTS_WITH_FAILURES
   },
-  "methodology": "Pre-registered. All slots use identical model, prompt, and settings. Each runs in an independent claude -p session. Cross-testing runs every implementation against every other test suite. All results reported."
+  "methodology": "Pre-registered. All slots use identical host defaults, prompt, and settings. Each runs in an independent $BENCHMARK_HOST session. Cross-testing runs every implementation against every other test suite. All results reported."
 }
 RESULTEOF
 
@@ -369,7 +377,7 @@ echo "========================================"
 echo " Variability Study Results"
 echo "========================================"
 echo ""
-echo "  Spec: task-scheduler | Model: claude-opus-4-6 | Slots: $SLOTS"
+echo "  Spec: task-scheduler | Host: $BENCHMARK_HOST | Slots: $SLOTS"
 echo "  Implementation time: ${IMPL_TIME}s ($((IMPL_TIME / 60))m $((IMPL_TIME % 60))s, all parallel)"
 echo ""
 echo "  TEST COUNTS"

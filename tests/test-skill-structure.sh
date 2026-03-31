@@ -77,6 +77,47 @@ for profile_dir in "$SKILL_DIR"/profiles/*/; do
 done
 
 echo ""
+echo "=== Skill Structure: Plugin Packaging ==="
+for file in \
+    .claude-plugin/plugin.json \
+    .claude-plugin/marketplace.json \
+    .codex-plugin/plugin.json \
+    skills/slot-machine/SKILL.md; do
+    if [ -e "$SKILL_DIR/$file" ]; then
+        echo "  [PASS] Packaging file '$file' exists"
+    else
+        echo "  [FAIL] Packaging file '$file' missing"
+        FAILED=$((FAILED + 1))
+    fi
+done
+
+echo ""
+echo "=== Skill Structure: Codex Skill Packaging ==="
+CODEX_SKILL_DIR="$SKILL_DIR/skills/slot-machine"
+CODEX_SKILL_PATH="$CODEX_SKILL_DIR/SKILL.md"
+if [ -L "$CODEX_SKILL_PATH" ]; then
+    echo "  [FAIL] Codex skill SKILL.md must be a real file, not a symlink"
+    FAILED=$((FAILED + 1))
+elif cmp -s "$SKILL_DIR/SKILL.md" "$CODEX_SKILL_PATH"; then
+    echo "  [PASS] Codex skill SKILL.md matches the repo-root SKILL.md"
+else
+    echo "  [FAIL] Codex skill SKILL.md must stay in sync with the repo-root SKILL.md"
+    FAILED=$((FAILED + 1))
+fi
+
+for relative_file in \
+    "skills/slot-machine/profiles/coding/0-profile.md" \
+    "skills/slot-machine/profiles/writing/0-profile.md" \
+    "skills/slot-machine/tests/fixtures/sample-metrics.json"; do
+    if [ -e "$SKILL_DIR/$relative_file" ]; then
+        echo "  [PASS] Codex skill asset '$relative_file' is reachable"
+    else
+        echo "  [FAIL] Codex skill asset '$relative_file' missing"
+        FAILED=$((FAILED + 1))
+    fi
+done
+
+echo ""
 echo "=== Skill Structure Tests Complete ==="
 echo "Failures: $FAILED"
 exit $FAILED

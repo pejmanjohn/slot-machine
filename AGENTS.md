@@ -2,9 +2,13 @@
 
 ## Purpose
 
-This repository is a skill/plugin repo, not an application service. The primary artifacts are prompt specifications and their validation harness:
+This repository is a skill/plugin repo for Claude Code and Codex, not an application service. The primary artifacts are prompt specifications, packaging metadata, and their validation harness:
 
-- `SKILL.md` is the orchestration engine.
+- `SKILL.md` is the host-agnostic orchestration engine.
+- `.claude-plugin/` and `.codex-plugin/` are first-class packaging/discovery targets.
+- `skills/slot-machine/SKILL.md` is the Codex-packaged mirror of the repo-root `SKILL.md`.
+- `scripts/build-codex-runtime-skill.sh`, `scripts/install-codex-skill.sh`, and `scripts/update-codex-skill.sh` define the supported Codex runtime install/update flow.
+- `scripts/install-codex-standalone-skill.sh` is a compatibility wrapper for materializing a plain bundle at an arbitrary destination.
 - `profiles/` contains task-specific profile configs and agent prompts.
 - `tests/` contains shell-based contract checks, real implementer/reviewer smoke tests, scaffolded higher-tier checks, fixtures, and benchmarks.
 
@@ -15,6 +19,12 @@ Treat prompt wording, documented variables, status strings, and output contracts
 - `SKILL.md`
   - Frontmatter `description` must describe trigger conditions only, not workflow details.
   - Defines the universal variable set, slot configuration rules, artifact paths, and orchestration behavior.
+- `.claude-plugin/`, `.codex-plugin/`, and `skills/slot-machine/SKILL.md`
+  - Keep Claude and Codex packaging aligned when discovery changes.
+  - `skills/slot-machine/SKILL.md` must remain byte-for-byte synchronized with the repo-root `SKILL.md`.
+  - `scripts/build-codex-runtime-skill.sh` must keep producing a standalone Codex skill directory with a real `SKILL.md`, linked built-in assets, and no `.codex-plugin` metadata.
+  - `scripts/install-codex-skill.sh` must rebuild that runtime bundle into the Codex runtime root and point the stable `~/.agents/skills/slot-machine` link at it.
+  - `scripts/update-codex-skill.sh` must rebuild from install metadata so Codex updates do not depend on manual path reconstruction.
 - `profiles/coding/` and `profiles/writing/`
   - `0-profile.md` holds frontmatter and approach hints.
   - `1-implementer.md`, `2-reviewer.md`, `3-judge.md`, `4-synthesizer.md` are the phase prompts.
@@ -24,7 +34,7 @@ Treat prompt wording, documented variables, status strings, and output contracts
   - `test-e2e-happy-path.sh` is a real headless happy-path E2E test.
   - `test-e2e-edge-cases.sh` and `test-reviewer-accuracy.sh` still skip until their headless `claude -p` assertions are wired in.
   - `benchmark/` contains long-running benchmark scripts.
-- `README.md`, `CONTRIBUTING.md`, `CLAUDE.md`
+- `README.md`, `CONTRIBUTING.md`, `CLAUDE.md`, `AGENTS.md`
   - Keep these aligned with actual workflow and test coverage when behavior changes.
 
 ## Change Rules
@@ -44,6 +54,8 @@ When editing this repo, preserve these invariants:
 4. If you change slot configuration, artifact layout, profile loading, or Codex dispatch behavior, update both docs and contract tests in the same change.
 5. Preserve the run artifact contract under `.slot-machine/runs/`, including `.slot-machine/runs/latest/result.json` if you change result generation.
 6. Do not add workflow details to the `SKILL.md` frontmatter description.
+7. Project config can live in `AGENTS.md` or `CLAUDE.md`; docs should treat both as first-class sources.
+8. Describe harness routing host-relatively: native path on the active host, with Codex slots using `codex exec` in their slot workspace and Claude-as-other-harness using `claude -p`.
 
 ## Editing Guidance
 
@@ -74,7 +86,7 @@ If you change prompt flow, profile behavior, or orchestration logic and have the
 ./tests/run-tests.sh --integration
 ```
 
-Important: today, higher-tier coverage is mixed. `test-implementer-smoke.sh`, `test-reviewer-smoke.sh`, `test-judge-smoke.sh`, and `test-e2e-happy-path.sh` run for real, while `test-e2e-edge-cases.sh` and `test-reviewer-accuracy.sh` still report explicit skips until their headless assertions are wired in. Read the output instead of assuming `--smoke`, `--integration`, or `--all` gives full behavioral coverage.
+Important: today, higher-tier coverage is mixed. `test-implementer-smoke.sh`, `test-reviewer-smoke.sh`, `test-judge-smoke.sh`, and `test-e2e-happy-path.sh` run for real via headless `claude -p`, while `test-e2e-edge-cases.sh` and `test-reviewer-accuracy.sh` still report explicit skips until their headless assertions are wired in. Read the output instead of assuming `--smoke`, `--integration`, or `--all` gives full dual-host behavioral coverage.
 
 ## Practical Review Checklist
 
@@ -82,5 +94,6 @@ Before finishing a change, verify:
 
 - Prompt variables still match `SKILL.md`.
 - Section headers and scorecard/verdict wording still match what downstream phases expect.
+- Claude and Codex packaging docs still match the repo layout.
 - README and contributor docs still describe the real behavior.
 - The fast contract suite passes.
