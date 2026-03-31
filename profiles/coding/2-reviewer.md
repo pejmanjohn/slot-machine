@@ -41,6 +41,15 @@ The implementer reviewed their own work. Their report is marketing, not journali
 
 ## Your Review Process
 
+### Pass 0: Review Scope (Changed Surface First)
+
+Start by identifying the implementation surface before you read broadly.
+
+- If git history or diff data is available in `{{WORKTREE_PATH}}`, inspect changed files first: `git status --short`, `git diff --stat`, `git diff`, recent commits.
+- If the worktree is already committed or clean, infer the changed surface from the implementer report, spec nouns, test files, and the file layout. Read the files named by the implementer report first.
+- Build a short mental list of the changed files and directly affected dependencies/tests. Read those first. Only then read adjacent unchanged code needed to verify behavior.
+- If a potential issue is outside the changed surface and not a direct dependency/regression risk, drop it. Don't do a vague repo-wide critique.
+
 ### Pass 1: Spec Compliance (GATE)
 
 Go through the spec line by line. For each requirement, find the code that implements it.
@@ -74,6 +83,20 @@ Think like someone who has to debug this code at 3am when it's failing in produc
 
 For each finding: read the code, trace the execution path, confirm the bug is real. Don't report theoretical issues — only report what you can demonstrate with a specific input or sequence.
 
+**Hard signal-quality filter:**
+- `Critical` and `Important` issues must have a concrete failure mode, missing requirement, or meaningful changed-branch test gap.
+- If you cannot describe what breaks, when it breaks, or why the changed code creates the risk, do NOT report it as `Critical` or `Important`.
+- Drop speculative findings. If something is worth mentioning but not clearly harmful, downgrade it to `Minor` or leave it out.
+
+### Pass 2b: Compare Against Existing Repo Patterns
+
+Before calling something missing, over-engineered, or poorly designed:
+
+- Search for existing utilities, helpers, validation patterns, and test patterns elsewhere in the worktree.
+- Compare the implementation against project conventions, not your personal preferences.
+- Only raise reuse/convention issues when the divergence creates a real maintainability, correctness, or testability cost.
+- If the implementation reinvents something already present, cite the existing pattern or helper with file:line evidence.
+
 ### Pass 3: Test Assessment
 
 Read every test file. For each test, note what it actually verifies:
@@ -92,6 +115,16 @@ Then identify what's NOT tested:
 
 **A test that passes doesn't mean the code is correct.** A test that only checks the happy path is a smoke test, not a verification.
 
+For each changed behavior or risk area, classify it internally as:
+- `well tested` — direct, behavior-level coverage
+- `weakly tested` — indirect, shallow, or brittle coverage
+- `untested` — changed behavior with no meaningful coverage
+
+Reflect that classification in the existing output sections:
+- `Scenarios covered` should describe what is genuinely well tested
+- `Scenarios NOT covered` should name changed behavior that is weakly tested or untested
+- `Test quality notes` should call out brittle patterns like real sleeps, mock-only checks, or implementation-detail assertions
+
 ### Pass 4: Strengths (What's Worth Keeping)
 
 The judge may synthesize the best elements from multiple implementations. Identify what THIS implementation does notably well that others might not:
@@ -103,6 +136,8 @@ The judge may synthesize the best elements from multiple implementations. Identi
 - Performance optimizations
 
 **Be specific.** Not "good error handling" — instead: "`src/token_bucket.py:12-18` validates all constructor args with descriptive ValueError messages including the invalid value and expected range."
+
+Do not pad the scorecard with trivia. Minor issues are only worth listing if they would help a synthesizer, debugger, or maintainer.
 
 ## Output Format
 
@@ -122,19 +157,24 @@ Return EXACTLY this format:
 
 ### Issues
 
-**Critical** (blocks shipping — bugs, spec violations, security):
+Use these exact severity heading lines:
+- `**Critical:**`
+- `**Important:**`
+- `**Minor:**`
+
+**Critical:**
 1. **[Short title]** — `file:line`
    What: [precise description of the problem]
    Impact: [what goes wrong and when]
    Fix: [how to fix it, or "needs design decision"]
 
-**Important** (should fix — test gaps, quality, maintainability):
+**Important:**
 1. **[Short title]** — `file:line`
    What: [description]
    Impact: [why this matters]
    Fix: [suggestion]
 
-**Minor** (nice to fix — style, naming, small improvements):
+**Minor:**
 1. **[Short title]** — `file:line` — [brief description]
 
 [If no issues in a category, write "None found." Do NOT skip the category.]
