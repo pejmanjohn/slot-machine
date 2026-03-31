@@ -55,6 +55,22 @@ for profile_dir in "$SKILL_DIR"/profiles/*/; do
 done
 
 echo ""
+echo "=== Contract 2b: Reviewer Prompt Hardening ==="
+CODING_REVIEWER_CONTENT=$(cat "$SKILL_DIR/profiles/coding/2-reviewer.md" 2>/dev/null || echo "")
+
+assert_contains "$CODING_REVIEWER_CONTENT" "git diff\\|changed files\\|diff shape" \
+    "coding reviewer starts from changed files or diff scope" || FAILED=$((FAILED + 1))
+
+assert_contains "$CODING_REVIEWER_CONTENT" "concrete failure mode\\|do not report speculative\\|drop speculative\\|downgrade speculative" \
+    "coding reviewer filters speculative findings" || FAILED=$((FAILED + 1))
+
+assert_contains "$CODING_REVIEWER_CONTENT" "existing utilit\\|existing helper\\|repo pattern\\|project convention\\|compare against existing" \
+    "coding reviewer compares against existing repo patterns" || FAILED=$((FAILED + 1))
+
+assert_contains "$CODING_REVIEWER_CONTENT" "well tested\\|weakly tested\\|untested\\|changed behavior" \
+    "coding reviewer evaluates test coverage for changed behavior" || FAILED=$((FAILED + 1))
+
+echo ""
 echo "=== Contract 3: Judge Verdict -> SKILL.md Phase 4 ==="
 for profile_dir in "$SKILL_DIR"/profiles/*/; do
     PROFILE_NAME=$(basename "$profile_dir")
