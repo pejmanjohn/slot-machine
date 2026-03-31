@@ -25,6 +25,7 @@ mkdir -p "$DEST_DIR"
 
 cp "$SOURCE_REPO/SKILL.md" "$DEST_DIR/SKILL.md"
 ln -s "$SOURCE_REPO/profiles" "$DEST_DIR/profiles"
+ln -s "$SOURCE_REPO/scripts" "$DEST_DIR/scripts"
 ln -s "$SOURCE_REPO/tests" "$DEST_DIR/tests"
 
 cat > "$DEST_DIR/.slot-machine-install.json" <<EOF

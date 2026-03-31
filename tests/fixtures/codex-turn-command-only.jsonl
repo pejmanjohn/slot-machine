@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"thread-synth"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"command_execution","command":"pytest tests/test_token_bucket.py -q","aggregated_output":"3 passed","exit_code":0,"status":"completed"}}
+{"type":"turn.completed","usage":{"input_tokens":12,"output_tokens":18}}

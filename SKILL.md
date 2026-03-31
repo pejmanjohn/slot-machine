@@ -106,7 +106,7 @@ Resolve profile names against exact roots. Do not rely on open-ended recursive g
    ```bash
    REAL_SKILL_DIR=$(cd "{skill_dir}" 2>/dev/null && pwd -P)
    ```
-   On Claude-hosted runs, when you need the installed skill directory and only have the installed path, canonicalize that installed path the same way before using `Glob` or `Read`. Built-in profile discovery must work whether the installed skill directory is a real directory or a symlink.
+   On Claude-hosted runs, when you need the installed skill directory and only have the installed path, canonicalize that installed path the same way before using `Glob` or `Read`. Built-in profile discovery must work whether the installed skill directory is a real directory or a symlink. Preserve `REAL_SKILL_DIR` for all built-in assets, not just profiles: the supported Codex runtime helper lives at `"$REAL_SKILL_DIR/scripts/codex-slot-runner.py"`.
 3. When selecting a named profile `X`, check exact directories in precedence order: `PROJECT_PROFILE_ROOT/X`, then `USER_PROFILE_ROOT/X`, then `REAL_SKILL_DIR/profiles/X`.
 4. When `extends: X` appears, rerun the same named-profile lookup for `X`. Do not assume the base profile lives beside the extending profile.
 5. Prefer `Read` on exact numbered files once you know the resolved directory. If you need to enumerate built-in files inside the canonicalized skill directory, scope the lookup to the physical path, for example:
@@ -446,7 +446,7 @@ These are Group 1 native-host slots. Use the native Claude implementation path i
 
 **Path D — Native Codex harness slots (harness = `codex`, active host = Codex):**
 
-These are Group 1 native-host slots. Use the native Codex implementation path in the assigned isolated slot workspace: run `codex exec` in that slot workspace using the same generic spec prompt contract used for explicit Codex harness slots. For `skill + codex` slots, translate the normalized skill to Codex syntax such as `$superpowers:test-driven-development`.
+These are Group 1 native-host slots. Use the shared Codex slot runtime helper in the assigned isolated slot workspace: `"$REAL_SKILL_DIR/scripts/codex-slot-runner.py"`. The helper is the supported Codex execution path for slot-machine. It shells out to `codex exec` in the current slot workspace, captures `codex-events.jsonl` and `codex-stderr.txt`, writes `codex-slot-report.md` plus `codex-slot-result.json`, and records the Codex `thread_id` for artifacts or manual resume. For `skill + codex` slots, translate the normalized skill to Codex syntax such as `$superpowers:test-driven-development`, write the generic Codex prompt to `codex-prompt.txt`, and invoke the same helper-backed contract described in Path F.
 
 Never launch Codex slots as background Bash jobs. Wait for `codex exec` to finish and return a normal implementer report before reviewers or the judge can run.
 
@@ -491,14 +491,15 @@ Native skill prefix translation for external Claude:
 
 **Path F — External Codex harness slots (harness = `codex`, active host = Claude):**
 
-Follow the active profile isolation. If isolation is `worktree`, create one worktree per slot, `cd` into that worktree, and launch `codex exec` directly. If isolation is `file`, create a per-slot directory under `{RUN_DIR}`, launch `codex exec` there, and tell it exactly which `{RUN_DIR}/slot-{i}.md` file to write.
+Follow the active profile isolation. If isolation is `worktree`, create one worktree per slot, `cd` into that worktree, and invoke the shared Codex slot runtime helper from that workspace. If isolation is `file`, create a per-slot directory under `{RUN_DIR}`, invoke the same helper there, and tell it exactly which `{RUN_DIR}/slot-{i}.md` file to write via `--expected-output-path`. Do not re-implement Codex JSON parsing inline; the helper is the supported runtime path.
 
-Save the raw `--json` JSONL stream to `codex-events.jsonl` and parse it after the process exits. Do not assume a single event mix — current Codex runs may expose `item.completed`, `turn.completed`, or both. Never launch Codex slots as background Bash jobs; wait for `codex exec` to finish before reviewers or the judge can run.
+The helper saves the raw `--json` JSONL stream to `codex-events.jsonl`, the stderr stream to `codex-stderr.txt`, and a normalized result/report pair to `codex-slot-result.json` and `codex-slot-report.md`. Do not assume a single event mix — current Codex runs may expose `item.completed`, `turn.completed`, or both. Never launch Codex slots as background Bash jobs; wait for `codex exec` to finish before reviewers or the judge can run.
 
-External Codex command contract:
+Helper-backed Codex command contract:
 
 ```bash
-codex exec "{If skill specified: '$codex_skill_name\n\n'}Implement this specification. {If isolation is worktree: 'Write all files to the current directory.'}{If isolation is file: 'Write the final output to {RUN_DIR}/slot-{i}.md and do not write elsewhere.'}
+cat > codex-prompt.txt <<'PROMPT'
+{If skill specified: '$codex_skill_name\n\n'}Implement this specification. {If isolation is worktree: 'Write all files to the current directory.'}{If isolation is file: 'Write the final output to {RUN_DIR}/slot-{i}.md and do not write elsewhere.'}
 Do not ask questions or wait for confirmation — make your best judgment and proceed.
 
 Specification:
@@ -511,22 +512,32 @@ When done, provide a summary of:
 - What you implemented (bullet list)
 - Files created or modified
 - Test results if you wrote tests
-- Any concerns or issues encountered" \
-  -s workspace-write \
-  -c 'model_reasoning_effort="high"' \
-  --json > codex-events.jsonl 2>codex-stderr.txt
+- Any concerns or issues encountered
+PROMPT
+
+python3 "$REAL_SKILL_DIR/scripts/codex-slot-runner.py" \
+  --cwd "$PWD" \
+  --prompt-file codex-prompt.txt \
+  --events-file codex-events.jsonl \
+  --stderr-file codex-stderr.txt \
+  --result-file codex-slot-result.json \
+  --report-file codex-slot-report.md \
+  --sandbox workspace-write \
+  --config 'model_reasoning_effort="high"' \
+  {If isolation is file: --expected-output-path "{RUN_DIR}/slot-{i}.md"}
 ```
 
-Post-run parsing contract for external Codex:
-- If `codex exec` exits non-zero or times out, normalize the slot to `BLOCKED` with the failure details attached.
-- Otherwise parse `codex-events.jsonl`.
-- If an `item.completed` event contains a structured agent message, treat it as the authoritative implementer report.
-- If the stream reaches `turn.completed` without a structured agent message, perform deterministic post-run inspection:
+Post-run normalization contract for Codex slots:
+- `codex-slot-result.json` is the source of truth. Do not re-parse `codex-events.jsonl` yourself unless the helper failed before writing the normalized result.
+- If the helper reports `status: DONE` or `DONE_WITH_CONCERNS`, use `codex-slot-report.md` as the authoritative implementer report.
+- If the helper reports `status: BLOCKED`, normalize the slot to `BLOCKED` with the helper's `failure_reason`.
+- The helper preserves the Codex `thread_id`, raw log paths, observed commands, and changed-file list. Persist that metadata into per-slot artifacts and `result.json` so the user can inspect or resume Codex work later.
+- Helper fallback behavior remains deterministic:
   - Prefer `git status --short --untracked-files=all` to build the changed-file list.
-  - If git is unavailable, fall back to another deterministic changed-file listing.
+  - If git is unavailable, fall back to another deterministic changed-file listing such as the explicit file-isolation output path.
   - If files changed and observed command executions or output show an obvious test command or result, synthesize a standard implementer report with `Status: DONE`.
   - If files changed but no structured test summary was extractable, synthesize a standard implementer report with `Status: DONE_WITH_CONCERNS`.
-  - In either synthesized case, include a concern noting that Codex emitted `turn.completed` without a structured agent message report.
+  - In either synthesized case, include a concern noting that Codex emitted `turn.completed` without a structured agent_message report.
 - If `codex exec` exits zero but there is no structured agent message and no meaningful workspace output from post-run inspection, normalize the slot to `BLOCKED`.
 
 Native skill prefix translation for external Codex:
@@ -872,6 +883,16 @@ cat > "{RUN_DIR}/result.json" << RESULT
   "slots_succeeded": {succeeded},
   "files_changed": [{list}],
   "tests_passing": {count or null},
+  "slot_details": [
+    {
+      "slot": {N},
+      "status": "{DONE|DONE_WITH_CONCERNS}",
+      "report_path": "{RUN_DIR}/slot-{N}/codex-slot-report.md",
+      "thread_id": "thread_abc123",
+      "events_path": "{RUN_DIR}/slot-{N}/codex-events.jsonl",
+      "stderr_path": "{RUN_DIR}/slot-{N}/codex-stderr.txt"
+    }
+  ],
   "run_dir": "{RUN_DIR}"
 }
 RESULT
@@ -880,14 +901,14 @@ RESULT
 ln -sfn "$(basename "{RUN_DIR}")" "$(dirname "{RUN_DIR}")/latest"
 ```
 
-This is always written, every run. Humans ignore it. Autonomous loops and scripts parse it via `.slot-machine/runs/latest/result.json`.
+This is always written, every run. Humans ignore it. Autonomous loops and scripts parse it via `.slot-machine/runs/latest/result.json`. When a slot ran through Codex, persist the Codex `thread_id` plus the raw event/stderr paths under `slot_details` so the run can be inspected or resumed with `codex resume {thread_id}` later.
 
 Manual handoff writes the same run artifact path with unresolved result state:
 
 In manual mode, the top-level `files_changed` and `tests_passing` fields are `null`; per-slot file/test data lives under `slot_details`.
 After refreshing `.slot-machine/runs/latest`, set the top-level `handoff_path` and `run_dir` fields to the absolute `latest` paths rather than the dated `{RUN_DIR}` path.
 For `file` isolation, each `slot_details` item uses `output_path` instead of `worktree_path`, and the worktree-only fields (`diff_path`, `branch`, `head_sha`) are omitted or `null`.
-Each file-isolation `slot_details` item still carries the slot output path, review path, files_changed, and tests_passing.
+Each file-isolation `slot_details` item still carries the slot output path, review path, files_changed, tests_passing, and any Codex `thread_id` / raw log paths when the slot ran through Codex.
 
 ```bash
 cat > {RUN_DIR}/result.json << RESULT
@@ -910,6 +931,9 @@ cat > {RUN_DIR}/result.json << RESULT
       "branch": "slot-machine/{feature_name}/slot-1",
       "head_sha": "abc123",
       "review_path": "{RUN_DIR}/review-1.md",
+      "thread_id": "thread_abc123",
+      "events_path": "{RUN_DIR}/slot-1/codex-events.jsonl",
+      "stderr_path": "{RUN_DIR}/slot-1/codex-stderr.txt",
       "review_summary": { "critical": 0, "important": 1, "minor": 2 },
       "files_changed": ["src/example.py"],
       "tests_passing": 12

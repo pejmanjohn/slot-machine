@@ -65,17 +65,20 @@ The key insight: the agent that implements never evaluates. The agent that revie
 
 ## Claude Code: Install
 
-Install slot-machine into Claude's user skill directory:
+For local development and testing, the recommended Claude install path is a symlinked skill managed from a source checkout:
 
 ```bash
-git clone https://github.com/pejmanjohn/slot-machine.git ~/.claude/skills/slot-machine
+git clone https://github.com/pejmanjohn/slot-machine.git ~/src/slot-machine
+~/src/slot-machine/scripts/install-claude-skill.sh
 ```
 
 And update slot-machine with:
 
 ```bash
-git -C ~/.claude/skills/slot-machine pull
+~/src/slot-machine/scripts/update-claude-skill.sh --pull
 ```
+
+If you already installed slot-machine by cloning directly into `~/.claude/skills/slot-machine`, that legacy layout still works. `scripts/update-claude-skill.sh` supports both the symlinked install above and a direct git checkout in Claude's skill directory.
 
 ### Codex: Local Skill Install
 
@@ -237,7 +240,7 @@ Three slots: Claude Code with CE patterns, Codex with CE patterns, and bare Code
 
 Slot definitions accept both `/skill` and `$skill`. Slot-machine normalizes that to a host-neutral skill reference, then dispatches the harness-native form when it runs the slot.
 
-Execution stays host-relative. If you start on Claude, Claude-targeted slots stay native and Codex-targeted slots run in isolated slot workspaces with `codex exec`. If you start on Codex, Codex-targeted slots use the native Codex slot path with `codex exec`, and only Claude-targeted slots use `claude -p`.
+Execution stays host-relative. If you start on Claude, Claude-targeted slots stay native and Codex-targeted slots run in isolated slot workspaces through the bundled `scripts/codex-slot-runner.py`, which invokes `codex exec`, captures raw logs, and normalizes the final report. If you start on Codex, Codex-targeted slots use the same helper in the native Codex slot path, and only Claude-targeted slots use `claude -p`.
 
 Or set project defaults in `AGENTS.md` or `CLAUDE.md`:
 
@@ -373,11 +376,19 @@ Every run writes a machine-readable result to `.slot-machine/runs/latest/result.
   "slots_succeeded": 3,
   "files_changed": ["src/api.py", "tests/test_api.py"],
   "tests_passing": 45,
+  "slot_details": [
+    {
+      "slot": 2,
+      "status": "DONE",
+      "thread_id": "thread_abc123",
+      "report_path": ".slot-machine/runs/2026-03-29-payment-webhook/slot-2/codex-slot-report.md"
+    }
+  ],
   "run_dir": ".slot-machine/runs/2026-03-29-payment-webhook"
 }
 ```
 
-Set `quiet: true` to suppress progress tables in unattended runs. The run directory (`.slot-machine/runs/`) keeps all artifacts (slot drafts, reviewer scorecards, judge verdict) for post-hoc inspection.
+Set `quiet: true` to suppress progress tables in unattended runs. The run directory (`.slot-machine/runs/`) keeps all artifacts (slot drafts, reviewer scorecards, judge verdict, raw Codex logs). Codex-backed `slot_details` preserve the `thread_id`, so you can inspect the exact run or continue it later with `codex resume`.
 
 ## Custom Profiles
 

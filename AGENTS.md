@@ -7,6 +7,8 @@ This repository is a skill/plugin repo for Claude Code and Codex, not an applica
 - `SKILL.md` is the host-agnostic orchestration engine.
 - `.claude-plugin/` and `.codex-plugin/` are first-class packaging/discovery targets.
 - `skills/slot-machine/SKILL.md` is the Codex-packaged mirror of the repo-root `SKILL.md`.
+- `scripts/codex-slot-runner.py` is the supported Codex slot runtime helper; it invokes `codex exec`, captures raw logs, and normalizes Codex slot results into stable artifacts.
+- `scripts/install-claude-skill.sh` and `scripts/update-claude-skill.sh` define the supported Claude install/update flow and keep `~/.claude/skills/slot-machine` pointed at the intended source checkout.
 - `scripts/build-codex-runtime-skill.sh`, `scripts/install-codex-skill.sh`, and `scripts/update-codex-skill.sh` define the supported Codex runtime install/update flow.
 - `scripts/install-codex-standalone-skill.sh` is a compatibility wrapper for materializing a plain bundle at an arbitrary destination.
 - `profiles/` contains task-specific profile configs and agent prompts.
@@ -22,7 +24,10 @@ Treat prompt wording, documented variables, status strings, and output contracts
 - `.claude-plugin/`, `.codex-plugin/`, and `skills/slot-machine/SKILL.md`
   - Keep Claude and Codex packaging aligned when discovery changes.
   - `skills/slot-machine/SKILL.md` must remain byte-for-byte synchronized with the repo-root `SKILL.md`.
+  - `scripts/install-claude-skill.sh` must create the stable `~/.claude/skills/slot-machine` link for script-managed Claude installs.
+  - `scripts/update-claude-skill.sh` must refresh that Claude link while remaining compatible with legacy direct git checkouts in the Claude skill directory.
   - `scripts/build-codex-runtime-skill.sh` must keep producing a standalone Codex skill directory with a real `SKILL.md`, linked built-in assets, and no `.codex-plugin` metadata.
+  - The standalone Codex runtime bundle must expose `scripts/codex-slot-runner.py` under `scripts/` so installed Codex skills use the same runtime helper as the repo checkout.
   - `scripts/install-codex-skill.sh` must rebuild that runtime bundle into the Codex runtime root and point the stable `~/.agents/skills/slot-machine` link at it.
   - `scripts/update-codex-skill.sh` must rebuild from install metadata so Codex updates do not depend on manual path reconstruction.
 - `profiles/coding/` and `profiles/writing/`
@@ -55,7 +60,7 @@ When editing this repo, preserve these invariants:
 5. Preserve the run artifact contract under `.slot-machine/runs/`, including `.slot-machine/runs/latest/result.json` if you change result generation.
 6. Do not add workflow details to the `SKILL.md` frontmatter description.
 7. Project config can live in `AGENTS.md` or `CLAUDE.md`; docs should treat both as first-class sources.
-8. Describe harness routing host-relatively: native path on the active host, with Codex slots using `codex exec` in their slot workspace and Claude-as-other-harness using `claude -p`.
+8. Describe harness routing host-relatively: native path on the active host, with Codex slots using the slot runtime helper in their slot workspace, which in turn runs `codex exec`, and Claude-as-other-harness using `claude -p`.
 
 ## Editing Guidance
 
