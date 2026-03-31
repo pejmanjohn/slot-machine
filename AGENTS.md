@@ -79,14 +79,38 @@ Run these commands from the repo root:
 ./tests/run-tests.sh
 ```
 
-If you change prompt flow, profile behavior, or orchestration logic and have the required environment available, also run:
+Default development policy:
+
+- Run `./tests/run-tests.sh` for every change. This is the required fast gate for normal feature work.
+- Use `./tests/run-tests.sh --changed` when you want the runner to keep Tier 1 and add only the heavier checks matched to the files you changed.
+- Use `./tests/run-tests.sh --host claude` or `./tests/run-tests.sh --host codex` when local work only needs one host path.
+- Use `./tests/run-tests.sh --jobs auto` or a fixed `--jobs N` value to parallelize independent shell tests.
+- Do not treat `--smoke` or `--integration` as default local-development commands. They are much more expensive and should be used selectively.
+- Prefer the smallest targeted headless check that matches the area you changed:
+  - Implementer prompt or implementer result-shape changes: `./tests/run-tests.sh --test test-implementer-smoke.sh`
+  - Reviewer prompt, seeded-bug expectations, or review formatting changes: `./tests/run-tests.sh --test test-reviewer-smoke.sh`
+  - Judge prompt, ranking/verdict parsing, or scorecard aggregation changes: `./tests/run-tests.sh --test test-judge-smoke.sh`
+  - Claude-host plus Codex-slot bridge changes: `./tests/run-tests.sh --test test-claude-host-codex-smoke.sh`
+  - Happy-path orchestration, merge/finalization, or run-artifact changes: `./tests/run-tests.sh --test test-e2e-happy-path.sh`
+  - `manual_handoff`, preserved-worktree behavior, or handoff artifact changes: `./tests/run-tests.sh --test test-e2e-manual-handoff.sh`
+- Reserve full smoke and integration sweeps for release prep, cross-host harness work, or broad orchestration refactors.
+- Reserve benchmarks for performance work and regression investigation; they are not part of the default feature-development loop.
+
+If you change prompt flow, profile behavior, or orchestration logic and need broader confirmation, run the smallest additional tier that matches the change:
 
 ```bash
 ./tests/run-tests.sh --smoke
 ./tests/run-tests.sh --integration
 ```
 
-Important: today, higher-tier coverage is mixed. `test-implementer-smoke.sh`, `test-reviewer-smoke.sh`, `test-judge-smoke.sh`, and `test-e2e-happy-path.sh` run for real via headless `claude -p`, while `test-e2e-edge-cases.sh` and `test-reviewer-accuracy.sh` still report explicit skips until their headless assertions are wired in. Read the output instead of assuming `--smoke`, `--integration`, or `--all` gives full dual-host behavioral coverage.
+Recommended release bar:
+
+- Always run `./tests/run-tests.sh`.
+- Add at least the relevant targeted smoke or E2E tests for the surfaces changed in the release.
+- Run `./tests/run-tests.sh --smoke` for host/harness changes or broad prompt-flow changes.
+- Run `./tests/run-tests.sh --integration` when the release touches end-to-end orchestration, artifact generation, merge/finalization, or manual handoff behavior.
+
+Important: today, higher-tier coverage is mixed and expensive. `test-implementer-smoke.sh`, `test-reviewer-smoke.sh`, and `test-judge-smoke.sh` run once per available host, while `test-e2e-happy-path.sh`, `test-e2e-manual-handoff.sh`, and `test-claude-host-codex-smoke.sh` each perform real headless orchestration runs. `test-e2e-edge-cases.sh` and `test-reviewer-accuracy.sh` still report explicit skips until their headless assertions are wired in. Read the output instead of assuming `--smoke`, `--integration`, or `--all` gives uniform coverage.
 
 ## Practical Review Checklist
 

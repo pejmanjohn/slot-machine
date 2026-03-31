@@ -42,6 +42,15 @@ All PRs must pass the fast validation suite:
 
 The fast suite currently verifies contracts, skill structure, and harness integrity.
 
+For normal development, prefer the smaller runner options before reaching for the full smoke or integration tiers:
+
+```bash
+./tests/run-tests.sh --changed        # Tier 1 + change-matched heavier checks
+./tests/run-tests.sh --host claude    # Restrict headless tests to one host
+./tests/run-tests.sh --jobs auto      # Parallelize independent tests
+./tests/run-tests.sh --test test-implementer-smoke.sh
+```
+
 If your change touches profiles (`profiles/*/`), SKILL.md workflow logic, or end-to-end orchestration behavior and you have the required environment available, also run:
 
 ```bash
@@ -49,7 +58,7 @@ If your change touches profiles (`profiles/*/`), SKILL.md workflow logic, or end
 ./tests/run-tests.sh --integration
 ```
 
-Today, the implementer, reviewer, and judge smoke tests execute on each available host via the shared runner, and the happy-path E2E runs on the selected viable host path. Explicit `claude` harness slots should execute through `claude -p` directly and fail per slot if the external Claude runtime is unavailable. `test-e2e-edge-cases.sh` and `test-reviewer-accuracy.sh` still skip explicitly.
+Today, the implementer, reviewer, and judge smoke tests execute on each allowed host via the shared runner, and the happy-path E2E runs on the selected viable host path. Use `--host` when you want only one host locally, and use `--changed` when you want the runner to keep Tier 1 and add only the matching heavier checks. Explicit `claude` harness slots should execute through `claude -p` directly and fail per slot if the external Claude runtime is unavailable. `test-e2e-edge-cases.sh` and `test-reviewer-accuracy.sh` still skip explicitly.
 
 ## What the Tests Check
 

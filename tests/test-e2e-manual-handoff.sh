@@ -9,6 +9,19 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/test-helpers.sh"
 
+HOST_FILTER="${SLOT_MACHINE_TEST_HOST_FILTER:-all}"
+case "$HOST_FILTER" in
+    ""|all|claude) ;;
+    codex)
+        echo "[SKIP] test-e2e-manual-handoff.sh requires the claude host path"
+        exit 2
+        ;;
+    *)
+        echo "[SKIP] unsupported SLOT_MACHINE_TEST_HOST_FILTER: $HOST_FILTER"
+        exit 2
+        ;;
+esac
+
 if ! command -v claude >/dev/null 2>&1; then
     echo "[SKIP] claude CLI not installed"
     exit 2
@@ -37,6 +50,7 @@ echo "  4. Assert run artifacts: handoff.md, result.json, review-*.md, slot diff
 echo "  5. Assert manual result metadata: resolution_mode=manual and verdict=null"
 echo "  6. Assert successful coding worktrees remain and the main worktree is not merged"
 echo ""
+echo "Host filter: $HOST_FILTER"
 
 SPEC_FILE="$SCRIPT_DIR/fixtures/tiny-spec.md"
 SLOT_COUNT=2

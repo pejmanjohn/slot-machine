@@ -31,7 +31,25 @@ You are working on the slot-machine skill/plugin repo for best-of-N parallel imp
 
 ## Testing
 - `./tests/run-tests.sh` — Fast suite: contracts, skill structure, harness integrity
+- `./tests/run-tests.sh --changed` — Fast suite plus the heavier checks matched to local changes
+- `./tests/run-tests.sh --host claude|codex|all` — Restrict headless tests to one host or run the full matrix
+- `./tests/run-tests.sh --jobs N|auto` — Run independent tests in parallel
 - `./tests/run-tests.sh --smoke` — Real implementer/reviewer/judge smoke tests on each available host
-- `./tests/run-tests.sh --integration` — Real happy-path E2E on the selected viable host path
+- `./tests/run-tests.sh --integration` — Smoke tier plus the heavier E2E tests
 - `./tests/run-tests.sh --benchmark` — Speed benchmarks
 - `./tests/run-tests.sh --all` — Full suite, with edge-case E2E and reviewer-accuracy still skipping explicitly
+
+Use this policy for normal repo work:
+
+- Always run `./tests/run-tests.sh` before committing. This is the default development gate.
+- Prefer targeted headless tests over full sweeps during feature work:
+  - `./tests/run-tests.sh --test test-implementer-smoke.sh`
+  - `./tests/run-tests.sh --test test-reviewer-smoke.sh`
+  - `./tests/run-tests.sh --test test-judge-smoke.sh`
+  - `./tests/run-tests.sh --test test-claude-host-codex-smoke.sh`
+  - `./tests/run-tests.sh --test test-e2e-happy-path.sh`
+  - `./tests/run-tests.sh --test test-e2e-manual-handoff.sh`
+- Do not run `--smoke`, `--integration`, or `--all` by default for routine feature development. Use them when the change is broad enough to justify the cost.
+- Use `--smoke` for host/harness changes, prompt-flow changes that span phases, or release prep.
+- Use `--integration` for end-to-end orchestration changes, run-artifact changes, merge/finalization changes, or `manual_handoff` changes.
+- Use `--benchmark` only for performance work or regression investigation.
