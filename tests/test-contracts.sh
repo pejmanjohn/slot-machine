@@ -201,6 +201,19 @@ for profile_dir in "$SKILL_DIR"/profiles/*/; do
 done
 
 echo ""
+echo "=== Contract 8b: Profile Resolution Guardrails ==="
+assert_contains "$SKILL_CONTENT" "pwd -P" \
+    "SKILL.md canonicalizes built-in skill paths before inherited-profile lookup" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "find -L" \
+    "SKILL.md documents a symlink-safe fallback for built-in profile discovery" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" '"resolution_mode": "blocked"' \
+    "SKILL.md documents blocked result.json mode for setup-time failures" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" '"blocked_stage": "profile_loading"' \
+    "SKILL.md records profile-loading failures in result.json" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" '"blocked_reason": "' \
+    "SKILL.md records a human-readable blocked reason in result.json" || FAILED=$((FAILED + 1))
+
+echo ""
 echo "=== Contract 9: Run Storage ==="
 # SKILL.md must reference .slot-machine/runs/ for artifact storage (not mktemp or temp dirs)
 assert_contains "$SKILL_CONTENT" ".slot-machine/runs/" \

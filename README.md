@@ -412,7 +412,7 @@ pre_checks: |
 3. "Design for backward compatibility — existing clients must not break."
 ```
 
-**Inheritance:** Set `extends: coding` to inherit all prompts from the coding profile and override only what you change. Files present in your profile replace the base; missing files are inherited. Resolution is deterministic: once slot-machine finds your named profile at one layer (project-local, personal, or built-in), it stops searching lower-precedence layers for that same profile, then resolves the base profile and fills any missing prompt files from that base. One level of inheritance max.
+**Inheritance:** Set `extends: coding` to inherit all prompts from the coding profile and override only what you change. Files present in your profile replace the base; missing files are inherited. One level of inheritance max. Resolution is deterministic: once slot-machine finds your named profile at one layer (project-local, personal, or built-in), it stops searching lower-precedence layers for that same profile, then resolves the base profile and fills any missing prompt files from that base. Built-in base profiles are resolved from the physical slot-machine skill directory, so inherited-profile lookup still works when the installed skill path is a symlink instead of a copied directory. If the selected profile or its base still cannot be resolved, slot-machine stops before dispatch and writes a blocked `.slot-machine/runs/latest/result.json` artifact instead of stalling.
 
 **Install locations:**
 - **Project-local:** `./profiles/my-profile/` (checked into your repo)
