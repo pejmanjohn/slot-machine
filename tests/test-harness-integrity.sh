@@ -20,6 +20,7 @@ all_runner_tests=(
     test-reviewer-smoke.sh
     test-judge-smoke.sh
     test-claude-host-codex-smoke.sh
+    test-claude-host-profile-inheritance-smoke.sh
     test-claude-profile-inheritance-smoke.sh
     test-e2e-happy-path.sh
     test-e2e-manual-handoff.sh
@@ -240,6 +241,10 @@ assert_contains "$RUNNER_CONTENT" "test-e2e-manual-handoff.sh" \
     "Tier 3 includes manual handoff integration coverage" || FAILED=$((FAILED + 1))
 assert_contains "$RUNNER_CONTENT" "test-claude-host-codex-smoke.sh" \
     "Smoke tier includes the Claude-host + Codex regression test" || FAILED=$((FAILED + 1))
+assert_contains "$RUNNER_CONTENT" "test-claude-profile-inheritance-smoke.sh" \
+    "Smoke tier includes the Claude symlink profile-inheritance regression test" || FAILED=$((FAILED + 1))
+assert_contains "$RUNNER_CONTENT" "test-claude-host-profile-inheritance-smoke.sh" \
+    "Smoke tier includes the Claude-host profile-inheritance regression test" || FAILED=$((FAILED + 1))
 assert_contains "$RUNNER_CONTENT" "--host" \
     "Runner exposes a host-selection option" || FAILED=$((FAILED + 1))
 assert_contains "$RUNNER_CONTENT" "--jobs" \
@@ -268,6 +273,7 @@ E2E_HAPPY_CONTENT=$(cat "$SKILL_DIR/tests/test-e2e-happy-path.sh")
 MANUAL_E2E_CONTENT=$(cat "$SKILL_DIR/tests/test-e2e-manual-handoff.sh" 2>/dev/null || echo "")
 CLAUDE_CODEX_SMOKE_CONTENT=$(cat "$SKILL_DIR/tests/test-claude-host-codex-smoke.sh")
 CLAUDE_PROFILE_INHERITANCE_SMOKE_CONTENT=$(cat "$SKILL_DIR/tests/test-claude-profile-inheritance-smoke.sh")
+CLAUDE_HOST_PROFILE_INHERITANCE_SMOKE_CONTENT=$(cat "$SKILL_DIR/tests/test-claude-host-profile-inheritance-smoke.sh")
 assert_not_contains "$IMPLEMENTER_SMOKE_CONTENT" "Placeholder until headless claude -p execution is wired to real assertions" \
     "test-implementer-smoke.sh is no longer a placeholder" || FAILED=$((FAILED + 1))
 assert_contains "$IMPLEMENTER_SMOKE_CONTENT" 'run_host_to_file "\$host" "\$OUTPUT_FILE" "\$HOST_PROMPT" "\$HOST_TIMEOUT" 50 "\$HOST_TMPDIR"' \
@@ -355,6 +361,14 @@ assert_contains "$CLAUDE_PROFILE_INHERITANCE_SMOKE_CONTENT" "blocked_stage" \
     "test-claude-profile-inheritance-smoke.sh checks the blocked stage metadata" || FAILED=$((FAILED + 1))
 assert_contains "$CLAUDE_PROFILE_INHERITANCE_SMOKE_CONTENT" "count_dispatch_events" \
     "test-claude-profile-inheritance-smoke.sh verifies dispatch/no-dispatch outcomes" || FAILED=$((FAILED + 1))
+assert_contains "$CLAUDE_HOST_PROFILE_INHERITANCE_SMOKE_CONTENT" "run_claude_to_file" \
+    "test-claude-host-profile-inheritance-smoke.sh invokes Claude headlessly" || FAILED=$((FAILED + 1))
+assert_contains "$CLAUDE_HOST_PROFILE_INHERITANCE_SMOKE_CONTENT" "SLOT_MACHINE_SETUP_TIMEOUT_SECONDS" \
+    "test-claude-host-profile-inheritance-smoke.sh exposes a setup-time timeout override" || FAILED=$((FAILED + 1))
+assert_contains "$CLAUDE_HOST_PROFILE_INHERITANCE_SMOKE_CONTENT" ".slot-machine state" \
+    "test-claude-host-profile-inheritance-smoke.sh checks early run-state creation" || FAILED=$((FAILED + 1))
+assert_contains "$CLAUDE_HOST_PROFILE_INHERITANCE_SMOKE_CONTENT" "SLOT_MACHINE_TEST_HOST_FILTER" \
+    "test-claude-host-profile-inheritance-smoke.sh honors the runner host filter" || FAILED=$((FAILED + 1))
 
 assert_contains "$MANUAL_E2E_CONTENT" "handoff.md" \
     "test-e2e-manual-handoff.sh checks handoff artifact output" || FAILED=$((FAILED + 1))
