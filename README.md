@@ -61,7 +61,7 @@ Slot-machine dispatches a pipeline of specialized agents. Each role is isolated 
 | **Synthesize** | 1 synthesizer (if needed) | Takes one slot as base, ports specific elements from donors per the judge's plan, verifies coherence, runs the full test suite. |
 | **Resolve** | Orchestrator | Finalizes the winner or synthesis result, cleans up worktrees when the profile uses them, and writes result artifacts with full model attribution. |
 
-The key insight: the agent that implements never evaluates. The agent that reviews never sees alternatives. The judge only sees structured scorecards, not raw code (unless it needs to inspect a specific disagreement). This separation prevents the bias that happens when one agent does everything.
+The key insight: the agent that implements never evaluates. The agent that reviews never sees alternatives. The judge only sees structured scorecards, not raw code (unless it needs to inspect a specific disagreement). This separation reduces the self-evaluation bias that shows up when one agent does everything.[^anthropic-harness]
 
 ## Claude Code: Install
 
@@ -172,7 +172,7 @@ The synthesizer agent starts with one slot as the base, ports specific elements 
 | | Without Skill | With Slot Machine |
 |---|---|---|
 | **Implementations** | 1 | 3 (parallel) |
-| **Review** | Self-review (finds 0 bugs) | 3 independent adversarial reviewers |
+| **Review** | Implementer self-review (0 bugs in our benchmark) | 3 independent adversarial reviewers |
 | **Bugs found** | 0 | 3 (including a crash-severity TypeError) |
 | **Tests in winner** | ~20 | 45 |
 | **Decision process** | Ships whatever it built | Evidence-based PICK or SYNTHESIZE with file:line reasoning |
@@ -252,7 +252,7 @@ slot-machine-slots:
 
 ## Profiles: Coding and Writing
 
-Slot-machine auto-detects whether your spec is a coding task or a writing task and loads the right profile. Each profile has its own approach hints, reviewer criteria, and synthesis strategy.
+Slot-machine auto-detects whether your spec is a coding task or a writing task and loads the right profile. Each profile has its own approach hints, reviewer criteria, and synthesis strategy. Those criteria are not cosmetic; they determine what the evaluation pipeline rewards.
 
 **Coding profile** (`isolation: worktree`):
 - Hints steer toward different implementation emphases: simplicity, robustness, functional style, idiomatic APIs, extensibility
@@ -315,6 +315,7 @@ That's what goes into your codebase. Not the first thing, not the prettiest — 
 | `approach_hints` | true | Different architectural direction per slot |
 | `auto_synthesize` | true | Allow combining best elements from multiple slots |
 | `max_retries` | 1 | Re-run failed slots (0 = no retry) |
+| `manual_handoff` | false | Stop after per-slot review, keep successful slot worktrees, restore your original checkout, and let you choose/merge manually |
 | `cleanup` | true | Delete worktrees after completion |
 | `quiet` | false | Suppress progress tables (for autonomous loops) |
 | `implementer_model` | inherit | Model for implementers (inherits from session) |
@@ -328,7 +329,7 @@ Set project defaults in `AGENTS.md`, `CLAUDE.md`, or both. When both exist, non-
 
 Slot-machine trades tokens and time for quality. In return, you get independent review that catches bugs self-review misses, multiple design alternatives compared under structured criteria, and the option to synthesize the best parts of each.
 
-That tradeoff is worth it when the cost of shipping a bug exceeds the cost of the extra compute. It's not worth it when the task is mechanical.
+That tradeoff is worth it when the cost of shipping a bug exceeds the cost of the extra compute, and when the task sits near the edge of what the current model does reliably on its own. It's not worth it when the task is mechanical or comfortably within cheap single-shot execution.
 
 **Use when:**
 - Feature has meaningful design choices (architecture, patterns, tradeoffs)
@@ -431,9 +432,9 @@ All prompts receive [universal variables](SKILL.md#universal-variables) (`{{SPEC
 
 We tried that. Five parallel implementations, no skill, Claude doing what it naturally does. The parallelism worked fine. Six things broke:
 
-**Self-review finds nothing.** The same agent that wrote the code reviewed it. In our benchmark, self-review found 0 bugs. Independent reviewers found 3 — including a crash-severity TypeError. You can't objectively evaluate your own work.
+**Self-review misses things.** The same agent that wrote the code also graded it. In our benchmark, self-review found 0 bugs. Independent reviewers found 3 — including a crash-severity TypeError. Anthropic reports the same failure mode in long-running harnesses: agents tend to overrate their own work, and tuning a separate evaluator is much more tractable than making the generator grade itself honestly.[^anthropic-harness]
 
-**No structured comparison.** Without a rubric, Claude made an ad hoc "this one looks best" decision. No spec compliance check, no severity categorization, no file:line evidence. The judge in slot-machine reads structured scorecards with ranked findings — not vibes.
+**No structured comparison.** Without a rubric, Claude made an ad hoc "this one looks best" decision. No spec compliance check, no severity categorization, no file:line evidence. The judge in slot-machine reads structured scorecards with ranked findings — not vibes. Anthropic's harness write-up reaches the same conclusion: turning vague judgments into explicit criteria and thresholds makes evaluator output far more useful.[^anthropic-harness]
 
 **No synthesis.** When no single implementation is best at everything — one has the cleanest code, another has the best tests — Claude just picks one and loses the other's strengths. Slot-machine's judge can call SYNTHESIZE: combine the best code from one slot with the best tests from another.
 
@@ -461,6 +462,8 @@ Slot Machine gives the **same task** to N agents and compares their **full imple
 ```
 
 The fast suite is the host-agnostic validation layer: it checks prompt contracts, skill structure, and harness integrity. The smoke tier runs on each available host, and the happy-path integration test uses the selected viable host path. When Codex is present but the Codex-to-Claude bridge is not operational, integration falls back to the viable host path instead of hanging. `test-e2e-edge-cases.sh` and `test-reviewer-accuracy.sh` still report explicit skips instead of passing silently.
+
+[^anthropic-harness]: Anthropic, [Harness design for long-running application development](https://www.anthropic.com/engineering/harness-design-long-running-apps) (Mar. 24, 2026). Useful external support for three claims reflected here: LLM self-evaluation is lenient, explicit grading criteria matter, and external evaluation is most worth the cost when the task is beyond what the current model handles reliably solo.
 
 ## License
 

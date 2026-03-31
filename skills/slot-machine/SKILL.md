@@ -65,6 +65,7 @@ Project config can live in `AGENTS.md`, `CLAUDE.md`, or both; treat them as equa
 | `approach_hints` | true | Give each slot a different architectural direction |
 | `auto_synthesize` | true | Allow judge to combine elements from multiple slots |
 | `max_retries` | 1 | Re-run failed slots (0 = no retry) |
+| `manual_handoff` | false | Stop after per-slot review and hand reviewed candidates back to the user for manual selection and merge |
 | `cleanup` | true | Delete worktrees after completion |
 | `quiet` | false | Suppress progress tables — only show final verdict + output path. For autonomous loops. |
 | `implementer_model` | inherit | Model for implementer subagents (inherits from session if not set) |
@@ -265,10 +266,12 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
 
 4. **Create run directory.** Create the run storage directory and add `.slot-machine/` to `.gitignore` if not already present:
    ```bash
-   RUN_DIR=".slot-machine/runs/$(date +%Y-%m-%d)-{feature_slug}"
+   RUN_DIR_REL=".slot-machine/runs/$(date +%Y-%m-%d)-{feature_slug}"
+   RUN_DIR="$PWD/$RUN_DIR_REL"
    mkdir -p "$RUN_DIR"
    grep -q '.slot-machine/' .gitignore 2>/dev/null || echo '.slot-machine/' >> .gitignore
    ```
+   Persist `RUN_DIR` as the absolute path for this run. All review, verdict, and result artifacts must be written via that absolute path, not a cwd-relative redirect. Before every artifact write later in the run, re-run `mkdir -p "$RUN_DIR"` so artifact persistence never depends on shell state.
    All artifacts from this run will be saved to `{RUN_DIR}/`.
 
 5. **Prepare isolation.** Check the profile's `isolation` field:
@@ -277,6 +280,11 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
      git init && git add -A && git commit -m "initial commit"
      ```
      Without this, `isolation: "worktree"` on Agent calls will fail and agents will not get isolated workspaces.
+     Record the original checkout before dispatching any slots so Phase 4 can restore it if needed:
+     ```bash
+     ORIGINAL_HEAD=$(git rev-parse HEAD)
+     ORIGINAL_BRANCH=$(git symbolic-ref --short -q HEAD || true)
+     ```
    - If `file`: No git repo required. Each slot will write its output to `{RUN_DIR}/slot-{i}.md`.
 
 6. **Run pre-checks (if configured).** Read the active profile's `0-profile.md` frontmatter for the `pre_checks` field.
@@ -323,6 +331,8 @@ Group 1 — Native-host slots: slots whose `harness_ref` is empty or matches the
 Group 2 — External-harness slots: slots whose `harness_ref` names the other CLI. If profile isolation is `worktree`, create one worktree per slot and launch one external CLI process per worktree. If profile isolation is `file`, create one per-slot run directory/output target under `{RUN_DIR}` and launch one external CLI process there, telling it where to write the output file.
 
 Host-relative routing is deterministic: `claude` on Claude and `codex` on Codex are Group 1 native-host slots; `claude` on Codex and `codex` on Claude are Group 2 external-harness slots. Apply the same rule to `skill + harness` slots.
+
+Never launch Codex slots as background Bash jobs from the orchestrator. The Codex wrapper agent must wait for `codex exec` to finish, harvest the final report or synthesize one from post-run inspection, and only then return control to the review/judge pipeline.
 
 ---
 
@@ -400,6 +410,8 @@ These are Group 1 native-host slots. Use the native Claude implementation path i
 
 These are Group 1 native-host slots. Use the native Codex implementation path in the assigned isolated slot workspace: run `codex exec` in that slot workspace using the same generic spec prompt contract used for explicit Codex harness slots. For `skill + codex` slots, translate the normalized skill to Codex syntax such as `$superpowers:test-driven-development`.
 
+Never launch Codex slots as background Bash jobs. Wait for `codex exec` to finish and return a normal implementer report before reviewers or the judge can run.
+
 ---
 
 **Path E — External Claude harness slots (harness = `claude`, active host = Codex):**
@@ -441,7 +453,9 @@ Native skill prefix translation for external Claude:
 
 **Path F — External Codex harness slots (harness = `codex`, active host = Claude):**
 
-Follow the active profile isolation. If isolation is `worktree`, create one worktree per slot, `cd` into that worktree, and launch `codex exec` directly. If isolation is `file`, create a per-slot directory under `{RUN_DIR}`, launch `codex exec` there, and tell it exactly which `{RUN_DIR}/slot-{i}.md` file to write. Do not route this through a wrapper subagent.
+Follow the active profile isolation. If isolation is `worktree`, create one worktree per slot, `cd` into that worktree, and launch `codex exec` directly. If isolation is `file`, create a per-slot directory under `{RUN_DIR}`, launch `codex exec` there, and tell it exactly which `{RUN_DIR}/slot-{i}.md` file to write.
+
+Save the raw `--json` JSONL stream to `codex-events.jsonl` and parse it after the process exits. Do not assume a single event mix — current Codex runs may expose `item.completed`, `turn.completed`, or both. Never launch Codex slots as background Bash jobs; wait for `codex exec` to finish before reviewers or the judge can run.
 
 External Codex command contract:
 
@@ -462,13 +476,20 @@ When done, provide a summary of:
 - Any concerns or issues encountered" \
   -s workspace-write \
   -c 'model_reasoning_effort="high"' \
-  --json 2>codex-stderr.txt > codex-stream.jsonl
+  --json > codex-events.jsonl 2>codex-stderr.txt
 ```
 
-Failure normalization for external Codex runs:
-- Missing CLI → warn and fall back to the native host path when possible, preserving the same normalized skill guidance if any.
-- Timeout, non-zero exit, empty report, or unparsable `--json` output → normalize to `BLOCKED` with the failure details attached.
-- Otherwise, parse the JSONL stream, extract the final agent report, and translate it to the standard implementer report format.
+Post-run parsing contract for external Codex:
+- If `codex exec` exits non-zero or times out, normalize the slot to `BLOCKED` with the failure details attached.
+- Otherwise parse `codex-events.jsonl`.
+- If an `item.completed` event contains a structured agent message, treat it as the authoritative implementer report.
+- If the stream reaches `turn.completed` without a structured agent message, perform deterministic post-run inspection:
+  - Prefer `git status --short --untracked-files=all` to build the changed-file list.
+  - If git is unavailable, fall back to another deterministic changed-file listing.
+  - If files changed and observed command executions or output show an obvious test command or result, synthesize a standard implementer report with `Status: DONE`.
+  - If files changed but no structured test summary was extractable, synthesize a standard implementer report with `Status: DONE_WITH_CONCERNS`.
+  - In either synthesized case, include a concern noting that Codex emitted `turn.completed` without a structured agent message report.
+- If `codex exec` exits zero but there is no structured agent message and no meaningful workspace output from post-run inspection, normalize the slot to `BLOCKED`.
 
 Native skill prefix translation for external Codex:
 - Use no prefix for bare `codex` slots.
@@ -550,7 +571,7 @@ The reviewer reads actual content in the worktree/output file — it does NOT ha
 
 **When multiple slots complete close together**, batch their reviewers into a single message for parallel dispatch — this is faster than dispatching one at a time. The key rule is: don't wait for stragglers. If 2 of 3 slots are done, dispatch their 2 reviewers now rather than waiting for the 3rd.
 
-**Collect reviews as they return.** Save each reviewer's full scorecard to `{RUN_DIR}/review-{i}.md` immediately when that reviewer finishes. Use Bash to persist the raw reviewer output verbatim. Do NOT postpone these writes until after the summary table, and do NOT replace the saved scorecard with only your orchestrator summary.
+**Collect reviews as they return.** Save each reviewer's full scorecard to `{RUN_DIR}/review-{i}.md` immediately when that reviewer finishes. Use the absolute path from `RUN_DIR` when persisting the file. If you use Bash, run `mkdir -p "$RUN_DIR"` immediately before the write; if you use a file-write tool, pass the same absolute path. Do NOT postpone these writes until after the summary table, and do NOT replace the saved scorecard with only your orchestrator summary. Never rely on the current shell directory for artifact redirects.
 
 **Before dispatching the judge, verify the review artifacts exist.** For every successful slot, confirm `{RUN_DIR}/review-{i}.md` exists and is non-empty. If any scorecard file is missing, write it before continuing. The judge phase is not allowed to start with missing review artifacts.
 
@@ -570,7 +591,52 @@ The reviewer reads actual content in the worktree/output file — it does NOT ha
 
 Extract standout elements from each reviewer's "Strengths" section. Pick the single most notable strength per slot — the one the judge is most likely to care about.
 
+#### Manual Handoff
+
+If `manual_handoff` is true:
+
+This is the terminal path for the run. Skip the judge/verdict/merge finalization path below and use the manual handoff report instead.
+
+- Do NOT dispatch the judge
+- Do NOT dispatch the synthesizer
+- Do NOT auto-merge or copy a winning result
+- For `worktree` isolation, preserve all successful slot worktrees
+- For `file` isolation, preserve slot output files and reviews
+- For `worktree` isolation, restore the user's original checkout before the final report. Manual mode must not leave the main worktree on a slot branch, detached at a slot commit, or merged to a winner.
+- Write `{RUN_DIR}/handoff.md`
+- Write `{RUN_DIR}/slot-manifest.json`
+- Write manual-mode `{RUN_DIR}/result.json`
+- Refresh `.slot-machine/runs/latest` before finalizing manual-mode `result.json`
+- Compose the user-facing final section headed `# Manual Handoff`
+- Report the reviewed candidates and next steps to the user
+- STOP. Do not read or follow any judged-run verdict/final-report instructions below this block when `manual_handoff` is true.
+
+Manual handoff output for coding/worktree runs must include at minimum:
+
+- The exact H1 heading `# Manual Handoff`
+- A slot summary table with each successful slot's status and reviewer counts or verdict summary
+- Artifact paths for the slot diff, worktree path, branch name, head SHA, review markdown, `handoff.md`, `slot-manifest.json`, and manual-mode `result.json`
+- Next-step guidance for manual selection, merge, and any follow-up verification
+
+Before emitting the final manual handoff report for `worktree` isolation, restore the main checkout recorded in Phase 1:
+
+```bash
+if [ -n "${ORIGINAL_BRANCH:-}" ]; then
+    git switch "$ORIGINAL_BRANCH"
+else
+    git checkout --detach "$ORIGINAL_HEAD"
+fi
+```
+
+If the restore fails, report `BLOCKED` instead of silently leaving the user on the wrong checkout. Manual handoff is only complete when the main worktree is back on the original branch/HEAD and the reviewed slot worktrees remain available for inspection.
+
+Persist the per-slot diff, branch, path, SHA, review, file-change, and test metadata in `{RUN_DIR}/result.json` under `slot_details`. For manual handoff, `slot_details` is the source of truth for per-slot file/test data and artifact metadata in both `worktree` and `file` isolation.
+In manual mode, write the top-level `handoff_path` and `run_dir` fields as the canonical absolute `.slot-machine/runs/latest/...` paths so scripts can follow a stable location without resolving the dated run directory themselves.
+`{RUN_DIR}/slot-manifest.json` mirrors the same per-slot metadata as the human-readable handoff summary so manual selection can happen without reading `result.json`.
+
 #### Dispatch the judge immediately
+
+If `manual_handoff` is false:
 
 As soon as all reviews are collected, dispatch the judge — do not pause for orchestrator reporting. The review report table above can be shown *after* the judge is already running, or combined with the verdict output. The goal is to eliminate idle time between the last review returning and the judge starting.
 
@@ -596,7 +662,7 @@ The judge returns one of three verdicts:
 - **SYNTHESIZE** — multiple slots have complementary strengths worth combining
 - **NONE_ADEQUATE** — all slots have critical issues
 
-Save the judge's full verdict and reasoning to `{RUN_DIR}/verdict.md` using Bash before composing the user-facing verdict block.
+Save the judge's full verdict and reasoning to `{RUN_DIR}/verdict.md` before composing the user-facing verdict block. Use the absolute `RUN_DIR` path, and if you use Bash run `mkdir -p "$RUN_DIR"` immediately before the write.
 
 **Before continuing to the final report, verify `{RUN_DIR}/verdict.md` exists and is non-empty.** If the file is missing, write it before proceeding. The inline verdict shown to the user is not a substitute for the persisted run artifact.
 
@@ -723,9 +789,13 @@ Slot diffs are preserved in `{RUN_DIR}/`.
 
 **For `file` isolation:** Run artifacts are kept permanently — no cleanup needed. All slot outputs, reviews, and the verdict remain in `{RUN_DIR}/`.
 
+If `manual_handoff` is true for `worktree` isolation, ignore `cleanup: true` and keep successful worktrees so the user can inspect and merge manually. In manual mode, do NOT write `verdict.md`; write `handoff.md` instead, and do not use the judged-run finalization path below. For each successful coding slot, persist `{RUN_DIR}/slot-{i}.diff`, branch name, head SHA, worktree path, and review artifact path in the manual handoff result metadata.
+
 If `cleanup` is false, report worktree/output locations so the user can inspect them.
 
 #### Final Report
+
+Judged runs only. Manual handoff already terminates with `# Manual Handoff`, `handoff.md`, `slot-manifest.json`, and manual-mode `result.json`; do not use this section when `manual_handoff` is true.
 
 The final report has three parts: the H1 header, the output content, and the footer line.
 
@@ -754,7 +824,8 @@ The final report has three parts: the H1 header, the output content, and the foo
 **Part 3: Result artifact** — always write a machine-readable JSON file to the run directory:
 
 ```bash
-cat > {RUN_DIR}/result.json << RESULT
+mkdir -p "{RUN_DIR}"
+cat > "{RUN_DIR}/result.json" << RESULT
 {
   "verdict": "{PICK|SYNTHESIZE|NONE_ADEQUATE}",
   "winning_slot": {N or null},
@@ -768,10 +839,48 @@ cat > {RUN_DIR}/result.json << RESULT
 RESULT
 
 # Create latest symlink for easy script access
-ln -sfn "$(basename {RUN_DIR})" "$(dirname {RUN_DIR})/latest"
+ln -sfn "$(basename "{RUN_DIR}")" "$(dirname "{RUN_DIR}")/latest"
 ```
 
 This is always written, every run. Humans ignore it. Autonomous loops and scripts parse it via `.slot-machine/runs/latest/result.json`.
+
+Manual handoff writes the same run artifact path with unresolved result state:
+
+In manual mode, the top-level `files_changed` and `tests_passing` fields are `null`; per-slot file/test data lives under `slot_details`.
+After refreshing `.slot-machine/runs/latest`, set the top-level `handoff_path` and `run_dir` fields to the absolute `latest` paths rather than the dated `{RUN_DIR}` path.
+For `file` isolation, each `slot_details` item uses `output_path` instead of `worktree_path`, and the worktree-only fields (`diff_path`, `branch`, `head_sha`) are omitted or `null`.
+Each file-isolation `slot_details` item still carries the slot output path, review path, files_changed, and tests_passing.
+
+```bash
+cat > {RUN_DIR}/result.json << RESULT
+{
+  "resolution_mode": "manual",
+  "verdict": null,
+  "winning_slot": null,
+  "confidence": null,
+  "slots": {total},
+  "slots_succeeded": {succeeded},
+  "handoff_path": "/abs/path/.slot-machine/runs/latest/handoff.md",
+  "files_changed": null,
+  "tests_passing": null,
+  "slot_details": [
+    {
+      "slot": 1,
+      "status": "DONE",
+      "diff_path": "{RUN_DIR}/slot-1.diff",
+      "worktree_path": ".slot-machine/worktrees/slot-1",
+      "branch": "slot-machine/{feature_name}/slot-1",
+      "head_sha": "abc123",
+      "review_path": "{RUN_DIR}/review-1.md",
+      "review_summary": { "critical": 0, "important": 1, "minor": 2 },
+      "files_changed": ["src/example.py"],
+      "tests_passing": 12
+    }
+  ],
+  "run_dir": "/abs/path/.slot-machine/runs/latest"
+}
+RESULT
+```
 
 **Part 4: Footer** — a horizontal rule followed by a one-line summary:
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Shared helpers for slot-machine skill tests
 
-SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DEFAULT_SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SKILL_DIR="${SLOT_MACHINE_SKILL_DIR:-$DEFAULT_SKILL_DIR}"
 
 host_available() {
     case "$1" in

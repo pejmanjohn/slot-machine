@@ -56,6 +56,22 @@ assert_contains "$RUNNER_CONTENT" "quality_tests=(test-reviewer-accuracy.sh)" \
     "Quality tier points at the reviewer accuracy test" || FAILED=$((FAILED + 1))
 assert_contains "$RUNNER_CONTENT" "test-harness-integrity.sh" \
     "Tier 1 includes harness integrity checks" || FAILED=$((FAILED + 1))
+assert_contains "$RUNNER_CONTENT" "test-e2e-manual-handoff.sh" \
+    "Tier 3 includes manual handoff integration coverage" || FAILED=$((FAILED + 1))
+assert_contains "$RUNNER_CONTENT" "test-claude-host-codex-smoke.sh" \
+    "Smoke tier includes the Claude-host + Codex regression test" || FAILED=$((FAILED + 1))
+
+echo ""
+echo "=== Harness Integrity: Repo Guidance ==="
+CLAUDE_CONTENT=$(cat "$SKILL_DIR/CLAUDE.md")
+AGENTS_CONTENT=$(cat "$SKILL_DIR/AGENTS.md")
+CONTRIBUTING_CONTENT=$(cat "$SKILL_DIR/CONTRIBUTING.md")
+assert_contains "$CLAUDE_CONTENT" "ready for review by default" \
+    "CLAUDE.md documents ready-for-review PRs by default" || FAILED=$((FAILED + 1))
+assert_contains "$AGENTS_CONTENT" "ready for review by default" \
+    "AGENTS.md documents ready-for-review PRs by default" || FAILED=$((FAILED + 1))
+assert_contains "$CONTRIBUTING_CONTENT" "ready for review by default" \
+    "CONTRIBUTING.md documents ready-for-review PRs by default" || FAILED=$((FAILED + 1))
 
 echo ""
 echo "=== Harness Integrity: Placeholder Tests ==="
@@ -63,6 +79,8 @@ IMPLEMENTER_SMOKE_CONTENT=$(cat "$SKILL_DIR/tests/test-implementer-smoke.sh")
 REVIEWER_SMOKE_CONTENT=$(cat "$SKILL_DIR/tests/test-reviewer-smoke.sh")
 JUDGE_SMOKE_CONTENT=$(cat "$SKILL_DIR/tests/test-judge-smoke.sh")
 E2E_HAPPY_CONTENT=$(cat "$SKILL_DIR/tests/test-e2e-happy-path.sh")
+MANUAL_E2E_CONTENT=$(cat "$SKILL_DIR/tests/test-e2e-manual-handoff.sh" 2>/dev/null || echo "")
+CLAUDE_CODEX_SMOKE_CONTENT=$(cat "$SKILL_DIR/tests/test-claude-host-codex-smoke.sh")
 assert_not_contains "$IMPLEMENTER_SMOKE_CONTENT" "Placeholder until headless claude -p execution is wired to real assertions" \
     "test-implementer-smoke.sh is no longer a placeholder" || FAILED=$((FAILED + 1))
 assert_contains "$IMPLEMENTER_SMOKE_CONTENT" 'run_host_to_file "\$host" "\$OUTPUT_FILE" "\$HOST_PROMPT" "\$HOST_TIMEOUT" 50 "\$HOST_TMPDIR"' \
@@ -122,6 +140,20 @@ assert_not_contains "$E2E_HAPPY_CONTENT" "assert_worktree_isolation" \
     "test-e2e-happy-path.sh no longer requires Claude-specific transcript isolation markers" || FAILED=$((FAILED + 1))
 assert_contains "$E2E_HAPPY_CONTENT" "result.json" \
     "test-e2e-happy-path.sh checks run artifacts" || FAILED=$((FAILED + 1))
+
+assert_contains "$CLAUDE_CODEX_SMOKE_CONTENT" "run_claude_to_file" \
+    "test-claude-host-codex-smoke.sh invokes Claude headlessly" || FAILED=$((FAILED + 1))
+assert_contains "$CLAUDE_CODEX_SMOKE_CONTENT" "review-1.md" \
+    "test-claude-host-codex-smoke.sh checks review artifacts explicitly" || FAILED=$((FAILED + 1))
+assert_contains "$CLAUDE_CODEX_SMOKE_CONTENT" "SLOT_MACHINE_SKILL_DIR" \
+    "test-claude-host-codex-smoke.sh can target installed skills" || FAILED=$((FAILED + 1))
+
+assert_contains "$MANUAL_E2E_CONTENT" "handoff.md" \
+    "test-e2e-manual-handoff.sh checks handoff artifact output" || FAILED=$((FAILED + 1))
+assert_contains "$MANUAL_E2E_CONTENT" "resolution_mode" \
+    "test-e2e-manual-handoff.sh checks manual result.json discriminator" || FAILED=$((FAILED + 1))
+assert_contains "$MANUAL_E2E_CONTENT" "Judge Slot Machine results" \
+    "test-e2e-manual-handoff.sh asserts judge dispatch is absent" || FAILED=$((FAILED + 1))
 
 for file in \
     "$SKILL_DIR/tests/test-e2e-edge-cases.sh" \

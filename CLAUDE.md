@@ -6,7 +6,7 @@ You are working on the slot-machine skill/plugin repo for best-of-N parallel imp
 - `SKILL.md` — Host-agnostic orchestration engine (shared across task types)
 - `.claude-plugin/` — Claude packaging and marketplace metadata
 - `.codex-plugin/` — Codex plugin metadata
-- `skills/slot-machine/SKILL.md` — Must stay a symlink to `../../SKILL.md` for Codex discovery
+- `skills/slot-machine/SKILL.md` — Must stay byte-for-byte in sync with the repo-root `SKILL.md`
 - `profiles/` — Task-specific profiles (one folder per profile)
   - `coding/` — Built-in: code implementation tasks
     - `0-profile.md` — Config: frontmatter + approach hints
@@ -25,6 +25,8 @@ You are working on the slot-machine skill/plugin repo for best-of-N parallel imp
 - Project config may live in `AGENTS.md` or `CLAUDE.md`
 - Describe harness routing host-relatively: native path on the active host, with Codex slots using `codex exec` in their slot workspace and Claude-as-other-harness using `claude -p`
 - Explicit `claude` harness slots should run through `claude -p` directly; do not silently fall back if the external Claude execution fails
+- Use conventional branch type prefixes for repo work: `feat/`, `fix/`, `docs/`, `style/` with a short kebab-case suffix
+- Open PRs as ready for review by default. Use draft only when there is an explicit reason or the user asks for it.
 - Run `./tests/run-tests.sh` before committing
 
 ## Testing

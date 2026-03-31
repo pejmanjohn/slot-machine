@@ -15,6 +15,23 @@
 - `scripts/install-codex-skill.sh` and `scripts/update-codex-skill.sh` are the supported Codex local install/update flow. They should keep the stable `~/.agents/skills/slot-machine` link pointed at the generated runtime bundle.
 - `scripts/install-codex-standalone-skill.sh` remains a compatibility wrapper for arbitrary-destination bundle generation.
 
+PRs should be opened as ready for review by default. Use draft only when there is an explicit reason or the user asks for it.
+
+## Branch Naming
+
+Use branch type prefixes so the purpose of a branch is obvious at a glance:
+
+- `feat/<short-kebab-name>` for new functionality
+- `fix/<short-kebab-name>` for bug fixes
+- `docs/<short-kebab-name>` for documentation-only changes
+- `style/<short-kebab-name>` for formatting or non-behavioral cleanup
+
+Examples:
+
+- `docs/readme-anthropic-footnote`
+- `fix/reviewer-scorecard-parser`
+- `feat/writing-profile-inheritance`
+
 ## Testing Requirements
 
 All PRs must pass the fast validation suite:

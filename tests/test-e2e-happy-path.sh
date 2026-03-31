@@ -125,7 +125,9 @@ else
 fi
 
 set +e
-run_host_to_file "$TEST_HOST" "$TRANSCRIPT_FILE" "$PROMPT" 1200 200 "$TMPDIR"
+# Claude-hosted happy-path runs can legitimately exceed the shorter smoke budget
+# because they carry the full judge + resolution path before final verification.
+run_host_to_file "$TEST_HOST" "$TRANSCRIPT_FILE" "$PROMPT" 1800 200 "$TMPDIR"
 HOST_RC=$?
 set -e
 
