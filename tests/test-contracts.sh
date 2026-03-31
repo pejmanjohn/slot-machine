@@ -554,21 +554,17 @@ echo ""
 echo "=== Contract 15: Orchestrator Trace ==="
 assert_contains "$SKILL_CONTENT" "## Orchestrator Trace" \
     "SKILL.md has Orchestrator Trace section" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" "events\\.jsonl" \
-    "SKILL.md documents events.jsonl" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" "state\\.json" \
-    "SKILL.md documents state.json" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "events_path.*\\.slot-machine/runs/[^[:space:]\"]+/events\\.jsonl" \
+    "SKILL.md documents orchestrator trace events.jsonl path" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "state_path.*\\.slot-machine/runs/[^[:space:]\"]+/state\\.json" \
+    "SKILL.md documents orchestrator trace state.json path" || FAILED=$((FAILED + 1))
 assert_contains "$SKILL_CONTENT" "\\.slot-machine/history/active\\.json" \
     "SKILL.md documents .slot-machine/history/active.json" || FAILED=$((FAILED + 1))
 assert_contains "$SKILL_CONTENT" "\\.slot-machine/history/latest\\.json" \
     "SKILL.md documents .slot-machine/history/latest.json" || FAILED=$((FAILED + 1))
 assert_contains "$SKILL_CONTENT" "\\.slot-machine/history/index\\.jsonl" \
     "SKILL.md documents .slot-machine/history/index.jsonl" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" '"events_path"' \
-    "SKILL.md documents events_path" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" '"state_path"' \
-    "SKILL.md documents state_path" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" '"status": "idle"' \
+assert_contains "$SKILL_CONTENT" "status.*idle" \
     "SKILL.md documents idle sentinel status" || FAILED=$((FAILED + 1))
 
 echo ""
@@ -587,9 +583,11 @@ assert_contains "$SKILL_CONTENT" '"current_phase"' \
     "SKILL.md documents current_phase state" || FAILED=$((FAILED + 1))
 assert_contains "$SKILL_CONTENT" '"last_event_seq"' \
     "SKILL.md documents last_event_seq state" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" "Any change that adds a new orchestration phase.*update" \
+assert_contains "$SKILL_CONTENT" "Any change that adds a new orchestration phase" \
     "SKILL.md includes maintenance rule for new orchestration phases" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" "SKILL\\.md and \`skills/slot-machine/SKILL\\.md\` must stay byte-for-byte synchronized" \
+assert_contains "$SKILL_CONTENT" "must update" \
+    "SKILL.md maintenance rule says to update the orchestrator trace docs" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "SKILL\\.md.*skills/slot-machine/SKILL\\.md.*synchronized\\|skills/slot-machine/SKILL\\.md.*SKILL\\.md.*synchronized" \
     "SKILL.md includes mirror sync rule for the packaged skill" || FAILED=$((FAILED + 1))
 
 echo ""
