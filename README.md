@@ -69,7 +69,7 @@ This repo ships first-class packaging for both Claude Code and Codex:
 
 - `.claude-plugin/` contains Claude packaging and marketplace metadata
 - `.codex-plugin/` contains Codex plugin metadata
-- `skills/slot-machine/SKILL.md` is a symlink to the repo-root `SKILL.md` for Codex skill discovery
+- `skills/slot-machine/` is a self-contained Codex skill directory that mirrors the repo-root `SKILL.md` and exposes the built-in profile assets Codex needs at runtime
 
 A portable local install is just a clone that preserves that layout:
 
