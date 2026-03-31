@@ -459,6 +459,10 @@ assert_contains "$SKILL_CONTENT" "non-zero exit\|timeout.*codex\|codex.*fail" \
 # Must describe deterministic post-run inspection fallback
 assert_contains "$SKILL_CONTENT" "git status --short\|post-run inspection\|structured agent message" \
     "SKILL.md documents deterministic fallback when structured extraction fails" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "codex-slot-runner.py" \
+    "SKILL.md documents the Codex slot runtime helper" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "thread_id\|codex_thread_id" \
+    "SKILL.md documents Codex thread/session metadata in slot artifacts" || FAILED=$((FAILED + 1))
 
 # Must forbid background Codex launches that bypass harvesting
 assert_contains "$SKILL_CONTENT" "Never launch Codex slots as background Bash jobs\|wait for `codex exec` to finish\|wrapper must return a normal implementer report before reviewers or the judge can run" \

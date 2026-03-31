@@ -7,6 +7,8 @@ You are working on the slot-machine skill/plugin repo for best-of-N parallel imp
 - `.claude-plugin/` — Claude packaging and marketplace metadata
 - `.codex-plugin/` — Codex plugin metadata
 - `skills/slot-machine/SKILL.md` — Must stay byte-for-byte in sync with the repo-root `SKILL.md`
+- `scripts/codex-slot-runner.py` — Supported Codex slot runtime helper; invokes `codex exec`, captures raw logs, and normalizes Codex slot reports
+- `scripts/install-claude-skill.sh`, `scripts/update-claude-skill.sh` — Supported Claude install/update scripts for keeping `~/.claude/skills/slot-machine` aligned with a chosen source checkout
 - `profiles/` — Task-specific profiles (one folder per profile)
   - `coding/` — Built-in: code implementation tasks
     - `0-profile.md` — Config: frontmatter + approach hints
@@ -23,7 +25,7 @@ You are working on the slot-machine skill/plugin repo for best-of-N parallel imp
 - Status/verdict values must match across SKILL.md and all profiles
 - Treat Claude and Codex packaging as first-class; if discovery changes, update both packaging docs/metadata paths together
 - Project config may live in `AGENTS.md` or `CLAUDE.md`
-- Describe harness routing host-relatively: native path on the active host, with Codex slots using `codex exec` in their slot workspace and Claude-as-other-harness using `claude -p`
+- Describe harness routing host-relatively: native path on the active host, with Codex slots using the slot runtime helper in their slot workspace, which runs `codex exec`, and Claude-as-other-harness using `claude -p`
 - Explicit `claude` harness slots should run through `claude -p` directly; do not silently fall back if the external Claude execution fails
 - Use conventional branch type prefixes for repo work: `feat/`, `fix/`, `docs/`, `style/` with a short kebab-case suffix
 - Open PRs as ready for review by default. Use draft only when there is an explicit reason or the user asks for it.

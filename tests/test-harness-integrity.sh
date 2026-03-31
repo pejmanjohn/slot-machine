@@ -14,8 +14,10 @@ all_runner_tests=(
     test-contracts.sh
     test-skill-structure.sh
     test-codex-standalone-install.sh
+    test-claude-skill-install.sh
     test-harness-integrity.sh
     test-codex-wrapper-parser.sh
+    test-codex-slot-runner.sh
     test-implementer-smoke.sh
     test-reviewer-smoke.sh
     test-judge-smoke.sh
@@ -169,7 +171,7 @@ PY
 )
 
 if [ "$JOBS_STATUS" -eq 0 ] &&
-   echo "$JOBS_OUTPUT" | grep -q "Results: 5 passed, 0 failed, 0 skipped" &&
+   echo "$JOBS_OUTPUT" | grep -q "Results: 7 passed, 0 failed, 0 skipped" &&
    python3 - <<'PY' "$JOBS_ELAPSED"
 import sys
 sys.exit(0 if float(sys.argv[1]) < 9.0 else 1)
@@ -199,7 +201,7 @@ if [ "$CHANGED_STATUS" -eq 0 ] &&
    ! echo "$CHANGED_OUTPUT" | grep -q "Running: test-reviewer-smoke.sh" &&
    ! echo "$CHANGED_OUTPUT" | grep -q "Running: test-judge-smoke.sh" &&
    ! echo "$CHANGED_OUTPUT" | grep -q "Running: test-e2e-happy-path.sh" &&
-   echo "$CHANGED_OUTPUT" | grep -q "Results: 6 passed, 0 failed, 0 skipped"; then
+   echo "$CHANGED_OUTPUT" | grep -q "Results: 8 passed, 0 failed, 0 skipped"; then
     echo "  [PASS] Runner selects the matching phase smoke test for --changed"
 else
     echo "  [FAIL] Runner does not select the matching phase smoke test for --changed"

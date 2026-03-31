@@ -382,7 +382,7 @@ fi
 export SLOT_MACHINE_TEST_HOST_FILTER="$HOST_FILTER"
 
 # Test lists
-tier1_tests=(test-contracts.sh test-skill-structure.sh test-codex-standalone-install.sh test-harness-integrity.sh test-codex-wrapper-parser.sh)
+tier1_tests=(test-contracts.sh test-skill-structure.sh test-codex-standalone-install.sh test-claude-skill-install.sh test-harness-integrity.sh test-codex-wrapper-parser.sh test-codex-slot-runner.sh)
 tier2_tests=(test-implementer-smoke.sh test-reviewer-smoke.sh test-judge-smoke.sh test-claude-host-codex-smoke.sh test-claude-profile-inheritance-smoke.sh test-claude-host-profile-inheritance-smoke.sh)
 tier3_tests=(test-e2e-happy-path.sh test-e2e-manual-handoff.sh test-e2e-edge-cases.sh)
 quality_tests=(test-reviewer-accuracy.sh)
