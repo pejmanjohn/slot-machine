@@ -551,6 +551,48 @@ assert_contains "$SKILL_CONTENT" "all my skills\|all implementation skills" \
     "SKILL.md documents natural language discovery triggers" || FAILED=$((FAILED + 1))
 
 echo ""
+echo "=== Contract 15: Orchestrator Trace ==="
+assert_contains "$SKILL_CONTENT" "## Orchestrator Trace" \
+    "SKILL.md has Orchestrator Trace section" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "events\\.jsonl" \
+    "SKILL.md documents events.jsonl" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "state\\.json" \
+    "SKILL.md documents state.json" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "\\.slot-machine/history/active\\.json" \
+    "SKILL.md documents .slot-machine/history/active.json" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "\\.slot-machine/history/latest\\.json" \
+    "SKILL.md documents .slot-machine/history/latest.json" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "\\.slot-machine/history/index\\.jsonl" \
+    "SKILL.md documents .slot-machine/history/index.jsonl" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" '"events_path"' \
+    "SKILL.md documents events_path" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" '"state_path"' \
+    "SKILL.md documents state_path" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" '"status": "idle"' \
+    "SKILL.md documents idle sentinel status" || FAILED=$((FAILED + 1))
+
+echo ""
+echo "=== Contract 15A: Orchestrator Trace Events ==="
+assert_contains "$SKILL_CONTENT" "phase_entered" \
+    "SKILL.md documents phase_entered events" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "artifact_written" \
+    "SKILL.md documents artifact_written events" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "slot_retry_scheduled" \
+    "SKILL.md documents slot_retry_scheduled events" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "run_finished" \
+    "SKILL.md documents run_finished events" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "run_failed" \
+    "SKILL.md documents run_failed events" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" '"current_phase"' \
+    "SKILL.md documents current_phase state" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" '"last_event_seq"' \
+    "SKILL.md documents last_event_seq state" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "Any change that adds a new orchestration phase.*update" \
+    "SKILL.md includes maintenance rule for new orchestration phases" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "SKILL\\.md and \`skills/slot-machine/SKILL\\.md\` must stay byte-for-byte synchronized" \
+    "SKILL.md includes mirror sync rule for the packaged skill" || FAILED=$((FAILED + 1))
+
+echo ""
 echo "=== Contract 16: Verdict Formatting ==="
 # Must NOT use blockquote for verdict
 VERDICT_SECTION=$(echo "$SKILL_CONTENT" | sed -n '/Report the verdict/,/Phase 4.*Resolution\|### Phase 4/p')
