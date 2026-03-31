@@ -63,41 +63,33 @@ Slot-machine dispatches a pipeline of specialized agents. Each role is isolated 
 
 The key insight: the agent that implements never evaluates. The agent that reviews never sees alternatives. The judge only sees structured scorecards, not raw code (unless it needs to inspect a specific disagreement). This separation prevents the bias that happens when one agent does everything.
 
-## Install
+## Claude Code: Install
 
-This repo ships first-class packaging for both Claude Code and Codex:
-
-- `.claude-plugin/` contains Claude packaging and marketplace metadata
-- `.codex-plugin/` contains Codex plugin metadata
-- `skills/slot-machine/` is a self-contained Codex skill directory that mirrors the repo-root `SKILL.md` and exposes the built-in profile assets Codex needs at runtime
-
-A portable local install is just a clone that preserves that layout:
-
-```bash
-git clone https://github.com/pejmanjohn/slot-machine.git ~/src/slot-machine
-```
-
-If you already use Claude's user skill directory, cloning there still works:
+Install slot-machine into Claude's user skill directory:
 
 ```bash
 git clone https://github.com/pejmanjohn/slot-machine.git ~/.claude/skills/slot-machine
 ```
 
-Then invoke it from Claude Code or Codex once that checkout is available to your host's local skill/plugin discovery:
-
-```text
-Claude Code: /slot-machine with 3 slots — Implement the payment webhook handler from PLAN.md
-Codex: $slot-machine with 3 slots — Implement the payment webhook handler from PLAN.md
-```
-
-Host routing stays relative to where you start it: on Claude, Claude-targeted slots stay on the native Claude path and Codex-targeted slots use the Codex harness path with `codex exec`; on Codex, Codex-targeted slots use the native Codex slot path with `codex exec`, and only Claude-targeted slots use `claude -p`.
-
-Explicit `claude` harness slots require an operational Claude headless runtime, not just `which claude`. Slot-machine now treats runtime readiness as a real contract: if Claude cannot satisfy the required headless probe, explicitly requested Claude slots become `BLOCKED` instead of silently falling back to another harness.
-
-To update later:
+And update slot-machine with:
 
 ```bash
-git -C ~/src/slot-machine pull
+git -C ~/.claude/skills/slot-machine pull
+```
+
+### Codex: Local Skill Install
+
+For Codex, the recommended local install path is a generated standalone skill bundle, not a plugin-root symlink. This keeps the skill identifier clean as `slot-machine` while preserving the repo's plugin metadata for publishing and development:
+
+```bash
+git clone https://github.com/pejmanjohn/slot-machine.git ~/src/slot-machine
+~/src/slot-machine/scripts/install-codex-skill.sh
+```
+
+Whenever you want to update to the latest slot-machine, run:
+
+```bash
+~/src/slot-machine/scripts/update-codex-skill.sh --pull
 ```
 
 ## See It Work

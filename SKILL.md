@@ -242,25 +242,9 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
 
    **Check harness availability and detect model.** For each slot that specifies a harness:
    - `codex`: Run `which codex` via Bash. If not found, warn: 'Codex CLI not found — slot {i} will fall back to the native host path. Install: `npm install -g @openai/codex`'. Change the slot's harness to `null` (falls back to the native host with the same skill guidance if any). If found, read the Codex model version from `~/.codex/config.toml` (look for `model = "..."` line). Record this as the slot's model identifier (e.g., `gpt-5.4`).
-   - `claude`: First run `which claude` via Bash and record the reported or configured Claude model identifier if available; otherwise record `unknown`. For native Claude host rows in the execution matrix, that is enough because the slot stays on the host-native path. For explicit Claude slots that would use the external Claude harness path, `which claude` is only the first check — they require **Claude runtime readiness**.
+   - `claude`: Run `which claude` via Bash and record the reported or configured Claude model identifier if available; otherwise record `unknown`. For native Claude host rows in the execution matrix, that is enough because the slot stays on the host-native path. For explicit Claude slots that use the external Claude harness path, do not silently fall back — dispatch the slot through `claude -p` and normalize the actual command outcome per slot.
    - **Claude Code slots:** The model is the session model (e.g., `claude-opus-4-6`) or the configured `implementer_model` override.
    - Future harnesses: same pattern — check binary, read model from config, warn and fall back if missing.
-
-   **Claude runtime readiness (external Claude harness only).** If any explicit `claude` slots will run through the external Claude harness path, check Claude runtime readiness once per run before dispatching those slots. A ready runtime requires:
-   - executable `claude`
-   - the structured headless contract slot-machine depends on
-   - a successful minimal probe such as:
-     ```bash
-     claude -p "Reply with exactly OK." \
-       --output-format stream-json \
-       --verbose \
-       --max-turns 1
-     ```
-   - exit code `0`, parseable output, and final result text exactly `OK`
-
-   A Claude runtime is unready if any of these fail: missing CLI, authentication failure such as `Not logged in · Please run /login`, bootstrap or permission failures (for example session initialization or `session-env` errors), timeout, non-zero exit, or empty/unparsable stream output.
-
-   If this once per run readiness check fails, do not silently fall back for explicit Claude slots. Mark every explicit `claude` slot `BLOCKED` with the shared readiness failure reason and continue only with the other slots, if any.
 
 2. **Validate the spec.** The spec (plan, requirements doc, or inline description) must be concrete enough for independent attempts. If ambiguous — stop and ask for clarification before spending compute.
 
@@ -422,9 +406,7 @@ These are Group 1 native-host slots. Use the native Codex implementation path in
 
 Follow the active profile isolation. If isolation is `worktree`, create one worktree per slot, `cd` into that worktree, and launch `claude -p` directly. If isolation is `file`, create a per-slot directory under `{RUN_DIR}`, launch `claude -p` there, and tell it exactly which `{RUN_DIR}/slot-{i}.md` file to write. Do not wrap this in a native subagent.
 
-Before dispatching any external Claude slots, perform Claude runtime readiness once per run. This is a real operational preflight, not just `which claude`. Re-use the staged check from Phase 1: cheap local checks first, then the minimal `claude -p` probe that must return exactly `OK`. This preflight exists to prove the active host can launch Claude headlessly with the contract slot-machine actually depends on.
-
-If the Claude runtime readiness preflight fails, every explicit Claude slot becomes `BLOCKED`. Do not silently fall back to the native host path or to Codex for those explicit Claude slots.
+Do not silently fall back to the native host path or to Codex for explicit Claude slots. Launch the configured `claude -p` command directly and let the slot outcome reflect the real external Claude execution result.
 
 External Claude command contract:
 
@@ -447,9 +429,9 @@ When done, provide a summary of:
 ```
 
 Failure normalization for external Claude runs:
-- Missing CLI during readiness check → normalize every explicit Claude slot to `BLOCKED`.
-- Authentication failure such as `Not logged in · Please run /login` → normalize every explicit Claude slot to `BLOCKED` with setup guidance.
-- Bootstrap or permission failure during Claude startup (for example session initialization or `session-env` errors) → normalize every explicit Claude slot to `BLOCKED`.
+- Missing CLI → normalize that slot to `BLOCKED`.
+- Authentication failure such as `Not logged in · Please run /login` → normalize that slot to `BLOCKED` with setup guidance.
+- Bootstrap or permission failure during Claude startup (for example session initialization or `session-env` errors) → normalize that slot to `BLOCKED`.
 - Timeout, non-zero exit, empty report, or unparsable `stream-json` output → normalize to `BLOCKED` with the failure details attached.
 - Otherwise, translate the final Claude report to the standard implementer report format.
 

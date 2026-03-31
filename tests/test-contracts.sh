@@ -340,17 +340,20 @@ assert_contains "$SKILL_CONTENT" "| Harness | Model |" \
     "SKILL.md progress tables include Harness and Model columns" || FAILED=$((FAILED + 1))
 
 echo ""
-echo "=== Contract 13A: Claude Runtime Readiness ==="
-assert_contains "$SKILL_CONTENT" "Claude runtime readiness\|runtime-readiness\|runtime readiness" \
-    "SKILL.md documents Claude runtime readiness" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" "checked once per run\|once per run" \
-    "SKILL.md checks Claude readiness once per run" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" "Reply with exactly OK\|exactly OK" \
-    "SKILL.md documents a minimal Claude headless probe" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" "Not logged in\|/login\|authentication" \
-    "SKILL.md documents Claude authentication failures" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" "bootstrap\|session-env\|permission" \
-    "SKILL.md documents Claude bootstrap/runtime failures" || FAILED=$((FAILED + 1))
+echo "=== Contract 13A: No Claude Runtime Preflight Gate ==="
+assert_not_contains "$SKILL_CONTENT" "Claude runtime readiness\|runtime-readiness\|runtime readiness" \
+    "SKILL.md does not require a Claude runtime readiness preflight" || FAILED=$((FAILED + 1))
+assert_not_contains "$SKILL_CONTENT" "checked once per run\|once per run" \
+    "SKILL.md does not impose a once-per-run Claude preflight" || FAILED=$((FAILED + 1))
+assert_not_contains "$SKILL_CONTENT" "Reply with exactly OK\|exactly OK" \
+    "SKILL.md does not document a synthetic Claude OK probe" || FAILED=$((FAILED + 1))
+
+CLAUDE_DOC_CONTENT=$(cat "$SKILL_DIR/CLAUDE.md" 2>/dev/null || echo "")
+CONTRIBUTING_DOC_CONTENT=$(cat "$SKILL_DIR/CONTRIBUTING.md" 2>/dev/null || echo "")
+assert_not_contains "$CLAUDE_DOC_CONTENT" "runtime readiness\|headless runtime contract\|exactly OK" \
+    "CLAUDE.md does not describe a Claude runtime readiness gate" || FAILED=$((FAILED + 1))
+assert_not_contains "$CONTRIBUTING_DOC_CONTENT" "runtime readiness\|headless runtime contract\|exactly OK" \
+    "CONTRIBUTING.md does not describe a Claude runtime readiness gate" || FAILED=$((FAILED + 1))
 
 echo ""
 echo "=== Contract 13B: Explicit Claude Slot Failure Behavior ==="
@@ -358,8 +361,8 @@ assert_contains "$SKILL_CONTENT" "explicit Claude slot\|explicit \`claude\` slot
     "SKILL.md distinguishes explicit Claude slots" || FAILED=$((FAILED + 1))
 assert_contains "$SKILL_CONTENT" "do not silently fall back\|must not silently fall back\|no silent fallback" \
     "SKILL.md forbids silent fallback for explicit Claude slots" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" "BLOCKED" \
-    "SKILL.md documents BLOCKED normalization for unready Claude runtime" || FAILED=$((FAILED + 1))
+assert_contains "$SKILL_CONTENT" "Missing CLI\|non-zero exit\|empty report\|unparsable" \
+    "SKILL.md documents per-slot external Claude failure normalization" || FAILED=$((FAILED + 1))
 
 echo ""
 echo "=== Contract 14: Skill Discovery ==="

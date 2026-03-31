@@ -6,7 +6,9 @@ This repository is a skill/plugin repo for Claude Code and Codex, not an applica
 
 - `SKILL.md` is the host-agnostic orchestration engine.
 - `.claude-plugin/` and `.codex-plugin/` are first-class packaging/discovery targets.
-- `skills/slot-machine/SKILL.md` is the Codex discovery symlink to the repo-root `SKILL.md`.
+- `skills/slot-machine/SKILL.md` is the Codex-packaged mirror of the repo-root `SKILL.md`.
+- `scripts/build-codex-runtime-skill.sh`, `scripts/install-codex-skill.sh`, and `scripts/update-codex-skill.sh` define the supported Codex runtime install/update flow.
+- `scripts/install-codex-standalone-skill.sh` is a compatibility wrapper for materializing a plain bundle at an arbitrary destination.
 - `profiles/` contains task-specific profile configs and agent prompts.
 - `tests/` contains shell-based contract checks, real implementer/reviewer smoke tests, scaffolded higher-tier checks, fixtures, and benchmarks.
 
@@ -19,7 +21,10 @@ Treat prompt wording, documented variables, status strings, and output contracts
   - Defines the universal variable set, slot configuration rules, artifact paths, and orchestration behavior.
 - `.claude-plugin/`, `.codex-plugin/`, and `skills/slot-machine/SKILL.md`
   - Keep Claude and Codex packaging aligned when discovery changes.
-  - `skills/slot-machine/SKILL.md` must remain a symlink to `../../SKILL.md`.
+  - `skills/slot-machine/SKILL.md` must remain byte-for-byte synchronized with the repo-root `SKILL.md`.
+  - `scripts/build-codex-runtime-skill.sh` must keep producing a standalone Codex skill directory with a real `SKILL.md`, linked built-in assets, and no `.codex-plugin` metadata.
+  - `scripts/install-codex-skill.sh` must rebuild that runtime bundle into the Codex runtime root and point the stable `~/.agents/skills/slot-machine` link at it.
+  - `scripts/update-codex-skill.sh` must rebuild from install metadata so Codex updates do not depend on manual path reconstruction.
 - `profiles/coding/` and `profiles/writing/`
   - `0-profile.md` holds frontmatter and approach hints.
   - `1-implementer.md`, `2-reviewer.md`, `3-judge.md`, `4-synthesizer.md` are the phase prompts.

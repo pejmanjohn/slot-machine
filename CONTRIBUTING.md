@@ -10,7 +10,10 @@
 ## Packaging Targets
 
 - `.claude-plugin/` and `.codex-plugin/` are first-class packaging/discovery targets. Keep their metadata aligned with actual repo behavior.
-- `skills/slot-machine/SKILL.md` must remain a symlink to the repo-root `SKILL.md` (`../../SKILL.md`), not a copied file.
+- `skills/slot-machine/SKILL.md` must stay byte-for-byte in sync with the repo-root `SKILL.md`. It is a real file because Codex discovery rejected the symlinked form in local testing.
+- `scripts/build-codex-runtime-skill.sh` is the source-repo -> runtime-bundle step for Codex. It should keep producing a plain standalone skill directory with a real `SKILL.md`, linked `profiles/`, linked `tests/`, and no `.codex-plugin` metadata.
+- `scripts/install-codex-skill.sh` and `scripts/update-codex-skill.sh` are the supported Codex local install/update flow. They should keep the stable `~/.agents/skills/slot-machine` link pointed at the generated runtime bundle.
+- `scripts/install-codex-standalone-skill.sh` remains a compatibility wrapper for arbitrary-destination bundle generation.
 
 ## Testing Requirements
 
@@ -29,13 +32,12 @@ If your change touches profiles (`profiles/*/`), SKILL.md workflow logic, or end
 ./tests/run-tests.sh --integration
 ```
 
-Today, the implementer, reviewer, and judge smoke tests plus the happy-path E2E test execute real headless `claude -p` assertions. `test-e2e-edge-cases.sh` and `test-reviewer-accuracy.sh` still skip explicitly, and these higher tiers do not constitute separate dual-host smoke/integration coverage for Codex.
-Today, the implementer, reviewer, and judge smoke tests execute on each available host via the shared runner, and the happy-path E2E runs on the selected viable host path. Explicit `claude` harness slots now depend on Claude runtime readiness, not just the presence of the `claude` binary: an unready Claude runtime should surface as `BLOCKED`, not a silent harness substitution. `test-e2e-edge-cases.sh` and `test-reviewer-accuracy.sh` still skip explicitly.
+Today, the implementer, reviewer, and judge smoke tests execute on each available host via the shared runner, and the happy-path E2E runs on the selected viable host path. Explicit `claude` harness slots should execute through `claude -p` directly and fail per slot if the external Claude runtime is unavailable. `test-e2e-edge-cases.sh` and `test-reviewer-accuracy.sh` still skip explicitly.
 
 ## What the Tests Check
 
 - **Contracts** — Variable references in prompts match SKILL.md definitions, status/verdict values are consistent across files, required sections exist
-- **Structure** — Required packaging files exist, including the Codex skill symlink
+- **Structure** — Required packaging files exist, including the Codex skill mirror plus the Codex build/install/update scripts
 - **Harness integrity** — The runner and placeholder/skip behavior match the documented contract
 - **Smoke** — Real implementer/reviewer/judge checks on each available host
 - **Benchmark** — Speed tests comparing slot-machine vs baseline single-agent runs

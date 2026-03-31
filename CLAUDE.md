@@ -24,7 +24,7 @@ You are working on the slot-machine skill/plugin repo for best-of-N parallel imp
 - Treat Claude and Codex packaging as first-class; if discovery changes, update both packaging docs/metadata paths together
 - Project config may live in `AGENTS.md` or `CLAUDE.md`
 - Describe harness routing host-relatively: native path on the active host, with Codex slots using `codex exec` in their slot workspace and Claude-as-other-harness using `claude -p`
-- Explicit `claude` harness slots require Claude runtime readiness, not just `which claude`; if the headless runtime contract is not operational, those slots should become `BLOCKED` instead of silently falling back
+- Explicit `claude` harness slots should run through `claude -p` directly; do not silently fall back if the external Claude execution fails
 - Run `./tests/run-tests.sh` before committing
 
 ## Testing
