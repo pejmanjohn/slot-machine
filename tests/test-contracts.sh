@@ -557,6 +557,18 @@ TRACE_SECTION_COMPACT=$(printf '%s' "$TRACE_SECTION" | tr '\n' ' ')
 
 assert_contains "$TRACE_SECTION" "## Orchestrator Trace" \
     "SKILL.md has Orchestrator Trace section" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION" "events.jsonl" \
+    "SKILL.md documents orchestrator trace events.jsonl path" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION" "state.json" \
+    "SKILL.md documents orchestrator trace state.json path" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION" '"events_path"' \
+    "SKILL.md documents events_path" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION" '"state_path"' \
+    "SKILL.md documents state_path" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION_COMPACT" '\.slot-machine/runs/[^[:space:]\"]+/events\.jsonl' \
+    "SKILL.md documents orchestrator trace events.jsonl run path" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION_COMPACT" '\.slot-machine/runs/[^[:space:]\"]+/state\.json' \
+    "SKILL.md documents orchestrator trace state.json run path" || FAILED=$((FAILED + 1))
 assert_contains "$TRACE_SECTION_COMPACT" '"events_path".*events\.jsonl' \
     "SKILL.md documents orchestrator trace events.jsonl path" || FAILED=$((FAILED + 1))
 assert_contains "$TRACE_SECTION_COMPACT" '"state_path".*state\.json' \
@@ -567,10 +579,6 @@ assert_contains "$TRACE_SECTION" "\\.slot-machine/history/latest\\.json" \
     "SKILL.md documents .slot-machine/history/latest.json" || FAILED=$((FAILED + 1))
 assert_contains "$TRACE_SECTION" "\\.slot-machine/history/index\\.jsonl" \
     "SKILL.md documents .slot-machine/history/index.jsonl" || FAILED=$((FAILED + 1))
-assert_contains "$TRACE_SECTION" '"events_path"' \
-    "SKILL.md documents events_path" || FAILED=$((FAILED + 1))
-assert_contains "$TRACE_SECTION" '"state_path"' \
-    "SKILL.md documents state_path" || FAILED=$((FAILED + 1))
 assert_contains "$TRACE_SECTION" '"status": "idle"' \
     "SKILL.md documents idle sentinel status" || FAILED=$((FAILED + 1))
 
