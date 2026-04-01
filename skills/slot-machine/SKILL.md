@@ -429,9 +429,7 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
      "last_event_seq": 0
    }
    JSON
-   ```
-   Then write the lightweight current-run pointer:
-   ```bash
+
    cat > "$ACTIVE_TRACE_FILE" << JSON
    {
      "schema_version": 1,
