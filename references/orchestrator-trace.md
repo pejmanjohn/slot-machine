@@ -18,6 +18,8 @@ Each trace line is an orchestrator event envelope. Keep the payload compact and 
 ```json
 {
   "schema_version": 1,
+  "seq": 12,
+  "ts": "2026-03-31T20:46:33.000Z",
   "run_id": "2026-03-31-feature-slug",
   "phase": "dispatch",
   "event": "slot_finished",
