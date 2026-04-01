@@ -73,6 +73,90 @@ Project config can live in `AGENTS.md`, `CLAUDE.md`, or both; treat them as equa
 | `judge_model` | inherit | Model for judge subagent (inherits from session if not set) |
 | `synthesizer_model` | inherit | Model for synthesizer subagent (inherits from session if not set) |
 
+## Orchestrator Trace
+
+The orchestrator trace is the normalized execution record for the orchestrator itself. It is not a shared slot context channel and must not be repurposed as one; slot-local prompts, outputs, and review artifacts remain separate from this trace.
+
+Canonical per-run trace artifacts:
+
+- `{RUN_DIR}/events.jsonl`
+- `{RUN_DIR}/state.json`
+
+Cross-run discovery artifacts:
+
+- `.slot-machine/history/active.json`
+- `.slot-machine/history/latest.json`
+- `.slot-machine/history/index.jsonl`
+
+When no run is active, `.slot-machine/history/active.json` should use the idle sentinel status:
+
+```json
+{
+  "schema_version": "1",
+  "status": "idle"
+}
+```
+
+Use this event envelope for every trace append:
+
+```json
+{
+  "schema_version": "1",
+  "seq": 12,
+  "ts": "2026-03-31T12:34:56Z",
+  "run_id": "2026-03-31-feature-slug",
+  "phase": "dispatch",
+  "event": "slot_finished",
+  "slot": 2,
+  "attempt": 1,
+  "data": {
+    "status": "DONE",
+    "artifact_path": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug/slot-2.diff"
+  }
+}
+```
+
+Required event names:
+
+- `run_started`
+- `phase_entered`
+- `artifact_written`
+- `slot_dispatched`
+- `slot_finished`
+- `slot_retry_scheduled`
+- `precheck_started`
+- `precheck_finished`
+- `review_dispatched`
+- `review_finished`
+- `judge_dispatched`
+- `judge_finished`
+- `synthesis_dispatched`
+- `synthesis_finished`
+- `cleanup_started`
+- `cleanup_finished`
+- `run_finished`
+- `run_failed`
+
+Use this state snapshot shape for `{RUN_DIR}/state.json`:
+
+```json
+{
+  "schema_version": "1",
+  "run_id": "2026-03-31-feature-slug",
+  "status": "RUNNING",
+  "current_phase": "dispatch",
+  "run_dir": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug",
+  "events_path": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug/events.jsonl",
+  "state_path": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug/state.json",
+  "result_path": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug/result.json",
+  "last_event_seq": 12
+}
+```
+
+Reusable rule: after every event append to `{RUN_DIR}/events.jsonl`, rewrite `{RUN_DIR}/state.json` so `.slot-machine/history/active.json` always points at a current snapshot. `events.jsonl` is the source of truth; `state.json` is the convenience view.
+
+Maintenance rule: Any change that adds a new orchestration phase, terminal path, retry path, or required artifact must update the trace documentation and trace-aware tests in the same change. SKILL.md and `skills/slot-machine/SKILL.md` must stay byte-for-byte synchronized after trace changes.
+
 ## Profile Loading
 
 Profiles define the task-specific content for a slot-machine run: approach hints, agent prompts, isolation strategy, and pre-check commands. SKILL.md is a domain-agnostic orchestration engine — all task-specific content comes from the active profile.
@@ -278,8 +362,29 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
    ```bash
    RUN_DIR_REL=".slot-machine/runs/$(date +%Y-%m-%d)-{feature_slug}"
    RUN_DIR="$PWD/$RUN_DIR_REL"
-   mkdir -p "$RUN_DIR"
+   TRACE_EVENTS_FILE="$RUN_DIR/events.jsonl"
+   TRACE_STATE_FILE="$RUN_DIR/state.json"
+   HISTORY_DIR=".slot-machine/history"
+   ACTIVE_TRACE_FILE="$HISTORY_DIR/active.json"
+   LATEST_TRACE_FILE="$HISTORY_DIR/latest.json"
+   HISTORY_INDEX_FILE="$HISTORY_DIR/index.jsonl"
+   mkdir -p "$RUN_DIR" "$HISTORY_DIR"
    grep -q '.slot-machine/' .gitignore 2>/dev/null || echo '.slot-machine/' >> .gitignore
+   ```
+   Immediately bootstrap the active-run trace metadata:
+   ```bash
+   cat > "$ACTIVE_TRACE_FILE" << JSON
+   {
+     "schema_version": "1",
+     "status": "RUNNING",
+     "run_id": "{run_id}",
+     "run_dir": "$RUN_DIR",
+     "events_path": "$TRACE_EVENTS_FILE",
+     "state_path": "$RUN_DIR/state.json",
+     "started_at": "{started_at_iso8601}",
+     "updated_at": "{started_at_iso8601}"
+   }
+   JSON
    ```
    Persist `RUN_DIR` as the absolute path for this run. All review, verdict, and result artifacts must be written via that absolute path, not a cwd-relative redirect. Before every artifact write later in the run, re-run `mkdir -p "$RUN_DIR"` so artifact persistence never depends on shell state.
    All artifacts from this run will be saved to `{RUN_DIR}/`.
