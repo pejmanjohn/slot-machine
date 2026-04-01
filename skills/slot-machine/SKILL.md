@@ -525,6 +525,7 @@ Orchestrator trace emission rules for this phase and the downstream lifecycle:
 - Emit `review_dispatched` and `review_finished` for reviewer lifecycle changes.
 - Emit `judge_dispatched` and `judge_finished` for judge lifecycle changes.
 - Emit `synthesis_dispatched` and `synthesis_finished` for synthesis lifecycle changes.
+- Emit `cleanup_started` and `cleanup_finished` for cleanup lifecycle changes.
 - Emit `artifact_written` immediately after each required artifact write completes.
 - Emit `run_finished` on successful terminal completion, or `run_failed` on terminal failure.
 - The orchestrator trace is orchestrator-level only. Do not include raw prompt bodies, slot-local transcripts, or subagent reasoning in `events.jsonl` or `state.json`.
@@ -1073,7 +1074,7 @@ cat > "{RUN_DIR}/result.json" << RESULT
 }
 RESULT
 
-# Post-write run discovery updates
+# Post-write run discovery updates for successful terminal completion
 ln -sfn "$(basename "{RUN_DIR}")" "$(dirname "{RUN_DIR}")/latest"
 cat > ".slot-machine/history/latest.json" << LATEST
 {
@@ -1098,11 +1099,12 @@ INDEX
 ```
 
 This is always written, every run. Humans ignore it. Autonomous loops and scripts parse it via `.slot-machine/runs/latest/result.json`. When a slot ran through Codex, persist the Codex `thread_id` plus the raw event/stderr paths under `slot_details` so the run can be inspected or resumed with `codex resume {thread_id}` later.
+Use the `status: "finished"` history records above for judged completion and manual handoff completion. For blocked or failed terminal exits, refresh the same history files with `status: "failed"` while keeping the canonical per-run `{RUN_DIR}` paths.
 
 Manual handoff writes the same run artifact path with unresolved result state:
 
 In manual mode, the top-level `files_changed` and `tests_passing` fields are `null`; per-slot file/test data lives under `slot_details`.
-After refreshing `.slot-machine/runs/latest`, set the top-level `handoff_path` and `run_dir` fields to the absolute `latest` paths rather than the dated `{RUN_DIR}` path.
+After refreshing `.slot-machine/runs/latest`, set the top-level `handoff_path` to the absolute `latest` path for operator convenience.
 For `file` isolation, each `slot_details` item uses `output_path` instead of `worktree_path`, and the worktree-only fields (`diff_path`, `branch`, `head_sha`) are omitted or `null`.
 Each file-isolation `slot_details` item still carries the slot output path, review path, files_changed, tests_passing, and any Codex `thread_id` / raw log paths when the slot ran through Codex.
 
@@ -1135,14 +1137,15 @@ cat > {RUN_DIR}/result.json << RESULT
       "tests_passing": 12
     }
   ],
-  "run_dir": "/abs/path/.slot-machine/runs/latest",
-  "events_path": "/abs/path/.slot-machine/runs/latest/events.jsonl",
-  "state_path": "/abs/path/.slot-machine/runs/latest/state.json"
+  "run_dir": "{RUN_DIR}",
+  "events_path": "{RUN_DIR}/events.jsonl",
+  "state_path": "{RUN_DIR}/state.json"
 }
 RESULT
 ```
 
 Manual handoff still writes `events.jsonl`, `state.json`, `.slot-machine/history/latest.json`, and `.slot-machine/history/index.jsonl`, resets `.slot-machine/history/active.json` to the idle sentinel, and must emit `run_finished` without any judge or synthesis events.
+For avoidance of doubt, the canonical manual result uses per-run paths for `run_dir`, `events_path`, and `state_path`; only `handoff_path` points at `.slot-machine/runs/latest`. Older discovery-oriented examples such as `"run_dir": "/abs/path/.slot-machine/runs/latest"` are superseded.
 
 Profile-loading failures and other setup-time hard stops must still write the same run artifact path before exiting, then refresh `.slot-machine/runs/latest` to that run:
 
@@ -1161,14 +1164,14 @@ cat > "{RUN_DIR}/result.json" << RESULT
   "blocked_reason": "Base profile 'coding' could not be resolved for profile 'blog-post-exp4'",
   "files_changed": null,
   "tests_passing": null,
-  "run_dir": "/abs/path/.slot-machine/runs/latest",
-  "events_path": "/abs/path/.slot-machine/runs/latest/events.jsonl",
-  "state_path": "/abs/path/.slot-machine/runs/latest/state.json"
+  "run_dir": "{RUN_DIR}",
+  "events_path": "{RUN_DIR}/events.jsonl",
+  "state_path": "{RUN_DIR}/state.json"
 }
 RESULT
 ```
 
-Blocked setup-time exits still append `run_failed`, write `state.json`, refresh `.slot-machine/history/latest.json`, append to `.slot-machine/history/index.jsonl`, and reset `.slot-machine/history/active.json` to the idle sentinel.
+Blocked setup-time exits still append `run_failed`, write `state.json`, refresh `.slot-machine/history/latest.json` with `status: "failed"`, append a matching `status: "failed"` row to `.slot-machine/history/index.jsonl`, and reset `.slot-machine/history/active.json` to the idle sentinel.
 
 **Part 4: Footer** — a horizontal rule followed by a one-line summary:
 
