@@ -561,18 +561,20 @@ assert_contains "$TRACE_SECTION" "events.jsonl" \
     "SKILL.md documents orchestrator trace events.jsonl path" || FAILED=$((FAILED + 1))
 assert_contains "$TRACE_SECTION" "state.json" \
     "SKILL.md documents orchestrator trace state.json path" || FAILED=$((FAILED + 1))
-assert_contains "$TRACE_SECTION" '"events_path"' \
-    "SKILL.md documents events_path" || FAILED=$((FAILED + 1))
-assert_contains "$TRACE_SECTION" '"state_path"' \
-    "SKILL.md documents state_path" || FAILED=$((FAILED + 1))
-assert_contains "$TRACE_SECTION_COMPACT" '\.slot-machine/runs/[^[:space:]\"]\+/events\.jsonl' \
-    "SKILL.md documents orchestrator trace events.jsonl run path" || FAILED=$((FAILED + 1))
-assert_contains "$TRACE_SECTION_COMPACT" '\.slot-machine/runs/[^[:space:]\"]\+/state\.json' \
-    "SKILL.md documents orchestrator trace state.json run path" || FAILED=$((FAILED + 1))
-assert_contains "$TRACE_SECTION_COMPACT" '"events_path".*events\.jsonl' \
-    "SKILL.md documents orchestrator trace events.jsonl path" || FAILED=$((FAILED + 1))
-assert_contains "$TRACE_SECTION_COMPACT" '"state_path".*state\.json' \
-    "SKILL.md documents orchestrator trace state.json path" || FAILED=$((FAILED + 1))
+for reference_file in \
+    references/orchestrator-trace.md \
+    references/harness-execution.md \
+    references/result-artifacts.md; do
+    assert_contains "$TRACE_SECTION" "$reference_file" \
+        "SKILL.md references $reference_file from the orchestrator trace contract" || FAILED=$((FAILED + 1))
+done
+for load_phrase in \
+    "before creating or updating trace/history artifacts" \
+    "before using Claude or Codex external harness execution paths" \
+    "before writing final run artifacts"; do
+    assert_contains "$TRACE_SECTION_COMPACT" "$load_phrase" \
+        "SKILL.md includes load instruction: $load_phrase" || FAILED=$((FAILED + 1))
+done
 assert_contains "$TRACE_SECTION" "\\.slot-machine/history/active\\.json" \
     "SKILL.md documents .slot-machine/history/active.json" || FAILED=$((FAILED + 1))
 assert_contains "$TRACE_SECTION" "\\.slot-machine/history/latest\\.json" \
@@ -594,6 +596,10 @@ assert_contains "$TRACE_SECTION" "run_finished" \
     "SKILL.md documents run_finished events" || FAILED=$((FAILED + 1))
 assert_contains "$TRACE_SECTION" "run_failed" \
     "SKILL.md documents run_failed events" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION" '"events_path"' \
+    "SKILL.md documents events_path" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION" '"state_path"' \
+    "SKILL.md documents state_path" || FAILED=$((FAILED + 1))
 assert_contains "$TRACE_SECTION" '"current_phase"' \
     "SKILL.md documents current_phase state" || FAILED=$((FAILED + 1))
 assert_contains "$TRACE_SECTION" '"last_event_seq"' \
