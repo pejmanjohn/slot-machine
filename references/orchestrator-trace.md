@@ -11,11 +11,29 @@ It covers the orchestrator-level JSONL event stream plus the snapshot files that
 - `.slot-machine/history/latest.json`: pointer to the most recent terminal run.
 - `.slot-machine/history/index.jsonl`: append-only summary history.
 
-## Event Shapes
+## Canonical Envelope
+
+Each trace line is an orchestrator event envelope. Keep the payload compact and run-scoped.
+
+```json
+{
+  "schema_version": 1,
+  "run_id": "2026-03-31-feature-slug",
+  "phase": "dispatch",
+  "event": "slot_finished",
+  "slot": 2,
+  "attempt": 1,
+  "data": {
+    "status": "DONE",
+    "artifact_path": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug/slot-2.diff"
+  }
+}
+```
 
 Keep events orchestrator-level only. Do not store raw prompt bodies, slot-local transcripts, or subagent reasoning here.
 
 ```json
+{"event":"run_started","phase":"setup"}
 {"event":"phase_entered","stage":"setup"}
 {"event":"slot_dispatched","slot":1,"harness":"codex","skill":"default"}
 {"event":"precheck_started","slot":1,"command":"python3 -m pytest tests/ -v"}
@@ -26,6 +44,7 @@ Keep events orchestrator-level only. Do not store raw prompt bodies, slot-local 
 
 ## Required Event Types
 
+- `run_started` at the beginning of every run.
 - `phase_entered` for `setup`, `implementation`, `review`, `judgment`, `synthesis`, `manual_handoff`, `cleanup`, and `finalization`.
 - `slot_dispatched`, `slot_finished`, and `slot_retry_scheduled` for slot lifecycle changes.
 - `precheck_started` and `precheck_finished` around required precheck commands.

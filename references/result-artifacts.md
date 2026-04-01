@@ -47,10 +47,30 @@ The latest pointers always refer to the most recent terminal run without copying
     {
       "slot": 1,
       "status": "DONE",
+      "diff_path": "/abs/path/.slot-machine/runs/2026-03-31-demo/slot-1.diff",
+      "worktree_path": ".slot-machine/worktrees/slot-1",
+      "branch": "slot-machine/feature-slug/slot-1",
+      "head_sha": "abc123",
       "review_path": "/abs/path/.slot-machine/runs/2026-03-31-demo/review-1.md",
       "thread_id": "thread_abc123",
       "events_path": "/abs/path/.slot-machine/runs/2026-03-31-demo/slot-1/codex-events.jsonl",
-      "stderr_path": "/abs/path/.slot-machine/runs/2026-03-31-demo/slot-1/codex-stderr.txt"
+      "stderr_path": "/abs/path/.slot-machine/runs/2026-03-31-demo/slot-1/codex-stderr.txt",
+      "review_summary": { "critical": 0, "important": 1, "minor": 2 },
+      "files_changed": ["src/example.py"],
+      "tests_passing": 12
+    },
+    {
+      "slot": 2,
+      "status": "DONE_WITH_CONCERNS",
+      "diff_path": null,
+      "output_path": "{RUN_DIR}/slot-2.md",
+      "review_path": "/abs/path/.slot-machine/runs/2026-03-31-demo/review-2.md",
+      "thread_id": "thread_def456",
+      "events_path": "/abs/path/.slot-machine/runs/2026-03-31-demo/slot-2/codex-events.jsonl",
+      "stderr_path": "/abs/path/.slot-machine/runs/2026-03-31-demo/slot-2/codex-stderr.txt",
+      "review_summary": { "critical": 0, "important": 2, "minor": 1 },
+      "files_changed": ["docs/example.md"],
+      "tests_passing": 11
     }
   ],
   "run_dir": "/abs/path/.slot-machine/runs/2026-03-31-demo",

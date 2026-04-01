@@ -15,13 +15,18 @@ Native-host slots are Group 1. External-harness slots are Group 2.
 
 ## Codex Harness Contract
 
-For Codex harness slots on the Codex host, the supported execution path is the shared slot runtime helper:
+For Codex harness slots, the supported execution path is the shared slot runtime helper in every host/harness combination:
+
+- active host `Codex`, slot harness `Codex`
+- active host `Claude`, slot harness `Codex`
+
+Use the helper from the assigned isolated slot workspace:
 
 ```bash
 "$REAL_SKILL_DIR/scripts/codex-slot-runner.py"
 ```
 
-The helper runs `codex exec` in the current slot workspace, captures `codex-events.jsonl` and `codex-stderr.txt`, writes `codex-slot-report.md` and `codex-slot-result.json`, and records the Codex `thread_id` for later inspection or resume.
+The helper runs `codex exec` in the current slot workspace, captures `codex-events.jsonl` and `codex-stderr.txt`, writes `codex-slot-report.md` and `codex-slot-result.json`, and records the Codex `thread_id` for later inspection or resume. On Claude-hosted runs, the external Codex slot path still uses this helper; it is not replaced by a native Claude subagent.
 
 For `skill + codex` slots, translate the normalized skill to Codex syntax such as `$superpowers:test-driven-development` and write the prompt to `codex-prompt.txt` before invoking the helper.
 
