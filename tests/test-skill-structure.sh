@@ -30,8 +30,14 @@ echo ""
 echo "=== Skill Structure: All Skill Files Exist ==="
 SKILL_FILES=(
     SKILL.md
+    references/orchestrator-trace.md
+    references/harness-execution.md
+    references/result-artifacts.md
     profiles/coding/0-profile.md
     profiles/writing/0-profile.md
+    skills/slot-machine/references/orchestrator-trace.md
+    skills/slot-machine/references/harness-execution.md
+    skills/slot-machine/references/result-artifacts.md
 )
 for file in "${SKILL_FILES[@]}"; do
     if [ -f "$SKILL_DIR/$file" ]; then

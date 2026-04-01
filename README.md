@@ -6,6 +6,8 @@ AI agents are probabilistic. The same spec produces different code every time â€
 
 Run N independent implementations of the same feature in parallel. Each gets reviewed by an independent agent that hunts for real bugs. A meta-judge compares all of them and makes one of three calls: **pick** the clear winner, **synthesize** the best elements from multiple implementations into something better than any individual, or **reject all** if none meet the bar.
 
+`SKILL.md` stays the main orchestration contract. Bulky executable examples and reference material now live under repo-root `references/`, and the generated Codex runtime bundle exposes that same `references/` tree alongside `SKILL.md`.
+
 ## What You Can Do
 
 **Run 3 competing implementations and pick the best one:**
@@ -82,7 +84,7 @@ If you already installed slot-machine by cloning directly into `~/.claude/skills
 
 ### Codex: Local Skill Install
 
-For Codex, the recommended local install path is a generated standalone skill bundle, not a plugin-root symlink. This keeps the skill identifier clean as `slot-machine` while preserving the repo's plugin metadata for publishing and development:
+For Codex, the recommended local install path is a generated standalone skill bundle, not a plugin-root symlink. This keeps the skill identifier clean as `slot-machine`, preserves the repo's plugin metadata for publishing and development, and exposes the bundled `references/` tree next to `SKILL.md`:
 
 ```bash
 git clone https://github.com/pejmanjohn/slot-machine.git ~/src/slot-machine
@@ -376,17 +378,21 @@ Every run writes a machine-readable result to `.slot-machine/runs/latest/result.
   "slots_succeeded": 3,
   "files_changed": ["src/api.py", "tests/test_api.py"],
   "tests_passing": 45,
+  "events_path": "/abs/path/.slot-machine/runs/2026-03-31-payment-webhook/events.jsonl",
+  "state_path": "/abs/path/.slot-machine/runs/2026-03-31-payment-webhook/state.json",
   "slot_details": [
     {
       "slot": 2,
       "status": "DONE",
       "thread_id": "thread_abc123",
-      "report_path": ".slot-machine/runs/2026-03-29-payment-webhook/slot-2/codex-slot-report.md"
+      "report_path": "/abs/path/.slot-machine/runs/2026-03-31-payment-webhook/slot-2/codex-slot-report.md"
     }
   ],
-  "run_dir": ".slot-machine/runs/2026-03-29-payment-webhook"
+  "run_dir": "/abs/path/.slot-machine/runs/2026-03-31-payment-webhook"
 }
 ```
+
+For inspection, `.slot-machine/history/active.json` tells you what the orchestrator is doing now, `.slot-machine/history/latest.json` points at the most recent terminal run, and `.slot-machine/history/index.jsonl` is an append-only cross-run summary. This is observability for reviewing past and in-flight runs, not a live runtime behavior change.
 
 Set `quiet: true` to suppress progress tables in unattended runs. The run directory (`.slot-machine/runs/`) keeps all artifacts (slot drafts, reviewer scorecards, judge verdict, raw Codex logs). Codex-backed `slot_details` preserve the `thread_id`, so you can inspect the exact run or continue it later with `codex resume`.
 

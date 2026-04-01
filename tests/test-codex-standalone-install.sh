@@ -74,7 +74,13 @@ else
     FAILED=$((FAILED + 1))
 fi
 
-for relative_path in profiles/coding/0-profile.md tests/fixtures/sample-metrics.json scripts/codex-slot-runner.py; do
+for relative_path in \
+    profiles/coding/0-profile.md \
+    tests/fixtures/sample-metrics.json \
+    scripts/codex-slot-runner.py \
+    references/orchestrator-trace.md \
+    references/harness-execution.md \
+    references/result-artifacts.md; do
     if [ -e "$DEST_DIR/$relative_path" ]; then
         echo "  [PASS] Standalone bundle exposes $relative_path"
     else

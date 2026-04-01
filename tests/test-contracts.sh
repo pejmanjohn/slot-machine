@@ -222,11 +222,11 @@ assert_contains "$SKILL_CONTENT" "pwd -P" \
     "SKILL.md canonicalizes built-in skill paths before inherited-profile lookup" || FAILED=$((FAILED + 1))
 assert_contains "$SKILL_CONTENT" "find -L" \
     "SKILL.md documents a symlink-safe fallback for built-in profile discovery" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" '"resolution_mode": "blocked"' \
+assert_contains "$SKILL_CONTENT" 'resolution_mode.*blocked' \
     "SKILL.md documents blocked result.json mode for setup-time failures" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" '"blocked_stage": "profile_loading"' \
+assert_contains "$SKILL_CONTENT" 'blocked_stage.*profile_loading' \
     "SKILL.md records profile-loading failures in result.json" || FAILED=$((FAILED + 1))
-assert_contains "$SKILL_CONTENT" '"blocked_reason": "' \
+assert_contains "$SKILL_CONTENT" 'blocked_reason' \
     "SKILL.md records a human-readable blocked reason in result.json" || FAILED=$((FAILED + 1))
 
 echo ""
@@ -303,41 +303,40 @@ assert_contains "$MANUAL_HANDOFF_BLOCK" "runs/latest" \
     "SKILL.md documents latest-path manual metadata" || FAILED=$((FAILED + 1))
 assert_contains "$SKILL_CONTENT" 'If `manual_handoff` is false' \
     "SKILL.md makes the judge path conditional on manual_handoff being false" || FAILED=$((FAILED + 1))
-MANUAL_RESULT_EXAMPLE=$(echo "$SKILL_CONTENT" | sed -n '/Manual handoff writes the same run artifact path with unresolved result state:/,/^\*\*Part 4: Footer\*\*/p')
-assert_contains "$MANUAL_RESULT_EXAMPLE" "\"resolution_mode\": \"manual\"" \
+MANUAL_RESULT_SECTION=$(echo "$SKILL_CONTENT" | sed -n '/Manual handoff writes the same run artifact path with unresolved result state:/,/^\*\*Part 4: Footer\*\*/p')
+assert_contains "$MANUAL_RESULT_SECTION" "resolution_mode.*manual" \
     "SKILL.md documents manual-mode result example resolution_mode" || FAILED=$((FAILED + 1))
-assert_contains "$MANUAL_RESULT_EXAMPLE" "\"verdict\": null" \
+assert_contains "$MANUAL_RESULT_SECTION" "verdict.*null" \
     "SKILL.md documents unresolved manual verdict" || FAILED=$((FAILED + 1))
-assert_contains "$MANUAL_RESULT_EXAMPLE" "\"winning_slot\": null" \
+assert_contains "$MANUAL_RESULT_SECTION" "winning_slot.*null" \
     "SKILL.md documents unresolved manual winning_slot" || FAILED=$((FAILED + 1))
-assert_contains "$MANUAL_RESULT_EXAMPLE" "\"files_changed\": null" \
+assert_contains "$MANUAL_RESULT_SECTION" "files_changed.*null" \
     "SKILL.md documents top-level null files_changed in manual result" || FAILED=$((FAILED + 1))
-assert_contains "$MANUAL_RESULT_EXAMPLE" "\"tests_passing\": null" \
+assert_contains "$MANUAL_RESULT_SECTION" "tests_passing.*null" \
     "SKILL.md documents top-level null tests_passing in manual result" || FAILED=$((FAILED + 1))
-assert_contains "$MANUAL_RESULT_EXAMPLE" "\"handoff_path\"" \
+assert_contains "$MANUAL_RESULT_SECTION" "handoff_path" \
     "SKILL.md documents manual-mode handoff_path" || FAILED=$((FAILED + 1))
-assert_contains "$MANUAL_RESULT_EXAMPLE" "runs/latest/handoff\\.md" \
+assert_contains "$MANUAL_RESULT_SECTION" "runs/latest/handoff\\.md" \
     "SKILL.md documents latest-based manual handoff_path" || FAILED=$((FAILED + 1))
-assert_contains "$MANUAL_RESULT_EXAMPLE" "\"slot_details\"" \
+assert_contains "$MANUAL_RESULT_SECTION" "slot_details" \
     "SKILL.md documents manual-mode slot details metadata" || FAILED=$((FAILED + 1))
-assert_contains "$MANUAL_RESULT_EXAMPLE" "\"run_dir\": \"/abs/path/\\.slot-machine/runs/latest\"" \
+assert_contains "$MANUAL_RESULT_SECTION" "run_dir.*runs/latest\|Deprecated shape to avoid.*runs/latest" \
     "SKILL.md documents latest-based manual run_dir" || FAILED=$((FAILED + 1))
-assert_contains "$MANUAL_RESULT_EXAMPLE" "\"diff_path\"" \
+assert_contains "$MANUAL_RESULT_SECTION" "diff_path" \
     "SKILL.md documents per-slot diff_path metadata in manual result" || FAILED=$((FAILED + 1))
-assert_contains "$MANUAL_RESULT_EXAMPLE" "\"worktree_path\"" \
+assert_contains "$MANUAL_RESULT_SECTION" "worktree_path" \
     "SKILL.md documents per-slot worktree_path metadata in manual result" || FAILED=$((FAILED + 1))
-assert_contains "$MANUAL_RESULT_EXAMPLE" "\"branch\"" \
+assert_contains "$MANUAL_RESULT_SECTION" "branch" \
     "SKILL.md documents per-slot branch metadata in manual result" || FAILED=$((FAILED + 1))
-assert_contains "$MANUAL_RESULT_EXAMPLE" "\"head_sha\"" \
+assert_contains "$MANUAL_RESULT_SECTION" "head_sha" \
     "SKILL.md documents per-slot head_sha metadata in manual result" || FAILED=$((FAILED + 1))
-assert_contains "$MANUAL_RESULT_EXAMPLE" "\"review_path\"" \
+assert_contains "$MANUAL_RESULT_SECTION" "review_path" \
     "SKILL.md documents per-slot review_path metadata in manual result" || FAILED=$((FAILED + 1))
-MANUAL_SLOT_DETAILS_OBJECT=$(echo "$MANUAL_RESULT_EXAMPLE" | sed -n '/^  "slot_details": \[/,/^  ],/p' | sed -n '/^    {/,/^    },/p')
-assert_contains "$MANUAL_SLOT_DETAILS_OBJECT" "\"files_changed\"" \
+assert_contains "$MANUAL_RESULT_SECTION" "files_changed" \
     "SKILL.md documents nested per-slot files_changed metadata in slot_details" || FAILED=$((FAILED + 1))
-assert_contains "$MANUAL_SLOT_DETAILS_OBJECT" "\"tests_passing\"" \
+assert_contains "$MANUAL_RESULT_SECTION" "tests_passing" \
     "SKILL.md documents nested per-slot tests_passing metadata in slot_details" || FAILED=$((FAILED + 1))
-FILE_MODE_NOTE=$(echo "$SKILL_CONTENT" | sed -n '/For `file` isolation, each `slot_details` item uses `output_path` instead of `worktree_path`/,/Each file-isolation `slot_details` item still carries the slot output path, review path, files_changed, and tests_passing\./p')
+FILE_MODE_NOTE=$(echo "$SKILL_CONTENT" | sed -n '/For `file` isolation, each `slot_details` item uses `"output_path"` instead of `"worktree_path"`/,/top-level `files_changed` and `tests_passing` fields are `null`/p')
 assert_contains "$FILE_MODE_NOTE" "output_path" \
     "SKILL.md documents file-isolation output_path in slot_details" || FAILED=$((FAILED + 1))
 assert_contains "$FILE_MODE_NOTE" "worktree-path.*omitted\|worktree-only.*omitted\|diff_path.*branch.*head_sha" \
@@ -515,6 +514,26 @@ assert_contains "$SKILL_CONTENT" "| Harness | Model |" \
     "SKILL.md progress tables include Harness and Model columns" || FAILED=$((FAILED + 1))
 
 echo ""
+echo "=== Contract 13C: External Harness Detail Lives In References ==="
+HARNESS_REFERENCE_CONTENT=$(cat "$SKILL_DIR/references/harness-execution.md" 2>/dev/null || echo "")
+PHASE2_EXTERNAL_SECTION=$(echo "$SKILL_CONTENT" | sed -n '/^\*\*Path E/,/^| Slot definition |/p')
+
+assert_contains "$HARNESS_REFERENCE_CONTENT" "claude -p" \
+    "references/harness-execution.md carries the detailed Claude command template" || FAILED=$((FAILED + 1))
+assert_contains "$HARNESS_REFERENCE_CONTENT" "--output-format stream-json" \
+    "references/harness-execution.md carries the Claude stream-json contract" || FAILED=$((FAILED + 1))
+assert_contains "$HARNESS_REFERENCE_CONTENT" "cat > codex-prompt.txt <<'PROMPT'" \
+    "references/harness-execution.md carries the detailed Codex prompt template" || FAILED=$((FAILED + 1))
+assert_contains "$HARNESS_REFERENCE_CONTENT" "--prompt-file codex-prompt.txt" \
+    "references/harness-execution.md carries the helper-backed Codex invocation" || FAILED=$((FAILED + 1))
+assert_contains "$HARNESS_REFERENCE_CONTENT" "--sandbox workspace-write" \
+    "references/harness-execution.md carries the Codex sandbox contract" || FAILED=$((FAILED + 1))
+assert_not_contains "$PHASE2_EXTERNAL_SECTION" "When done, provide this implementer report" \
+    "SKILL.md does not inline the external harness report template" || FAILED=$((FAILED + 1))
+assert_not_contains "$PHASE2_EXTERNAL_SECTION" "cat > codex-prompt.txt <<'PROMPT'" \
+    "SKILL.md does not inline the Codex helper prompt template" || FAILED=$((FAILED + 1))
+
+echo ""
 echo "=== Contract 13A: No Claude Runtime Preflight Gate ==="
 assert_not_contains "$SKILL_CONTENT" "Claude runtime readiness\|runtime-readiness\|runtime readiness" \
     "SKILL.md does not require a Claude runtime readiness preflight" || FAILED=$((FAILED + 1))
@@ -549,6 +568,71 @@ assert_contains "$SKILL_CONTENT" "\-\-discover" \
 
 assert_contains "$SKILL_CONTENT" "all my skills\|all implementation skills" \
     "SKILL.md documents natural language discovery triggers" || FAILED=$((FAILED + 1))
+
+echo ""
+echo "=== Contract 15: Orchestrator Trace ==="
+TRACE_SECTION=$(echo "$SKILL_CONTENT" | sed -n '/^## Orchestrator Trace$/,/^## /p')
+TRACE_SECTION_COMPACT=$(printf '%s' "$TRACE_SECTION" | tr '\n' ' ')
+
+assert_contains "$TRACE_SECTION" "## Orchestrator Trace" \
+    "SKILL.md has Orchestrator Trace section" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION" "events.jsonl" \
+    "SKILL.md documents orchestrator trace events.jsonl path" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION" "state.json" \
+    "SKILL.md documents orchestrator trace state.json path" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION_COMPACT" "references/orchestrator-trace\\.md.*before creating or updating trace/history artifacts" \
+    "SKILL.md pairs references/orchestrator-trace.md with the trace/history artifact load point" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION_COMPACT" "references/harness-execution\\.md.*before using Claude or Codex external harness execution paths" \
+    "SKILL.md pairs references/harness-execution.md with the external harness execution load point" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION_COMPACT" "references/result-artifacts\\.md.*before writing final run artifacts.*history.*handoff" \
+    "SKILL.md pairs references/result-artifacts.md with the final run artifacts/history/handoff load point" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION" "\\.slot-machine/history/active\\.json" \
+    "SKILL.md documents .slot-machine/history/active.json" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION" "\\.slot-machine/history/latest\\.json" \
+    "SKILL.md documents .slot-machine/history/latest.json" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION" "\\.slot-machine/history/index\\.jsonl" \
+    "SKILL.md documents .slot-machine/history/index.jsonl" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION" '"status": "idle"' \
+    "SKILL.md documents idle sentinel status" || FAILED=$((FAILED + 1))
+
+echo ""
+echo "=== Contract 15A: Orchestrator Trace Events ==="
+assert_contains "$TRACE_SECTION" "phase_entered" \
+    "SKILL.md documents phase_entered events" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION" "artifact_written" \
+    "SKILL.md documents artifact_written events" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION" "slot_retry_scheduled" \
+    "SKILL.md documents slot_retry_scheduled events" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION" "run_finished" \
+    "SKILL.md documents run_finished events" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION" "run_failed" \
+    "SKILL.md documents run_failed events" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION" '"events_path"' \
+    "SKILL.md documents events_path" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION" '"state_path"' \
+    "SKILL.md documents state_path" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION" '"current_phase"' \
+    "SKILL.md documents current_phase state" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION" '"last_event_seq"' \
+    "SKILL.md documents last_event_seq state" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION_COMPACT" "Any change that adds a new orchestration phase.*update" \
+    "SKILL.md includes maintenance rule for new orchestration phases" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION_COMPACT" "SKILL\\.md and \`skills/slot-machine/SKILL\\.md\` must stay byte-for-byte synchronized" \
+    "SKILL.md includes mirror sync rule for the packaged skill" || FAILED=$((FAILED + 1))
+
+echo ""
+echo "=== Contract 15B: Result Artifact Detail Lives In References ==="
+RESULT_REFERENCE_CONTENT=$(cat "$SKILL_DIR/references/result-artifacts.md" 2>/dev/null || echo "")
+RESULT_ARTIFACT_SECTION=$(echo "$SKILL_CONTENT" | sed -n '/^\*\*Part 3: Result artifact/,/^\*\*Part 4:/p')
+
+assert_contains "$RESULT_REFERENCE_CONTENT" '"slot_details"' \
+    "references/result-artifacts.md documents nested slot_details payloads" || FAILED=$((FAILED + 1))
+assert_contains "$RESULT_REFERENCE_CONTENT" '"handoff_path"' \
+    "references/result-artifacts.md documents manual handoff result payloads" || FAILED=$((FAILED + 1))
+assert_contains "$RESULT_REFERENCE_CONTENT" '"blocked_stage"' \
+    "references/result-artifacts.md documents blocked setup payloads" || FAILED=$((FAILED + 1))
+assert_not_contains "$RESULT_ARTIFACT_SECTION" '```json' \
+    "SKILL.md does not inline bulky result.json examples in Phase 4" || FAILED=$((FAILED + 1))
 
 echo ""
 echo "=== Contract 16: Verdict Formatting ==="
