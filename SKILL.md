@@ -520,7 +520,7 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
 Orchestrator trace emission rules for this phase and the downstream lifecycle:
 
 - Emit `phase_entered` when moving into `setup`, `implementation`, `review`, `judgment`, `synthesis`, `manual_handoff`, `cleanup`, or `finalization`.
-- Emit `slot_dispatched`, `slot_finished`, and `slot_retry_scheduled` for slot lifecycle changes.
+- Emit `slot_dispatched`, `slot_finished`, and `slot_retry_scheduled` for slot lifecycle changes. `slot_finished` must record one of `DONE`, `DONE_WITH_CONCERNS`, `BLOCKED`, or `NEEDS_CONTEXT`.
 - Emit `precheck_started` and `precheck_finished` around required precheck commands.
 - Emit `review_dispatched` and `review_finished` for reviewer lifecycle changes.
 - Emit `judge_dispatched` and `judge_finished` for judge lifecycle changes.
