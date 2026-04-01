@@ -6,6 +6,8 @@ AI agents are probabilistic. The same spec produces different code every time â€
 
 Run N independent implementations of the same feature in parallel. Each gets reviewed by an independent agent that hunts for real bugs. A meta-judge compares all of them and makes one of three calls: **pick** the clear winner, **synthesize** the best elements from multiple implementations into something better than any individual, or **reject all** if none meet the bar.
 
+`SKILL.md` stays the main orchestration contract. Bulky executable examples and reference material now live under repo-root `references/`, and the generated Codex runtime bundle exposes that same `references/` tree alongside `SKILL.md`.
+
 ## What You Can Do
 
 **Run 3 competing implementations and pick the best one:**
@@ -82,7 +84,7 @@ If you already installed slot-machine by cloning directly into `~/.claude/skills
 
 ### Codex: Local Skill Install
 
-For Codex, the recommended local install path is a generated standalone skill bundle, not a plugin-root symlink. This keeps the skill identifier clean as `slot-machine` while preserving the repo's plugin metadata for publishing and development:
+For Codex, the recommended local install path is a generated standalone skill bundle, not a plugin-root symlink. This keeps the skill identifier clean as `slot-machine`, preserves the repo's plugin metadata for publishing and development, and exposes the bundled `references/` tree next to `SKILL.md`:
 
 ```bash
 git clone https://github.com/pejmanjohn/slot-machine.git ~/src/slot-machine
