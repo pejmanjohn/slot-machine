@@ -137,7 +137,7 @@ echo "  [PASS] Transcript captured"
 assert_not_contains "$TRANSCRIPT_TEXT" "Judge Slot Machine results" \
     "Manual handoff run does not dispatch the judge"
 
-if [ ! -f "$TMPDIR/.slot-machine/runs/latest/result.json" ] && \
+if [ ! -e "$TMPDIR/.slot-machine/runs/latest" ] && \
     printf '%s\n' "$TRANSCRIPT_TEXT" | rg -q 'rate_limit_event|error":"rate_limit|out of extra usage'; then
     echo "  [SKIP] claude-host rate limit returned before writing expected run artifacts"
     exit 2
@@ -168,14 +168,6 @@ LATEST_TRACE="$TMPDIR/.slot-machine/history/latest.json"
 INDEX_FILE="$TMPDIR/.slot-machine/history/index.jsonl"
 CANONICAL_LATEST_RUN=$(canonical_path "$LATEST_RUN")
 CANONICAL_HANDOFF_FILE=$(canonical_path "$HANDOFF_FILE")
-
-if [ ! -f "$RESULT_JSON" ] || [ ! -f "$HANDOFF_FILE" ] || [ ! -f "$MANIFEST_FILE" ] || \
-    [ ! -f "$EVENTS_FILE" ] || [ ! -f "$STATE_FILE" ]; then
-    if printf '%s\n' "$TRANSCRIPT_TEXT" | rg -q 'rate_limit_event|error":"rate_limit|out of extra usage'; then
-        echo "  [SKIP] claude-host rate limit returned before writing expected run artifacts"
-        exit 2
-    fi
-fi
 
 if [ -f "$RESULT_JSON" ]; then
     echo "  [PASS] result.json written to latest run dir"
@@ -306,6 +298,7 @@ with open(latest_path, encoding="utf-8") as fh:
 with open(index_path, encoding="utf-8") as fh:
     index_rows = [json.loads(line) for line in fh if line.strip()]
 
+result_run_id = result.get("run_id") or os.path.basename(result.get("run_dir", ""))
 observed = {event["event"] for event in events}
 required = {
     "run_started",
@@ -319,6 +312,11 @@ required = {
 }
 missing = sorted(required - observed)
 assert not missing, f"missing manual-run events: {missing}"
+assert any(
+    event.get("event") == "phase_entered" and event.get("phase") == "manual_handoff"
+    for event in events
+), "missing manual_handoff phase_entered event"
+assert events, "no events captured"
 
 for forbidden in {"judge_dispatched", "judge_finished", "synthesis_dispatched", "synthesis_finished"}:
     assert forbidden not in observed, f"unexpected manual-run event: {forbidden}"
@@ -326,9 +324,16 @@ for forbidden in {"judge_dispatched", "judge_finished", "synthesis_dispatched", 
 assert os.path.realpath(result["events_path"]) == os.path.realpath(events_path)
 assert os.path.realpath(result["state_path"]) == os.path.realpath(state_path)
 assert state["status"] == "finished", state
+assert state["last_event_seq"] == events[-1]["seq"], state
 assert active["status"] == "idle", active
+assert latest.get("run_id") == result_run_id, latest
+if "result_path" in latest:
+    assert os.path.realpath(latest["result_path"]) == os.path.realpath(result_path), latest
 assert os.path.realpath(latest["events_path"]) == os.path.realpath(events_path), latest
 assert os.path.realpath(latest["state_path"]) == os.path.realpath(state_path), latest
+assert index_rows[-1].get("run_id") == result_run_id, index_rows[-1]
+if "result_path" in index_rows[-1]:
+    assert os.path.realpath(index_rows[-1]["result_path"]) == os.path.realpath(result_path), index_rows[-1]
 assert index_rows[-1]["manual_handoff"] is True, index_rows[-1]
 assert index_rows[-1]["status"] == "finished", index_rows[-1]
 PY
