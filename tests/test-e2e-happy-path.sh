@@ -150,7 +150,6 @@ set -e
 
 TRANSCRIPT_TEXT=$(cat "$TRANSCRIPT_FILE")
 FINAL_REPORT=$(extract_result_text "$TEST_HOST" "$TRANSCRIPT_FILE")
-DISPATCH_EVENTS=$(count_dispatch_events "$TEST_HOST" "$TRANSCRIPT_FILE" | tail -n 1)
 
 if [ "$HOST_RC" -eq 2 ]; then
     echo "$TRANSCRIPT_TEXT"
@@ -168,18 +167,7 @@ if [ ! -s "$TRANSCRIPT_FILE" ]; then
     exit 1
 fi
 
-if [ "$TEST_HOST" = "claude" ] && printf '%s\n%s\n' "$TRANSCRIPT_TEXT" "$FINAL_REPORT" | grep -Eqi 'rate_limit_event|rate_limit|out of extra usage'; then
-    echo "  [SKIP] claude host hit a usage rate limit; run artifacts were not created"
-    exit 2
-fi
-
 echo "  [PASS] Transcript captured"
-if [ "$DISPATCH_EVENTS" -ge 3 ]; then
-    echo "  [PASS] Transcript includes multiple dispatch events ($DISPATCH_EVENTS)"
-else
-    echo "  [FAIL] Expected multiple dispatch events, found $DISPATCH_EVENTS"
-    exit 1
-fi
 
 if printf '%s' "$FINAL_REPORT" | grep -Eq "Verdict|Final Output|Complete"; then
     echo "  [PASS] Final report includes a completion summary"
@@ -197,6 +185,20 @@ STATE_FILE="$LATEST_RUN/state.json"
 ACTIVE_TRACE="$TMPDIR/.slot-machine/history/active.json"
 LATEST_TRACE="$TMPDIR/.slot-machine/history/latest.json"
 INDEX_FILE="$TMPDIR/.slot-machine/history/index.jsonl"
+
+if [ "$TEST_HOST" = "claude" ] && { [ ! -d "$LATEST_RUN" ] || [ ! -f "$RESULT_JSON" ]; } && printf '%s\n%s\n' "$TRANSCRIPT_TEXT" "$FINAL_REPORT" | grep -Eqi 'type":"rate_limit_event"|error":"rate_limit"|out of extra usage'; then
+    echo "  [SKIP] claude host hit a usage rate limit; run artifacts were not created"
+    exit 2
+fi
+
+DISPATCH_EVENTS=$(count_dispatch_events "$TEST_HOST" "$TRANSCRIPT_FILE" | tail -n 1)
+
+if [ "$DISPATCH_EVENTS" -ge 3 ]; then
+    echo "  [PASS] Transcript includes multiple dispatch events ($DISPATCH_EVENTS)"
+else
+    echo "  [FAIL] Expected multiple dispatch events, found $DISPATCH_EVENTS"
+    exit 1
+fi
 
 if [ -f "$RESULT_JSON" ]; then
     echo "  [PASS] result.json written to latest run dir"
@@ -302,7 +304,8 @@ assert state["last_event_seq"] == events[-1]["seq"], state
 assert active["status"] == "idle", active
 assert os.path.realpath(latest["events_path"]) == os.path.realpath(events_path), latest
 assert os.path.realpath(latest["state_path"]) == os.path.realpath(state_path), latest
-assert index_rows[-1]["run_id"] == result["run_dir"].split("/")[-1] or index_rows[-1]["result_path"].endswith("/result.json")
+assert index_rows[-1]["run_id"] == result["run_id"], index_rows[-1]
+assert os.path.realpath(index_rows[-1]["result_path"]) == os.path.realpath(result_path), index_rows[-1]
 assert index_rows[-1]["manual_handoff"] is False, index_rows[-1]
 assert index_rows[-1]["status"] == "finished", index_rows[-1]
 PY
