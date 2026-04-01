@@ -327,13 +327,11 @@ assert state["status"] == "finished", state
 assert state["last_event_seq"] == events[-1]["seq"], state
 assert active["status"] == "idle", active
 assert latest.get("run_id") == result_run_id, latest
-if "result_path" in latest:
-    assert os.path.realpath(latest["result_path"]) == os.path.realpath(result_path), latest
+assert os.path.realpath(latest["result_path"]) == os.path.realpath(result_path), latest
 assert os.path.realpath(latest["events_path"]) == os.path.realpath(events_path), latest
 assert os.path.realpath(latest["state_path"]) == os.path.realpath(state_path), latest
 assert index_rows[-1].get("run_id") == result_run_id, index_rows[-1]
-if "result_path" in index_rows[-1]:
-    assert os.path.realpath(index_rows[-1]["result_path"]) == os.path.realpath(result_path), index_rows[-1]
+assert os.path.realpath(index_rows[-1]["result_path"]) == os.path.realpath(result_path), index_rows[-1]
 assert index_rows[-1]["manual_handoff"] is True, index_rows[-1]
 assert index_rows[-1]["status"] == "finished", index_rows[-1]
 PY
