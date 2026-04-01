@@ -103,8 +103,8 @@ SKIP_STATUS=$?
 set -e
 
 if [ "$SKIP_STATUS" -eq 0 ] &&
-   echo "$SKIP_OUTPUT" | grep -q "\[SKIP\] synthetic skip" &&
-   echo "$SKIP_OUTPUT" | grep -q "Results: 0 passed, 0 failed, 1 skipped"; then
+   grep -q "\[SKIP\] synthetic skip" <<<"$SKIP_OUTPUT" &&
+   grep -q "Results: 0 passed, 0 failed, 1 skipped" <<<"$SKIP_OUTPUT"; then
     echo "  [PASS] Runner treats exit code 2 as skipped"
 else
     echo "  [FAIL] Runner does not treat exit code 2 as skipped"
@@ -117,8 +117,8 @@ MISSING_STATUS=$?
 set -e
 
 if [ "$MISSING_STATUS" -ne 0 ] &&
-   echo "$MISSING_OUTPUT" | grep -q "Test file not found" &&
-   echo "$MISSING_OUTPUT" | grep -q "Results: 0 passed, 1 failed, 0 skipped"; then
+   grep -q "Test file not found" <<<"$MISSING_OUTPUT" &&
+   grep -q "Results: 0 passed, 1 failed, 0 skipped" <<<"$MISSING_OUTPUT"; then
     echo "  [PASS] Runner fails when a declared test file is missing"
 else
     echo "  [FAIL] Runner does not fail when a declared test file is missing"
@@ -140,7 +140,7 @@ HOST_FILTER_STATUS=$?
 set -e
 
 if [ "$HOST_FILTER_STATUS" -eq 0 ] &&
-   echo "$HOST_FILTER_OUTPUT" | grep -q "host-filter=codex"; then
+   grep -q "host-filter=codex" <<<"$HOST_FILTER_OUTPUT"; then
     echo "  [PASS] Runner forwards --host filter to test scripts"
 else
     echo "  [FAIL] Runner does not forward --host filter to test scripts"
@@ -171,7 +171,7 @@ PY
 )
 
 if [ "$JOBS_STATUS" -eq 0 ] &&
-   echo "$JOBS_OUTPUT" | grep -q "Results: 7 passed, 0 failed, 0 skipped" &&
+   grep -q "Results: 7 passed, 0 failed, 0 skipped" <<<"$JOBS_OUTPUT" &&
    python3 - <<'PY' "$JOBS_ELAPSED"
 import sys
 sys.exit(0 if float(sys.argv[1]) < 9.0 else 1)
@@ -197,11 +197,11 @@ CHANGED_STATUS=$?
 set -e
 
 if [ "$CHANGED_STATUS" -eq 0 ] &&
-   echo "$CHANGED_OUTPUT" | grep -q "Running: test-implementer-smoke.sh" &&
-   ! echo "$CHANGED_OUTPUT" | grep -q "Running: test-reviewer-smoke.sh" &&
-   ! echo "$CHANGED_OUTPUT" | grep -q "Running: test-judge-smoke.sh" &&
-   ! echo "$CHANGED_OUTPUT" | grep -q "Running: test-e2e-happy-path.sh" &&
-   echo "$CHANGED_OUTPUT" | grep -q "Results: 8 passed, 0 failed, 0 skipped"; then
+   grep -q "Running: test-implementer-smoke.sh" <<<"$CHANGED_OUTPUT" &&
+   ! grep -q "Running: test-reviewer-smoke.sh" <<<"$CHANGED_OUTPUT" &&
+   ! grep -q "Running: test-judge-smoke.sh" <<<"$CHANGED_OUTPUT" &&
+   ! grep -q "Running: test-e2e-happy-path.sh" <<<"$CHANGED_OUTPUT" &&
+   grep -q "Results: 8 passed, 0 failed, 0 skipped" <<<"$CHANGED_OUTPUT"; then
     echo "  [PASS] Runner selects the matching phase smoke test for --changed"
 else
     echo "  [FAIL] Runner does not select the matching phase smoke test for --changed"
@@ -223,8 +223,8 @@ MANUAL_STATUS=$?
 set -e
 
 if [ "$MANUAL_STATUS" -eq 0 ] &&
-   echo "$MANUAL_OUTPUT" | grep -q "Running: test-e2e-happy-path.sh" &&
-   echo "$MANUAL_OUTPUT" | grep -q "Running: test-e2e-manual-handoff.sh"; then
+   grep -q "Running: test-e2e-happy-path.sh" <<<"$MANUAL_OUTPUT" &&
+   grep -q "Running: test-e2e-manual-handoff.sh" <<<"$MANUAL_OUTPUT"; then
     echo "  [PASS] Runner selects both happy-path and manual handoff coverage when manual artifacts change"
 else
     echo "  [FAIL] Runner does not select the expected E2E coverage for manual-handoff changes"
