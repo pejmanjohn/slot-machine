@@ -168,11 +168,17 @@ if [ ! -s "$TRANSCRIPT_FILE" ]; then
     exit 1
 fi
 
+if [ "$TEST_HOST" = "claude" ] && printf '%s\n%s\n' "$TRANSCRIPT_TEXT" "$FINAL_REPORT" | grep -Eqi 'rate_limit_event|rate_limit|out of extra usage'; then
+    echo "  [SKIP] claude host hit a usage rate limit; run artifacts were not created"
+    exit 2
+fi
+
 echo "  [PASS] Transcript captured"
 if [ "$DISPATCH_EVENTS" -ge 3 ]; then
     echo "  [PASS] Transcript includes multiple dispatch events ($DISPATCH_EVENTS)"
 else
-    echo "  [PASS] Transcript dispatch markers unavailable ($DISPATCH_EVENTS); relying on run artifacts"
+    echo "  [FAIL] Expected multiple dispatch events, found $DISPATCH_EVENTS"
+    exit 1
 fi
 
 if printf '%s' "$FINAL_REPORT" | grep -Eq "Verdict|Final Output|Complete"; then
@@ -191,44 +197,6 @@ STATE_FILE="$LATEST_RUN/state.json"
 ACTIVE_TRACE="$TMPDIR/.slot-machine/history/active.json"
 LATEST_TRACE="$TMPDIR/.slot-machine/history/latest.json"
 INDEX_FILE="$TMPDIR/.slot-machine/history/index.jsonl"
-
-for _ in $(seq 1 20); do
-    if [ -f "$RESULT_JSON" ] && [ -f "$EVENTS_FILE" ] && [ -f "$STATE_FILE" ] && [ -f "$ACTIVE_TRACE" ] && [ -f "$LATEST_TRACE" ] && [ -f "$INDEX_FILE" ]; then
-        break
-    fi
-    sleep 1
-done
-
-if [ ! -f "$RESULT_JSON" ] && [ -f "$LATEST_TRACE" ]; then
-    LATEST_RUN=$(python3 - <<'PY' "$LATEST_TRACE"
-import json
-import os
-import sys
-
-with open(sys.argv[1], encoding="utf-8") as fh:
-    latest = json.load(fh)
-
-print(os.path.dirname(latest["result_path"]))
-PY
-    )
-    RESULT_JSON="$LATEST_RUN/result.json"
-    VERDICT_FILE="$LATEST_RUN/verdict.md"
-    EVENTS_FILE="$LATEST_RUN/events.jsonl"
-    STATE_FILE="$LATEST_RUN/state.json"
-fi
-
-if [ ! -f "$RESULT_JSON" ]; then
-    if [ -d "$TMPDIR/.slot-machine/runs" ]; then
-        NEWEST_RESULT=$(find "$TMPDIR/.slot-machine/runs" -mindepth 2 -maxdepth 2 -name result.json | sort | tail -n 1)
-        if [ -n "$NEWEST_RESULT" ]; then
-            LATEST_RUN=$(dirname "$NEWEST_RESULT")
-            RESULT_JSON="$NEWEST_RESULT"
-            VERDICT_FILE="$LATEST_RUN/verdict.md"
-            EVENTS_FILE="$LATEST_RUN/events.jsonl"
-            STATE_FILE="$LATEST_RUN/state.json"
-        fi
-    fi
-fi
 
 if [ -f "$RESULT_JSON" ]; then
     echo "  [PASS] result.json written to latest run dir"
