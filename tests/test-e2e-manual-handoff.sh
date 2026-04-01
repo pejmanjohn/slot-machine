@@ -46,7 +46,7 @@ echo "Test plan:"
 echo "  1. Create a temp Python repo with an initial git commit"
 echo "  2. Run /slot-machine with 2 slots in manual handoff mode"
 echo "  3. Assert transcript sanity: non-empty, no judge dispatch, worktree isolation"
-echo "  4. Assert run artifacts: handoff.md, result.json, review-*.md, slot diffs, and slot manifest"
+echo "  4. Assert run artifacts: handoff.md, result.json, events.jsonl, state.json, review-*.md, slot diffs, slot manifest, and history pointers"
 echo "  5. Assert manual result metadata: resolution_mode=manual and verdict=null"
 echo "  6. Assert successful coding worktrees remain and the main worktree is not merged"
 echo ""
@@ -136,6 +136,13 @@ fi
 echo "  [PASS] Transcript captured"
 assert_not_contains "$TRANSCRIPT_TEXT" "Judge Slot Machine results" \
     "Manual handoff run does not dispatch the judge"
+
+if [ ! -f "$TMPDIR/.slot-machine/runs/latest/result.json" ] && \
+    printf '%s\n' "$TRANSCRIPT_TEXT" | rg -q 'rate_limit_event|error":"rate_limit|out of extra usage'; then
+    echo "  [SKIP] claude-host rate limit returned before writing expected run artifacts"
+    exit 2
+fi
+
 assert_worktree_isolation "$TRANSCRIPT_FILE" "Agent calls use isolation:worktree"
 
 AGENT_CALLS=$(count_agent_calls "$TRANSCRIPT_FILE")
@@ -154,8 +161,21 @@ LATEST_RUN="$TMPDIR/.slot-machine/runs/latest"
 RESULT_JSON="$LATEST_RUN/result.json"
 HANDOFF_FILE="$LATEST_RUN/handoff.md"
 MANIFEST_FILE="$LATEST_RUN/slot-manifest.json"
+EVENTS_FILE="$LATEST_RUN/events.jsonl"
+STATE_FILE="$LATEST_RUN/state.json"
+ACTIVE_TRACE="$TMPDIR/.slot-machine/history/active.json"
+LATEST_TRACE="$TMPDIR/.slot-machine/history/latest.json"
+INDEX_FILE="$TMPDIR/.slot-machine/history/index.jsonl"
 CANONICAL_LATEST_RUN=$(canonical_path "$LATEST_RUN")
 CANONICAL_HANDOFF_FILE=$(canonical_path "$HANDOFF_FILE")
+
+if [ ! -f "$RESULT_JSON" ] || [ ! -f "$HANDOFF_FILE" ] || [ ! -f "$MANIFEST_FILE" ] || \
+    [ ! -f "$EVENTS_FILE" ] || [ ! -f "$STATE_FILE" ]; then
+    if printf '%s\n' "$TRANSCRIPT_TEXT" | rg -q 'rate_limit_event|error":"rate_limit|out of extra usage'; then
+        echo "  [SKIP] claude-host rate limit returned before writing expected run artifacts"
+        exit 2
+    fi
+fi
 
 if [ -f "$RESULT_JSON" ]; then
     echo "  [PASS] result.json written to latest run dir"
@@ -256,6 +276,62 @@ else
     echo "  [FAIL] Expected at least one successful slot, found $SLOTS_SUCCEEDED"
     exit 1
 fi
+
+for trace_file in "$EVENTS_FILE" "$STATE_FILE" "$ACTIVE_TRACE" "$LATEST_TRACE" "$INDEX_FILE"; do
+    if [ -f "$trace_file" ]; then
+        echo "  [PASS] Trace artifact exists: $trace_file"
+    else
+        echo "  [FAIL] Missing trace artifact: $trace_file"
+        exit 1
+    fi
+done
+
+python3 - <<'PY' "$RESULT_JSON" "$EVENTS_FILE" "$STATE_FILE" "$ACTIVE_TRACE" "$LATEST_TRACE" "$INDEX_FILE"
+import json
+import os
+import sys
+
+result_path, events_path, state_path, active_path, latest_path, index_path = sys.argv[1:]
+
+with open(result_path, encoding="utf-8") as fh:
+    result = json.load(fh)
+with open(events_path, encoding="utf-8") as fh:
+    events = [json.loads(line) for line in fh if line.strip()]
+with open(state_path, encoding="utf-8") as fh:
+    state = json.load(fh)
+with open(active_path, encoding="utf-8") as fh:
+    active = json.load(fh)
+with open(latest_path, encoding="utf-8") as fh:
+    latest = json.load(fh)
+with open(index_path, encoding="utf-8") as fh:
+    index_rows = [json.loads(line) for line in fh if line.strip()]
+
+observed = {event["event"] for event in events}
+required = {
+    "run_started",
+    "phase_entered",
+    "slot_dispatched",
+    "slot_finished",
+    "review_dispatched",
+    "review_finished",
+    "artifact_written",
+    "run_finished",
+}
+missing = sorted(required - observed)
+assert not missing, f"missing manual-run events: {missing}"
+
+for forbidden in {"judge_dispatched", "judge_finished", "synthesis_dispatched", "synthesis_finished"}:
+    assert forbidden not in observed, f"unexpected manual-run event: {forbidden}"
+
+assert os.path.realpath(result["events_path"]) == os.path.realpath(events_path)
+assert os.path.realpath(result["state_path"]) == os.path.realpath(state_path)
+assert state["status"] == "finished", state
+assert active["status"] == "idle", active
+assert os.path.realpath(latest["events_path"]) == os.path.realpath(events_path), latest
+assert os.path.realpath(latest["state_path"]) == os.path.realpath(state_path), latest
+assert index_rows[-1]["manual_handoff"] is True, index_rows[-1]
+assert index_rows[-1]["status"] == "finished", index_rows[-1]
+PY
 
 shopt -s nullglob
 review_files=("$LATEST_RUN"/review-*.md)
