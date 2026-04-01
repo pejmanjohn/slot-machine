@@ -561,20 +561,12 @@ assert_contains "$TRACE_SECTION" "events.jsonl" \
     "SKILL.md documents orchestrator trace events.jsonl path" || FAILED=$((FAILED + 1))
 assert_contains "$TRACE_SECTION" "state.json" \
     "SKILL.md documents orchestrator trace state.json path" || FAILED=$((FAILED + 1))
-for reference_file in \
-    references/orchestrator-trace.md \
-    references/harness-execution.md \
-    references/result-artifacts.md; do
-    assert_contains "$TRACE_SECTION" "$reference_file" \
-        "SKILL.md references $reference_file from the orchestrator trace contract" || FAILED=$((FAILED + 1))
-done
-for load_phrase in \
-    "before creating or updating trace/history artifacts" \
-    "before using Claude or Codex external harness execution paths" \
-    "before writing final run artifacts"; do
-    assert_contains "$TRACE_SECTION_COMPACT" "$load_phrase" \
-        "SKILL.md includes load instruction: $load_phrase" || FAILED=$((FAILED + 1))
-done
+assert_contains "$TRACE_SECTION_COMPACT" "references/orchestrator-trace\\.md.*before creating or updating trace/history artifacts" \
+    "SKILL.md pairs references/orchestrator-trace.md with the trace/history artifact load point" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION_COMPACT" "references/harness-execution\\.md.*before using Claude or Codex external harness execution paths" \
+    "SKILL.md pairs references/harness-execution.md with the external harness execution load point" || FAILED=$((FAILED + 1))
+assert_contains "$TRACE_SECTION_COMPACT" "references/result-artifacts\\.md.*before writing final run artifacts.*history.*handoff" \
+    "SKILL.md pairs references/result-artifacts.md with the final run artifacts/history/handoff load point" || FAILED=$((FAILED + 1))
 assert_contains "$TRACE_SECTION" "\\.slot-machine/history/active\\.json" \
     "SKILL.md documents .slot-machine/history/active.json" || FAILED=$((FAILED + 1))
 assert_contains "$TRACE_SECTION" "\\.slot-machine/history/latest\\.json" \
