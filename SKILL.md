@@ -82,26 +82,63 @@ Canonical per-run trace artifacts:
 - `{RUN_DIR}/events.jsonl`
 - `{RUN_DIR}/state.json`
 
+`{RUN_DIR}/state.json` is the full run snapshot for the current run. It is the machine-readable snapshot view for orchestrator state at a point in time.
+
 Cross-run discovery artifacts:
 
 - `.slot-machine/history/active.json`
 - `.slot-machine/history/latest.json`
 - `.slot-machine/history/index.jsonl`
 
+`.slot-machine/history/active.json` is the current-run pointer and lightweight metadata document. It points at the current run snapshot; it is not a copy of `{RUN_DIR}/state.json`.
+
+Use this shape for `.slot-machine/history/active.json` while a run is active:
+
+```json
+{
+  "schema_version": 1,
+  "status": "running",
+  "run_id": "2026-03-31-feature-slug",
+  "run_dir": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug",
+  "events_path": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug/events.jsonl",
+  "state_path": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug/state.json",
+  "started_at": "2026-03-31T12:34:56Z",
+  "updated_at": "2026-03-31T12:34:56Z"
+}
+```
+
 When no run is active, `.slot-machine/history/active.json` should use the idle sentinel status:
 
 ```json
 {
-  "schema_version": "1",
+  "schema_version": 1,
   "status": "idle"
 }
 ```
+
+`.slot-machine/history/latest.json` is the latest-finished-run pointer. It should point at the most recent completed run snapshot and result artifacts without copying the full state payload.
+
+Use this shape for `.slot-machine/history/latest.json`:
+
+```json
+{
+  "schema_version": 1,
+  "status": "idle",
+  "run_id": "2026-03-31-feature-slug",
+  "run_dir": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug",
+  "state_path": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug/state.json",
+  "result_path": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug/result.json",
+  "finished_at": "2026-03-31T12:56:00Z"
+}
+```
+
+`.slot-machine/history/index.jsonl` is append-only run summary history. Each line should be a compact per-run summary for cross-run discovery, filtering, and audit trails rather than a full snapshot copy.
 
 Use this event envelope for every trace append:
 
 ```json
 {
-  "schema_version": "1",
+  "schema_version": 1,
   "seq": 12,
   "ts": "2026-03-31T12:34:56Z",
   "run_id": "2026-03-31-feature-slug",
@@ -141,9 +178,9 @@ Use this state snapshot shape for `{RUN_DIR}/state.json`:
 
 ```json
 {
-  "schema_version": "1",
+  "schema_version": 1,
   "run_id": "2026-03-31-feature-slug",
-  "status": "RUNNING",
+  "status": "running",
   "current_phase": "dispatch",
   "run_dir": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug",
   "events_path": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug/events.jsonl",
@@ -153,7 +190,7 @@ Use this state snapshot shape for `{RUN_DIR}/state.json`:
 }
 ```
 
-Reusable rule: after every event append to `{RUN_DIR}/events.jsonl`, rewrite `{RUN_DIR}/state.json` so `.slot-machine/history/active.json` always points at a current snapshot. `events.jsonl` is the source of truth; `state.json` is the convenience view.
+Reusable rule: after every event append to `{RUN_DIR}/events.jsonl`, rewrite `{RUN_DIR}/state.json` and update `.slot-machine/history/active.json` so it continues pointing at the current snapshot. `events.jsonl` is the source of truth; `state.json` is the convenience snapshot view; `active.json` is only the pointer/current-run metadata document.
 
 Maintenance rule: Any change that adds a new orchestration phase, terminal path, retry path, or required artifact must update the trace documentation and trace-aware tests in the same change. SKILL.md and `skills/slot-machine/SKILL.md` must stay byte-for-byte synchronized after trace changes.
 
@@ -375,8 +412,8 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
    ```bash
    cat > "$ACTIVE_TRACE_FILE" << JSON
    {
-     "schema_version": "1",
-     "status": "RUNNING",
+     "schema_version": 1,
+     "status": "running",
      "run_id": "{run_id}",
      "run_dir": "$RUN_DIR",
      "events_path": "$TRACE_EVENTS_FILE",
