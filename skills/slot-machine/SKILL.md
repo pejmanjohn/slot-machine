@@ -123,7 +123,7 @@ Use this shape for `.slot-machine/history/latest.json`:
 ```json
 {
   "schema_version": 1,
-  "status": "idle",
+  "status": "finished",
   "run_id": "2026-03-31-feature-slug",
   "run_dir": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug",
   "state_path": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug/state.json",
@@ -133,6 +133,12 @@ Use this shape for `.slot-machine/history/latest.json`:
 ```
 
 `.slot-machine/history/index.jsonl` is append-only run summary history. Each line should be a compact per-run summary for cross-run discovery, filtering, and audit trails rather than a full snapshot copy.
+
+Lifecycle rules:
+
+- `.slot-machine/history/active.json` is written at run start, updated as the run progresses, and reset to the idle sentinel when no run is active.
+- `.slot-machine/history/latest.json` is refreshed on every terminal path that writes a run artifact, including judged completion, manual handoff completion, and blocked or failed terminal exits.
+- `.slot-machine/history/index.jsonl` appends one summary line on those same terminal paths.
 
 Use this event envelope for every trace append:
 
@@ -408,7 +414,23 @@ User confirms or edits. Save selection to `~/.slot-machine/config.md`:
    mkdir -p "$RUN_DIR" "$HISTORY_DIR"
    grep -q '.slot-machine/' .gitignore 2>/dev/null || echo '.slot-machine/' >> .gitignore
    ```
-   Immediately bootstrap the active-run trace metadata:
+   Immediately bootstrap the run snapshot and active-run pointer metadata:
+   ```bash
+   cat > "$TRACE_STATE_FILE" << JSON
+   {
+     "schema_version": 1,
+     "run_id": "{run_id}",
+     "status": "running",
+     "current_phase": "setup",
+     "run_dir": "$RUN_DIR",
+     "events_path": "$TRACE_EVENTS_FILE",
+     "state_path": "$TRACE_STATE_FILE",
+     "result_path": "$RUN_DIR/result.json",
+     "last_event_seq": 0
+   }
+   JSON
+   ```
+   Then write the lightweight current-run pointer:
    ```bash
    cat > "$ACTIVE_TRACE_FILE" << JSON
    {
