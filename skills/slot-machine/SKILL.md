@@ -77,12 +77,14 @@ Project config can live in `AGENTS.md`, `CLAUDE.md`, or both; treat them as equa
 
 The orchestrator trace is the normalized execution record for the orchestrator itself. It is not a shared slot context channel and must not be repurposed as one; slot-local prompts, outputs, and review artifacts remain separate from this trace.
 
-Canonical per-run trace artifacts:
+Read `references/orchestrator-trace.md` before creating or updating trace/history artifacts.
+Read `references/harness-execution.md` before using Claude or Codex external harness execution paths.
+Read `references/result-artifacts.md` before writing final run artifacts, history pointers, or handoff files.
+
+Core per-run trace artifacts:
 
 - `{RUN_DIR}/events.jsonl`
 - `{RUN_DIR}/state.json`
-
-`{RUN_DIR}/state.json` is the full run snapshot for the current run. It is the machine-readable snapshot view for orchestrator state at a point in time.
 
 Cross-run discovery artifacts:
 
@@ -90,113 +92,22 @@ Cross-run discovery artifacts:
 - `.slot-machine/history/latest.json`
 - `.slot-machine/history/index.jsonl`
 
-`.slot-machine/history/active.json` is the current-run pointer and lightweight metadata document. It points at the current run snapshot; it is not a copy of `{RUN_DIR}/state.json`.
+Inline contract:
 
-Use this shape for `.slot-machine/history/active.json` while a run is active:
-
-```json
-{
-  "schema_version": 1,
-  "status": "running",
-  "run_id": "2026-03-31-feature-slug",
-  "run_dir": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug",
-  "events_path": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug/events.jsonl",
-  "state_path": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug/state.json",
-  "started_at": "2026-03-31T12:34:56Z",
-  "updated_at": "2026-03-31T12:34:56Z"
-}
-```
-
-When no run is active, `.slot-machine/history/active.json` should use the idle sentinel status:
+- `{RUN_DIR}/events.jsonl` is append-only. Every event record must include `schema_version`, `seq`, `ts`, `run_id`, `phase`, and `event`; include `slot`, `attempt`, and `data` when applicable.
+- Required event names: `run_started`, `phase_entered`, `artifact_written`, `slot_dispatched`, `slot_finished`, `slot_retry_scheduled`, `precheck_started`, `precheck_finished`, `review_dispatched`, `review_finished`, `judge_dispatched`, `judge_finished`, `synthesis_dispatched`, `synthesis_finished`, `cleanup_started`, `cleanup_finished`, `run_finished`, `run_failed`.
+- `{RUN_DIR}/state.json` is the current snapshot and must include `"schema_version"`, `"run_id"`, `"status"`, `"current_phase"`, `"run_dir"`, `"events_path"`, `"state_path"`, `"result_path"`, and `"last_event_seq"`.
+- `.slot-machine/history/active.json` is the pointer/current-run metadata document, not a copy of `{RUN_DIR}/state.json`. While active it must include `"schema_version"`, `"status": "running"`, `"run_id"`, `"run_dir"`, `"events_path"`, `"state_path"`, `"started_at"`, and `"updated_at"`.
+- When no run is active, `.slot-machine/history/active.json` must be the idle sentinel:
 
 ```json
-{
-  "schema_version": 1,
-  "status": "idle"
-}
+{"schema_version": 1, "status": "idle"}
 ```
 
-`.slot-machine/history/latest.json` is the latest-finished-run pointer. It should point at the most recent completed run snapshot and result artifacts without copying the full state payload.
-
-Use this shape for `.slot-machine/history/latest.json`:
-
-```json
-{
-  "schema_version": 1,
-  "status": "finished",
-  "run_id": "2026-03-31-feature-slug",
-  "run_dir": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug",
-  "state_path": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug/state.json",
-  "result_path": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug/result.json",
-  "finished_at": "2026-03-31T12:56:00Z"
-}
-```
-
-`.slot-machine/history/index.jsonl` is append-only run summary history. Each line should be a compact per-run summary for cross-run discovery, filtering, and audit trails rather than a full snapshot copy.
-
-Lifecycle rules:
-
-- `.slot-machine/history/active.json` is written at run start, updated as the run progresses, and reset to the idle sentinel when no run is active.
-- `.slot-machine/history/latest.json` is refreshed on every terminal path that writes a run artifact, including judged completion, manual handoff completion, and blocked or failed terminal exits.
-- `.slot-machine/history/index.jsonl` appends one summary line on those same terminal paths.
-
-Use this event envelope for every trace append:
-
-```json
-{
-  "schema_version": 1,
-  "seq": 12,
-  "ts": "2026-03-31T12:34:56Z",
-  "run_id": "2026-03-31-feature-slug",
-  "phase": "dispatch",
-  "event": "slot_finished",
-  "slot": 2,
-  "attempt": 1,
-  "data": {
-    "status": "DONE",
-    "artifact_path": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug/slot-2.diff"
-  }
-}
-```
-
-Required event names:
-
-- `run_started`
-- `phase_entered`
-- `artifact_written`
-- `slot_dispatched`
-- `slot_finished`
-- `slot_retry_scheduled`
-- `precheck_started`
-- `precheck_finished`
-- `review_dispatched`
-- `review_finished`
-- `judge_dispatched`
-- `judge_finished`
-- `synthesis_dispatched`
-- `synthesis_finished`
-- `cleanup_started`
-- `cleanup_finished`
-- `run_finished`
-- `run_failed`
-
-Use this state snapshot shape for `{RUN_DIR}/state.json`:
-
-```json
-{
-  "schema_version": 1,
-  "run_id": "2026-03-31-feature-slug",
-  "status": "running",
-  "current_phase": "dispatch",
-  "run_dir": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug",
-  "events_path": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug/events.jsonl",
-  "state_path": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug/state.json",
-  "result_path": "/abs/path/.slot-machine/runs/2026-03-31-feature-slug/result.json",
-  "last_event_seq": 12
-}
-```
-
-Reusable rule: after every event append to `{RUN_DIR}/events.jsonl`, rewrite `{RUN_DIR}/state.json` and update `.slot-machine/history/active.json` so it continues pointing at the current snapshot. `events.jsonl` is the source of truth; `state.json` is the convenience snapshot view; `active.json` is only the pointer/current-run metadata document.
+- After every append to `{RUN_DIR}/events.jsonl`, rewrite `{RUN_DIR}/state.json` and refresh `.slot-machine/history/active.json` so it keeps pointing at the current snapshot.
+- Every terminal `result.json` must carry `"events_path"` and `"state_path"` alongside the run artifact fields.
+- Refresh `.slot-machine/history/latest.json` and append `.slot-machine/history/index.jsonl` on every terminal path. Use `status: "finished"` for judged completion and manual handoff completion. Use `status: "failed"` for blocked or failed terminal exits while keeping the canonical per-run `{RUN_DIR}` paths.
+- The orchestrator trace is orchestrator-level only. Do not include raw prompt bodies, slot-local transcripts, or subagent reasoning in `events.jsonl` or `state.json`.
 
 Maintenance rule: Any change that adds a new orchestration phase, terminal path, retry path, or required artifact must update the trace documentation and trace-aware tests in the same change. SKILL.md and `skills/slot-machine/SKILL.md` must stay byte-for-byte synchronized after trace changes.
 
@@ -630,27 +541,16 @@ Never launch Codex slots as background Bash jobs. Wait for `codex exec` to finis
 **Path E — External Claude harness slots (harness = `claude`, active host = Codex):**
 
 Follow the active profile isolation. If isolation is `worktree`, create one worktree per slot, `cd` into that worktree, and launch `claude -p` directly. If isolation is `file`, create a per-slot directory under `{RUN_DIR}`, launch `claude -p` there, and tell it exactly which `{RUN_DIR}/slot-{i}.md` file to write. Do not wrap this in a native subagent.
+Before using Claude or Codex external harness execution paths, read `references/harness-execution.md`.
 
 Do not silently fall back to the native host path or to Codex for explicit Claude slots. Launch the configured `claude -p` command directly and let the slot outcome reflect the real external Claude execution result.
 
 External Claude command contract:
 
 ```bash
-claude -p "{If skill specified: '/claude_skill_name\n\n'}Implement this specification. {If isolation is worktree: 'Write all files to the current directory.'}{If isolation is file: 'Write the final output to {RUN_DIR}/slot-{i}.md and do not write elsewhere.'}
-Do not ask questions or wait for confirmation — make your best judgment and proceed.
-
-Specification:
-{spec}
-
-Project context:
-{project_context}
-
-When done, provide a summary of:
-- What you implemented (bullet list)
-- Files created or modified
-- Test results if you wrote tests
-- Any concerns or issues encountered" \
-  --output-format stream-json 2>claude-stderr.txt > claude-stream.jsonl
+claude -p "{If skill specified: '/claude_skill_name\n\n'}Implement this specification. {If isolation is worktree: 'Write all files to the current directory.'}{If isolation is file: 'Write the final output to {RUN_DIR}/slot-{i}.md and do not write elsewhere.'}" \
+  --output-format stream-json \
+  2>claude-stderr.txt > claude-stream.jsonl
 ```
 
 Failure normalization for external Claude runs:
@@ -667,6 +567,7 @@ Native skill prefix translation for external Claude:
 **Path F — External Codex harness slots (harness = `codex`, active host = Claude):**
 
 Follow the active profile isolation. If isolation is `worktree`, create one worktree per slot, `cd` into that worktree, and invoke the shared Codex slot runtime helper from that workspace. If isolation is `file`, create a per-slot directory under `{RUN_DIR}`, invoke the same helper there, and tell it exactly which `{RUN_DIR}/slot-{i}.md` file to write via `--expected-output-path`. Do not re-implement Codex JSON parsing inline; the helper is the supported runtime path.
+Before using Claude or Codex external harness execution paths, read `references/harness-execution.md`.
 
 The helper saves the raw `--json` JSONL stream to `codex-events.jsonl`, the stderr stream to `codex-stderr.txt`, and a normalized result/report pair to `codex-slot-result.json` and `codex-slot-report.md`. Do not assume a single event mix — current Codex runs may expose `item.completed`, `turn.completed`, or both. Never launch Codex slots as background Bash jobs; wait for `codex exec` to finish before reviewers or the judge can run.
 
@@ -675,19 +576,6 @@ Helper-backed Codex command contract:
 ```bash
 cat > codex-prompt.txt <<'PROMPT'
 {If skill specified: '$codex_skill_name\n\n'}Implement this specification. {If isolation is worktree: 'Write all files to the current directory.'}{If isolation is file: 'Write the final output to {RUN_DIR}/slot-{i}.md and do not write elsewhere.'}
-Do not ask questions or wait for confirmation — make your best judgment and proceed.
-
-Specification:
-{spec}
-
-Project context:
-{project_context}
-
-When done, provide a summary of:
-- What you implemented (bullet list)
-- Files created or modified
-- Test results if you wrote tests
-- Any concerns or issues encountered
 PROMPT
 
 python3 "$REAL_SKILL_DIR/scripts/codex-slot-runner.py" \
@@ -1045,11 +933,11 @@ The final report has three parts: the H1 header, the output content, and the foo
 `3` files changed, `474` insertions
 `45` tests passing
 
-**Part 3: Result artifact** — always write a machine-readable JSON file to the run directory:
+**Part 3: Result artifact** — always write a machine-readable JSON file to the run directory. Before writing final run artifacts, history pointers, or handoff files, read `references/result-artifacts.md`.
 
-```bash
-mkdir -p "{RUN_DIR}"
-cat > "{RUN_DIR}/result.json" << RESULT
+Judged completion minimum contract for `{RUN_DIR}/result.json`:
+
+```json
 {
   "verdict": "{PICK|SYNTHESIZE|NONE_ADEQUATE}",
   "winning_slot": {N or null},
@@ -1072,31 +960,14 @@ cat > "{RUN_DIR}/result.json" << RESULT
   "events_path": "{RUN_DIR}/events.jsonl",
   "state_path": "{RUN_DIR}/state.json"
 }
-RESULT
-
-# Post-write run discovery updates for successful terminal completion
-ln -sfn "$(basename "{RUN_DIR}")" "$(dirname "{RUN_DIR}")/latest"
-cat > ".slot-machine/history/latest.json" << LATEST
-{
-  "schema_version": 1,
-  "status": "finished",
-  "run_id": "{RUN_ID}",
-  "run_dir": "{RUN_DIR}",
-  "state_path": "{RUN_DIR}/state.json",
-  "result_path": "{RUN_DIR}/result.json",
-  "finished_at": "{TIMESTAMP}"
-}
-LATEST
-cat > ".slot-machine/history/active.json" << IDLE
-{
-  "schema_version": 1,
-  "status": "idle"
-}
-IDLE
-cat >> ".slot-machine/history/index.jsonl" << INDEX
-{"schema_version":1,"run_id":"{RUN_ID}","status":"finished","run_dir":"{RUN_DIR}","result_path":"{RUN_DIR}/result.json","finished_at":"{TIMESTAMP}"}
-INDEX
 ```
+
+Post-write discovery updates for judged completion:
+
+- Refresh `.slot-machine/runs/latest` so scripts can resolve `.slot-machine/runs/latest/result.json`.
+- Refresh `.slot-machine/history/latest.json` with `status: "finished"` and the canonical per-run `run_dir`, `state_path`, and `result_path`.
+- Reset `.slot-machine/history/active.json` to the idle sentinel `{ "schema_version": 1, "status": "idle" }`.
+- Append a compact `status: "finished"` summary row to `.slot-machine/history/index.jsonl`.
 
 This is always written, every run. Humans ignore it. Autonomous loops and scripts parse it via `.slot-machine/runs/latest/result.json`. When a slot ran through Codex, persist the Codex `thread_id` plus the raw event/stderr paths under `slot_details` so the run can be inspected or resumed with `codex resume {thread_id}` later.
 Use the `status: "finished"` history records above for judged completion and manual handoff completion. For blocked or failed terminal exits, refresh the same history files with `status: "failed"` while keeping the canonical per-run `{RUN_DIR}` paths.
@@ -1108,8 +979,7 @@ After refreshing `.slot-machine/runs/latest`, set the top-level `handoff_path` t
 For `file` isolation, each `slot_details` item uses `output_path` instead of `worktree_path`, and the worktree-only fields (`diff_path`, `branch`, `head_sha`) are omitted or `null`.
 Each file-isolation `slot_details` item still carries the slot output path, review path, files_changed, tests_passing, and any Codex `thread_id` / raw log paths when the slot ran through Codex.
 
-```bash
-cat > {RUN_DIR}/result.json << RESULT
+```json
 {
   "resolution_mode": "manual",
   "verdict": null,
@@ -1137,22 +1007,19 @@ cat > {RUN_DIR}/result.json << RESULT
       "tests_passing": 12
     }
   ],
-  "run_dir": "{RUN_DIR}",
+  "run_dir": "/abs/path/.slot-machine/runs/latest",
   "events_path": "{RUN_DIR}/events.jsonl",
   "state_path": "{RUN_DIR}/state.json"
 }
-RESULT
 ```
 
 Manual handoff still writes `events.jsonl`, `state.json`, `.slot-machine/history/latest.json`, and `.slot-machine/history/index.jsonl`, resets `.slot-machine/history/active.json` to the idle sentinel, and must emit `run_finished` without any judge or synthesis events.
-For avoidance of doubt, the canonical manual result uses per-run paths for `run_dir`, `events_path`, and `state_path`; only `handoff_path` points at `.slot-machine/runs/latest`. Older discovery-oriented examples such as `"run_dir": "/abs/path/.slot-machine/runs/latest"` are superseded.
 
 Profile-loading failures and other setup-time hard stops must still write the same run artifact path before exiting, then refresh `.slot-machine/runs/latest` to that run:
 
 For profile-loading failures, set `blocked_stage` to `profile_loading` and describe the unresolved profile or base in `blocked_reason`.
 
-```bash
-cat > "{RUN_DIR}/result.json" << RESULT
+```json
 {
   "resolution_mode": "blocked",
   "verdict": null,
@@ -1168,7 +1035,6 @@ cat > "{RUN_DIR}/result.json" << RESULT
   "events_path": "{RUN_DIR}/events.jsonl",
   "state_path": "{RUN_DIR}/state.json"
 }
-RESULT
 ```
 
 Blocked setup-time exits still append `run_failed`, write `state.json`, refresh `.slot-machine/history/latest.json` with `status: "failed"`, append a matching `status: "failed"` row to `.slot-machine/history/index.jsonl`, and reset `.slot-machine/history/active.json` to the idle sentinel.
