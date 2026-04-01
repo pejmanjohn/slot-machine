@@ -376,19 +376,23 @@ Every run writes a machine-readable result to `.slot-machine/runs/latest/result.
   "slots_succeeded": 3,
   "files_changed": ["src/api.py", "tests/test_api.py"],
   "tests_passing": 45,
+  "events_path": ".slot-machine/runs/2026-03-31-payment-webhook/events.jsonl",
+  "state_path": ".slot-machine/runs/2026-03-31-payment-webhook/state.json",
   "slot_details": [
     {
       "slot": 2,
       "status": "DONE",
       "thread_id": "thread_abc123",
-      "report_path": ".slot-machine/runs/2026-03-29-payment-webhook/slot-2/codex-slot-report.md"
+      "report_path": ".slot-machine/runs/2026-03-31-payment-webhook/slot-2/codex-slot-report.md"
     }
   ],
-  "run_dir": ".slot-machine/runs/2026-03-29-payment-webhook"
+  "run_dir": ".slot-machine/runs/2026-03-31-payment-webhook"
 }
 ```
 
 Set `quiet: true` to suppress progress tables in unattended runs. The run directory (`.slot-machine/runs/`) keeps all artifacts (slot drafts, reviewer scorecards, judge verdict, raw Codex logs). Codex-backed `slot_details` preserve the `thread_id`, so you can inspect the exact run or continue it later with `codex resume`.
+
+For inspection, `.slot-machine/history/active.json` tells you what the orchestrator is doing now, `.slot-machine/history/latest.json` points at the most recent finished run, and `.slot-machine/history/index.jsonl` is an append-only cross-run summary. This is observability for reviewing past and in-flight runs, not a live runtime behavior change.
 
 ## Custom Profiles
 
