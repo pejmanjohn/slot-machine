@@ -548,7 +548,20 @@ Do not silently fall back to the native host path or to Codex for explicit Claud
 External Claude command contract:
 
 ```bash
-claude -p "{If skill specified: '/claude_skill_name\n\n'}Implement this specification. {If isolation is worktree: 'Write all files to the current directory.'}{If isolation is file: 'Write the final output to {RUN_DIR}/slot-{i}.md and do not write elsewhere.'}" \
+claude -p "{If skill specified: '/claude_skill_name\n\n'}Implement this specification. {If isolation is worktree: 'Write all files to the current directory.'}{If isolation is file: 'Write the final output to {RUN_DIR}/slot-{i}.md and do not write elsewhere.'}
+Do not ask questions or wait for confirmation.
+
+Specification:
+{spec}
+
+Project context:
+{project_context}
+
+When done, provide this implementer report:
+- What you implemented
+- Files created or modified
+- Test results if you wrote tests
+- Concerns or issues encountered" \
   --output-format stream-json \
   2>claude-stderr.txt > claude-stream.jsonl
 ```
@@ -576,6 +589,19 @@ Helper-backed Codex command contract:
 ```bash
 cat > codex-prompt.txt <<'PROMPT'
 {If skill specified: '$codex_skill_name\n\n'}Implement this specification. {If isolation is worktree: 'Write all files to the current directory.'}{If isolation is file: 'Write the final output to {RUN_DIR}/slot-{i}.md and do not write elsewhere.'}
+Do not ask questions or wait for confirmation.
+
+Specification:
+{spec}
+
+Project context:
+{project_context}
+
+When done, provide this implementer report:
+- What you implemented
+- Files created or modified
+- Test results if you wrote tests
+- Concerns or issues encountered
 PROMPT
 
 python3 "$REAL_SKILL_DIR/scripts/codex-slot-runner.py" \
@@ -1007,13 +1033,15 @@ Each file-isolation `slot_details` item still carries the slot output path, revi
       "tests_passing": 12
     }
   ],
-  "run_dir": "/abs/path/.slot-machine/runs/latest",
+  "run_dir": "{RUN_DIR}",
   "events_path": "{RUN_DIR}/events.jsonl",
   "state_path": "{RUN_DIR}/state.json"
 }
 ```
 
 Manual handoff still writes `events.jsonl`, `state.json`, `.slot-machine/history/latest.json`, and `.slot-machine/history/index.jsonl`, resets `.slot-machine/history/active.json` to the idle sentinel, and must emit `run_finished` without any judge or synthesis events.
+Only `handoff_path` points at `.slot-machine/runs/latest`; `run_dir`, `events_path`, and `state_path` remain canonical per-run `{RUN_DIR}` paths.
+Deprecated shape to avoid in manual mode: `"run_dir": "/abs/path/.slot-machine/runs/latest"`.
 
 Profile-loading failures and other setup-time hard stops must still write the same run artifact path before exiting, then refresh `.slot-machine/runs/latest` to that run:
 
